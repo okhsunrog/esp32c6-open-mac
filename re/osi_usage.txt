@@ -1,0 +1,99 @@
+0x004 _env_is_chip                     (9) chm_set_current_channel esp_wifi_internal_set_mac_sleep hal_he_set_mac_delay hal_init_bf wDev_ProcessRxSucData wifi_hw_start wifi_hw_stop wifi_rf_phy_disable wifi_rf_phy_enable
+0x008 _set_intr                        (1) ic_set_interrupt_handler
+0x00c _clear_intr                      (1) ic_clear_interrupt_handler
+0x010 _set_isr                         (3) ic_bb_check_noise_init ic_clear_interrupt_handler ic_set_interrupt_handler
+0x014 _ints_on                         (2) ic_bb_check_noise_init ic_set_interrupt_handler
+0x018 _ints_off                        (1) ic_clear_interrupt_handler
+0x01c _is_from_isr                     (1) esp_wifi_get_tsf_time
+0x020 _spin_lock_create                (1) wifi_init_in_caller_task
+0x024 _spin_lock_delete                (1) wifi_deinit_in_caller_task
+0x028 _wifi_int_disable                (4) ppTask pp_post wDev_AppendRxBlocks wdevProcessRxSucDataAll
+0x02c _wifi_int_restore                (4) ppTask pp_post wDev_AppendRxBlocks wdevProcessRxSucDataAll
+0x030 _task_yield_from_isr             (1) pp_post
+0x034 _semphr_create                   (2) pp_create_task pp_delete_task
+0x038 _semphr_delete                   (2) pp_create_task pp_delete_task
+0x03c _semphr_take                     (3) ieee80211_ioctl pp_create_task pp_delete_task
+0x040 _semphr_give                     (2) ieee80211_ioctl_process ppTask
+0x044 _wifi_thread_semphr_get          (1) ieee80211_ioctl
+0x048 _mutex_create                    (1) wifi_init_in_caller_task
+0x04c _recursive_mutex_create          (21) esp_now_add_peer esp_now_deinit esp_now_del_peer esp_now_fetch_peer esp_now_get_peer esp_now_get_peer_num esp_now_get_user_oui esp_now_get_version esp_now_init esp_now_is_peer_exist esp_now_mod_peer esp_now_register_recv_cb esp_now_register_send_cb esp_now_send ...
+0x050 _mutex_delete                    (1) wifi_deinit_in_caller_task
+0x054 _mutex_lock                      (69) check_bss_queue chm_set_current_channel chm_set_home_channel clear_bss_queue clear_mac_queue cnx_node_alloc cnx_sta_leave esf_buf_alloc esf_buf_alloc_dynamic esf_buf_free_static esf_buf_recycle esp_now_add_peer esp_now_deinit esp_now_del_peer ...
+0x058 _mutex_unlock                    (69) check_bss_queue chm_set_current_channel chm_set_home_channel clear_bss_queue clear_mac_queue cnx_node_alloc cnx_sta_leave esf_buf_alloc esf_buf_alloc_dynamic esf_buf_free_static esf_buf_recycle esp_now_add_peer esp_now_deinit esp_now_del_peer ...
+0x064 _queue_send                      (1) pp_post
+0x068 _queue_send_from_isr             (1) pp_post
+0x074 _queue_recv                      (1) ppTask
+0x078 _queue_msg_waiting               (3) ppMessageInQ ppTask pp_post
+0x090 _task_create_pinned_to_core      (1) pp_create_task
+0x098 _task_delete                     (3) ppTask pp_create_task pp_delete_task_manually
+0x09c _task_delay                      (4) esp_wifi_scan_start esp_wifi_stop pp_create_task pp_delete_task
+0x0a4 _task_get_current_task           (1) current_task_is_wifi_task
+0x0a8 _task_get_max_priority           (1) pp_create_task
+0x0ac _malloc                          (1) pm_beacon_offset_sample_start
+0x0b0 _free                            (103) ampdu_rx_start.constprop.0 ampdu_rx_stop.constprop.0 ampdu_tx_stop cnx_add_to_blacklist cnx_clear_blacklist cnx_connect_op cnx_node_alloc cnx_remove_all_rc cnx_remove_from_blacklist cnx_remove_rc cnx_remove_rc_except cnx_sta_leave cnx_update_bss_more esf_buf_free_static ...
+0x0b4 _event_post                      (2) wifi_event_post wifi_mesh_event_post
+0x0b8 _get_free_heap_size              (1) pp_attach
+0x0bc _rand                            (1) hal_random
+0x0c8 _wifi_apb80m_request             (2) wifi_hw_start wifi_rf_phy_enable
+0x0cc _wifi_apb80m_release             (2) wifi_hw_stop wifi_rf_phy_disable
+0x0d0 _phy_disable                     (2) wifi_hw_stop wifi_rf_phy_disable
+0x0d4 _phy_enable                      (2) wifi_hw_start wifi_rf_phy_enable
+0x0d8 _phy_update_country_info         (1) ieee80211_update_phy_country
+0x0dc _read_mac                        (1) wifi_init_process
+0x0e0 _timer_arm                       (44) ap_try_sa_query_process chm_change_channel cnx_connect_next_ap cnx_connect_to_bss cnx_do_handoff cnx_sta_associated cnx_sta_connect_cmd cnx_start_obss_scan ftm_initiator_negotiate_session he_recv_action_twt_information he_twt_information_txcb hostap_auth_open hostap_recv_mgmt ieee80211_ampdu_request ...
+0x0e4 _timer_disarm                    (96) addba_stop_timeout ap_sa_query_timeout_process ap_try_sa_query_process chm_cancel_op chm_change_channel chm_end_op_timeout_process cnx_auth_done cnx_connect_next_ap cnx_connect_to_bss cnx_do_handoff cnx_sta_associated cnx_sta_connect_cmd cnx_sta_leave cnx_stop_obss_scan ...
+0x0e8 _timer_done                      (66) addba_stop_timeout ap_sa_query_timeout_process ap_try_sa_query_process btwt_setup_timeout_fn_process chm_deinit cnx_auth_done cnx_beacon_timeout_process cnx_connect_next_ap cnx_connect_to_bss cnx_do_handoff cnx_sta_associated cnx_sta_connect_cmd cnx_sta_leave cnx_stop_obss_scan ...
+0x0ec _timer_setfn                     (46) ap_try_sa_query_process chm_init cnx_beacon_timeout_process cnx_connect_next_ap cnx_connect_to_bss cnx_do_handoff cnx_sta_associated cnx_sta_connect_cmd cnx_start_obss_scan ftm_initiator_negotiate_session ftm_initiator_process_resp ftm_send_initial_resp he_recv_action_twt_information he_recv_action_twt_setup ...
+0x0f0 _timer_arm_us                    (23) ftm_initiator_process_resp ftm_send_initial_resp he_recv_action_twt_setup ieee80211_ampdu_start_age_timer ieee80211_process_btwt_setup_action ieee80211_send_ftmr_process ieee80211_tx_ftm_msmt_process itwt_probe_rc_tx_cb pm_beacon_monitor_tbtt_start pm_coex_recalculate_wifi_time_slice pm_coex_schm_process pm_coex_separate_connectionless_window pm_coex_slice_timeout_process pm_dream ...
+0x0f4 _wifi_reset_mac                  (1) wifi_reset_mac
+0x0f8 _wifi_clock_enable               (3) pm_attach wifi_hw_start wifi_rf_phy_enable
+0x0fc _wifi_clock_disable              (3) pm_attach wifi_hw_stop wifi_rf_phy_disable
+0x100 _wifi_rtc_enable_iso             (1) wifi_hw_stop
+0x104 _wifi_rtc_disable_iso            (1) wifi_hw_start
+0x108 _esp_timer_get_time              (22) esp_test_tx_enab_statistics esp_test_tx_process_complete pm_coex_schm_process pm_coex_separate_connectionless_window pm_coex_slice_timeout_process pm_dream pm_get_null_max_tx_time pm_go_to_wake pm_keep_alive pm_process_tim pm_reset_keep_alive pm_sleep pm_start pm_start_twt ...
+0x10c _nvs_set_i8                      (2) wifi_nvs_load wifi_nvs_set
+0x110 _nvs_get_i8                      (2) wifi_nvs_compare_cfg_diff wifi_nvs_load
+0x114 _nvs_set_u8                      (2) wifi_nvs_load wifi_nvs_set
+0x118 _nvs_get_u8                      (2) wifi_nvs_compare_cfg_diff wifi_nvs_load
+0x11c _nvs_set_u16                     (2) wifi_nvs_load wifi_nvs_set
+0x120 _nvs_get_u16                     (2) wifi_nvs_compare_cfg_diff wifi_nvs_load
+0x124 _nvs_open                        (1) wifi_nvs_init
+0x128 _nvs_close                       (1) wifi_nvs_deinit
+0x12c _nvs_commit                      (1) wifi_nvs_commit
+0x130 _nvs_set_blob                    (1) wifi_nvs_set
+0x134 _nvs_get_blob                    (2) wifi_nvs_compare_cfg_diff wifi_nvs_load
+0x13c _get_random                      (4) ap_try_sa_query_process sta_try_sa_query_process wifi_get_rand_macaddr wifi_get_rand_macaddr_keep_oui
+0x140 _get_time                        (5) ftm_offchan_end ftm_offchan_tx_req offchan_txop_end roc_op_end roc_op_start
+0x144 _random                          (2) cnx_bss_init softap_choose_bss_color_without_conflict
+0x148 _slowclk_cal_get                 (3) hal_init pm_update_params pm_update_tsf_tick_interval
+0x14c _log_write                       (1) wifi_log
+0x150 _log_writev                      (1) wifi_log
+0x158 _malloc_internal                 (4) esf_buf_alloc_dynamic pp_attach wDev_Rxbuf_Init wifi_nvs_load
+0x160 _calloc_internal                 (3) net80211_funcs_init pm_funcs_init wdev_funcs_init
+0x164 _zalloc_internal                 (2) esp_test_enable_rx_statistics wDev_Rxbuf_Init
+0x168 _wifi_malloc                     (29) cnx_add_to_blacklist cnx_update_bss_more esf_buf_alloc_dynamic esp_now_send esp_wifi_scan_sort_ap_records esp_wifi_set_ap_key_internal esp_wifi_stop esp_wifi_vnd_lora_enable hal_crypto_set_key_entry he_recv_action_twt_information he_twt_information_txcb ieee80211_alloc_challenge ieee80211_parse_mbssid ieee80211_recv_action_vendor_esp_now ...
+0x174 _wifi_zalloc                     (173) ampdu_rx_start.constprop.0 cnx_node_alloc esp_mesh_allow_root_conflicts esp_mesh_clear_parent_candidate esp_mesh_get_active_duty_cycle esp_mesh_get_network_duty_cycle esp_mesh_get_parent_candidate esp_mesh_get_parent_monitor_config esp_mesh_get_router_bssid esp_mesh_get_rssi_threshold_internal esp_mesh_get_running_active_duty_cycle esp_mesh_is_roots_found esp_mesh_map_deauth esp_mesh_ps_duty_signaling ...
+0x178 _wifi_create_queue               (1) pp_create_task
+0x17c _wifi_delete_queue               (3) ppTask pp_create_task pp_delete_task_manually
+0x188 _coex_enable                     (1) wifi_hw_start
+0x18c _coex_disable                    (1) wifi_hw_stop
+0x190 _coex_status_get                 (39) cnx_auth_done cnx_do_handoff cnx_sta_scan_cmd ieee80211_sta_new_state pm_check_state pm_coex_pwr_update pm_coex_recalculate_wifi_time_slice pm_coex_restart_timeout_process pm_coex_separate_connectionless_window pm_coex_set_reconnect_policy pm_coex_slice_timeout_process pm_coex_tbtt_process pm_coex_update_wifi_time_slice_state pm_connectionless_wake_window_timeout_process ...
+0x198 _coex_wifi_request               (7) pm_coex_schm_process pm_coex_separate_connectionless_window pm_coex_tbtt_process pm_coex_update_wifi_time_slice_state pm_process_tim pm_tx_data_process pp_coex_tx_request
+0x19c _coex_wifi_release               (10) ieee80211_sta_new_state pm_beacon_monitor_timeout_process pm_coex_update_wifi_time_slice_state pm_disconnected_sleep pm_rx_beacon_process pm_sleep pm_tx_null_data_done_quick_wake_process pp_coex_tx_release sta_recv_mgmt sta_rx_eapol
+0x1a0 _coex_wifi_channel_set           (1) ieee80211_update_channel
+0x1a4 _coex_event_duration_get         (1) pp_coex_tx_request
+0x1a8 _coex_pti_get                    (7) hal_init hal_set_ofdma_sequence_pti ieee80211_set_tx_pti mac_tx_set_pti pm_on_channel pm_start pp_coex_tx_request
+0x1ac _coex_schm_status_bit_clear      (1) pm_on_coex_schm_status_config
+0x1b0 _coex_schm_status_bit_set        (1) pm_on_coex_schm_status_config
+0x1b4 _coex_schm_interval_set          (5) pm_coex_tbtt_process pm_on_coex_schm_status_config pm_on_probe_resp_rx pm_parse_beacon pm_start
+0x1b8 _coex_schm_interval_get          (3) pm_coex_recalculate_wifi_time_slice pm_coex_schm_process pm_coex_separate_connectionless_window
+0x1bc _coex_schm_curr_period_get       (4) pm_coex_recalculate_wifi_time_slice pm_coex_schm_overall_period_get pm_coex_schm_process scan_next_channel
+0x1c0 _coex_schm_curr_phase_get        (1) pm_coex_schm_process
+0x1c4 _coex_schm_process_restart       (1) pm_coex_schm_process_restart
+0x1c8 _coex_schm_register_cb           (1) ic_init
+0x1cc _coex_register_start_cb          (1) ic_init
+0x1d0 _regdma_link_set_write_wait_content (1) wdev_mac_sleep
+0x1d4 _sleep_retention_find_link_by_id (1) wdev_mac_sleep_init
+0x1d8 _coex_schm_flexible_period_set   (1) pm_coex_pwr_update
+0x1dc _coex_schm_flexible_period_get   (1) pm_coex_schm_overall_period_get
+0x1e0 _coex_schm_get_phase_by_idx      (1) pm_coex_recalculate_wifi_time_slice

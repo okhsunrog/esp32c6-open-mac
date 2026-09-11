@@ -1,0 +1,9399 @@
+{
+"RC_GetCtsTime": [
+"RC_GetDuration"
+],
+"RC_GetBlockAckTime": [
+"RC_GetDuration"
+],
+"pp_timer_coex_restart": [
+"pm_coex_restart_timeout_process"
+],
+"pp_timer_twt_keep_alive": [
+"pm_twt_keep_alive_timeout_process"
+],
+"pp_timer_max_idle": [
+"pm_max_idle_timeout_process"
+],
+"pp_timer_beacon_monitor_tbtt": [
+"pm_beacon_monitor_tbtt_timeout_process"
+],
+"pp_timer_beacon_monitor": [
+"pm_beacon_monitor_timeout_process"
+],
+"pp_timer_connectionless_wake_window": [
+"pm_connectionless_wake_window_timeout_process"
+],
+"pp_timer_connectionless_wake_interval": [
+"pm_connectionless_wake_interval_timeout_process"
+],
+"pp_timer_disconnected_sleep_delay": [
+"pm_disconnected_sleep_delay_timeout_process"
+],
+"pp_timer_sleep_delay": [
+"pm_sleep_delay_timeout_process"
+],
+"pp_timer_coex_slice": [
+"pm_coex_slice_timeout_process"
+],
+"pp_timer_active": [
+"pm_active_timeout_process"
+],
+"pp_timer_dream": [
+"pm_dream_timeout_process"
+],
+"pp_timer_noise_check": [
+"pm_noise_check_process"
+],
+"pm_set_state": [
+"wifi_gpio_debug"
+],
+"pm_mac_sleep_init": [
+"wdev_mac_sleep_init"
+],
+"pm_mac_sleep_deinit": [
+"wdev_mac_sleep_deinit"
+],
+"pm_enable_max_idle_timer": [
+"pm_is_twt_start"
+],
+"pm_reset_keep_alive": [
+"pm_enable_active_timer"
+],
+"pm_enable_sleep_delay_timer": [
+"pm_is_twt_start"
+],
+"pm_noise_check": [
+"noise_check_loop",
+"read_hw_noisefloor"
+],
+"pm_send_nullfunc": [
+"ic_get_trc",
+"memset",
+"pm_is_twt_send_null",
+"rcGetSched",
+"wifi_gpio_debug"
+],
+"pm_mac_wakeup": [
+"wdev_mac_wakeup"
+],
+"pm_mac_sleep": [
+"wdev_mac_sleep"
+],
+"pm_disconnected_wake": [
+"pm_set_state",
+"wifi_gpio_debug",
+"wifi_rf_phy_enable"
+],
+"pm_disconnected_sleep": [
+"ppCheckTxIdle",
+"wifi_gpio_debug",
+"wifi_rf_phy_disable"
+],
+"pm_offchan_execute_ready_cb": [
+"wifi_log"
+],
+"pm_wake_up": [
+"pm_disable_disconnected_sleep_delay_timer",
+"pm_disable_sleep_delay_timer",
+"pm_disconnected_wake",
+"pm_dream"
+],
+"pm_send_probe_start": [
+"hal_disable_sta_beacon_filter",
+"pm_disable_active_timer",
+"pm_wake_up"
+],
+"pm_off_channel": [
+"hal_disable_sta_beacon_filter",
+"hal_set_rx_beacon_pti",
+"pm_disable_active_timer",
+"pm_dream",
+"pm_send_nullfunc",
+"pm_wake_up"
+],
+"pm_offchan_ready_or_defer": [
+"pm_off_channel",
+"wifi_log"
+],
+"pm_wake_done": [
+"pm_sleep"
+],
+"pm_go_to_sleep": [
+"pm_check_state",
+"pm_set_state"
+],
+"pm_update_tsf_tick_interval": [
+"hal_timer_update_by_rtc"
+],
+"pm_update_at_next_beacon": [
+"hal_disable_sta_beacon_filter"
+],
+"pm_set_next_tbtt": [
+"hal_set_sta_tbtt_interval",
+"pm_coex_schm_overall_period_get"
+],
+"pm_set_beacon_filter": [
+"hal_disable_sta_beacon_filter",
+"hal_enable_sta_beacon_filter",
+"hal_set_sta_beacon_filter"
+],
+"pm_beacon_timestamp_statistic": [
+"__umoddi3"
+],
+"pm_is_in_wifi_slice_threshold": [
+"pm_coex_recalculate_wifi_time_slice"
+],
+"pm_dream_timeout_process": [
+"pm_enable_sleep_delay_timer"
+],
+"pm_sleep_delay_timeout_process": [
+"pm_sleep"
+],
+"pm_mac_force_disable_modem_state": [
+"pm_mac_try_enable_modem_state"
+],
+"pm_force_soc_wakeup": [
+"pm_mac_try_enable_modem_state"
+],
+"pm_coex_separate_connectionless_window": [
+"pm_coex_schm_overall_period_get",
+"pm_force_soc_wakeup",
+"pm_wake_up",
+"wifi_gpio_debug"
+],
+"pm_coex_schm_process": [
+"hal_pm_unblock_txq",
+"pm_coex_schm_overall_period_get",
+"pm_coex_separate_connectionless_window",
+"pm_disconnected_wake",
+"pm_is_sleeping",
+"ppCheckTxIdle",
+"wifi_gpio_debug"
+],
+"pm_coex_slice_timeout_process": [
+"pm_enable_disconnected_sleep_delay_timer",
+"pm_enable_sleep_delay_timer",
+"pm_force_soc_wakeup",
+"pm_go_to_sleep",
+"ppCheckTxConnTrafficIdle",
+"ppCheckTxIdle",
+"wifi_gpio_debug"
+],
+"pm_tx_data_done_process": [
+"pm_check_state",
+"pm_enable_active_timer",
+"pm_enable_disconnected_sleep_delay_timer",
+"pm_enable_max_idle_timer",
+"pm_enable_sleep_delay_timer",
+"pm_incr_coex_active_cnt",
+"pm_incr_twt_active_cnt",
+"pm_is_twt_awake",
+"pm_is_twt_start",
+"pm_reset_keep_alive",
+"pm_sleep",
+"ppCheckTxIdle",
+"sta_reset_beacon_timeout"
+],
+"pm_tx_null_data_done_quick_wake_process": [
+"hal_clear_rx_beacon_pti",
+"pm_send_nullfunc",
+"ppCheckTxIdle",
+"sta_reset_beacon_timeout"
+],
+"pm_tx_null_data_done_process": [
+"pm_check_state",
+"pm_dream",
+"pm_enable_active_timer",
+"pm_enable_max_idle_timer",
+"pm_enable_sleep_delay_timer",
+"pm_is_in_wifi_slice_threshold",
+"pm_is_twt_start",
+"pm_offchan_execute_ready_cb",
+"pm_reset_keep_alive",
+"pm_send_nullfunc",
+"pm_set_state",
+"pm_sleep",
+"pm_tx_null_data_done_quick_wake_process",
+"pm_tx_null_data_done_twt_process",
+"ppProcessWaitingQueue"
+],
+"pm_go_to_wake": [
+"pm_dream",
+"pm_is_in_wifi_slice_threshold",
+"pm_is_twt_start",
+"pm_send_nullfunc",
+"pm_tx_null_data_done_process",
+"ppCheckTxConnTrafficIdle"
+],
+"pm_send_probe_stop": [
+"pm_enable_active_timer",
+"pm_go_to_wake",
+"pm_wake_done",
+"ppCheckTxConnTrafficIdle"
+],
+"pm_on_channel": [
+"hal_pm_unblock_txq",
+"hal_set_rx_beacon_pti",
+"pm_enable_active_timer",
+"pm_go_to_wake",
+"pm_wake_done",
+"ppCheckTxConnTrafficIdle"
+],
+"pm_update_params": [
+"__umoddi3",
+"hal_get_sta_tsf",
+"hal_set_sta_light_sleep_wake_ahead_time",
+"hal_set_sta_tbtt_ahead_time",
+"hal_timer_update_by_rtc",
+"pm_coex_schm_overall_period_get",
+"pm_go_to_wake",
+"pm_is_twt_start",
+"pm_update_at_next_beacon"
+],
+"pm_coex_tbtt_process": [
+"hal_pm_unblock_txq",
+"pm_coex_schm_overall_period_get",
+"pm_coex_schm_process_restart",
+"pm_is_sleeping",
+"ppCheckTxConnTrafficIdle"
+],
+"pm_active_timeout_process": [
+"pm_dream",
+"pm_enable_active_timer",
+"pm_go_to_sleep",
+"pm_go_to_wake",
+"pm_is_twt_active_cnt_zero",
+"pm_is_twt_start",
+"pm_reset_twt_active_cnt",
+"pm_send_nullfunc",
+"ppCheckTxIdle"
+],
+"pm_max_idle_timeout_process": [
+"pm_dream",
+"pm_enable_max_idle_timer",
+"pm_is_twt_start",
+"pm_send_nullfunc"
+],
+"pm_on_coex_schm_process_restart": [
+"pm_coex_schm_process_restart"
+],
+"pm_on_coex_schm_status_config": [
+"pm_get_connectionless_status"
+],
+"pm_on_coex_start": [
+"pm_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"pm_update_by_connectionless_status",
+"wifi_log"
+],
+"pm_on_data_tx_done": [
+"pm_tx_data_done_process"
+],
+"pm_on_sample_beacon": [
+"pm_update_at_next_beacon"
+],
+"pm_on_probe_resp_rx": [
+"pm_scale_listen_interval",
+"pm_update_next_tbtt"
+],
+"pm_disconnected_start": [
+"pm_coex_schm_process_restart",
+"pm_disable_disconnected_sleep_delay_timer",
+"pm_on_coex_schm_status_config",
+"pm_update_by_connectionless_status",
+"wifi_gpio_debug"
+],
+"pm_disconnected_stop": [
+"pm_disable_disconnected_sleep_delay_timer",
+"pm_update_by_connectionless_status",
+"wifi_gpio_debug"
+],
+"pm_start": [
+"dbg_lmac_ps_statis_reset",
+"hal_set_rx_beacon_pti",
+"hal_set_rx_beacon_time",
+"hal_set_sta_tsf_wakeup",
+"memcpy",
+"pm_enable_active_timer",
+"pm_is_twt_start",
+"pm_on_coex_schm_status_config",
+"pm_scale_listen_interval",
+"pm_update_by_connectionless_status",
+"pm_update_next_tbtt",
+"wDev_Rxbuf_Init",
+"wifi_gpio_debug",
+"wifi_log"
+],
+"pm_deattach": [
+"hal_set_sta_tsf_wakeup"
+],
+"pm_set_sleep_type": [
+"ieee80211_twt_teardown_all",
+"pm_coex_pwr_update",
+"pm_disable_max_idle_timer",
+"pm_dream",
+"pm_enable_active_timer",
+"pm_enable_max_idle_timer",
+"pm_go_to_wake",
+"pm_is_twt_start",
+"pm_set_state",
+"pm_update_at_next_beacon",
+"wifi_log"
+],
+"pm_register_connectionless_wake_window": [
+"pm_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"pm_update_by_connectionless_status"
+],
+"pm_unregister_connectionless_wake_window": [
+"pm_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"pm_update_by_connectionless_status"
+],
+"pm_connectionless_module_set_wake_interval": [
+"pm_update_by_connectionless_status"
+],
+"pm_stop": [
+"__divsf3",
+"__extendsfdf2",
+"__floatundisf",
+"esp_mesh_get_running_active_duty_cycle",
+"hal_disable_sta_beacon_filter",
+"hal_disable_sta_tbtt",
+"hal_pm_unblock_txq",
+"hal_set_rx_beacon_pti",
+"hal_set_sta_tsf_wakeup",
+"ieee80211_hostapd_beacon_txcb",
+"pm_clear_wakeup_signal",
+"pm_coex_pwr_update",
+"pm_coex_schm_process_restart",
+"pm_disable_active_timer",
+"pm_disable_max_idle_timer",
+"pm_disable_sleep_delay_timer",
+"pm_dream",
+"pm_enable_disconnected_sleep_delay_timer",
+"pm_mac_force_disable_modem_state",
+"pm_on_coex_schm_status_config",
+"pm_set_state",
+"pm_update_by_connectionless_status",
+"pm_wake_done",
+"ppProcessWaitingQueue",
+"wifi_log"
+],
+"pm_attach": [
+"hal_set_sta_tsf_wakeup",
+"memset",
+"pm_clear_wakeup_signal",
+"pm_mac_try_enable_modem_state",
+"pm_set_state",
+"ppRegisterTxCallback"
+],
+"ic_disable_crypto": [
+"wDev_Crypto_Disable"
+],
+"ic_set_key": [
+"wDev_Insert_KeyEntry"
+],
+"ic_get_key": [
+"hal_crypto_get_key_entry",
+"memcpy"
+],
+"ic_obtain_key": [
+"hal_crypto_is_key_valid",
+"ic_get_key",
+"memcmp"
+],
+"ic_get_rssi": [
+"rc_get_trc"
+],
+"ic_tx_pkt": [
+"ppTxPkt"
+],
+"ic_ebuf_alloc": [
+"esf_buf_alloc"
+],
+"ic_ebuf_recycle_tx": [
+"esf_buf_recycle"
+],
+"ic_ebuf_recycle_rx": [
+"ppRecycleRxPkt"
+],
+"esp_wifi_internal_free_rx_buffer": [
+"ppRecycleRxPkt"
+],
+"ic_register_tx_cb": [
+"ppRegisterTxCallback"
+],
+"ic_register_rx_cb": [
+"ppRegisterRxCallback"
+],
+"ic_register_timer_post_cb": [
+"pp_timer_register_post_cb"
+],
+"ic_register_michael_mic_failure_cb": [
+"pp_register_michael_mic_failure_cb"
+],
+"ic_register_pp_tx_done_cb": [
+"ppRegisterTxDoneUserActionCallback"
+],
+"ic_set_promis_filter": [
+"wdev_set_promis_filter"
+],
+"ic_get_promis_filter": [
+"wdev_get_promis_filter"
+],
+"ic_set_promis_ctrl_filter": [
+"wdev_set_promis_ctrl_filter"
+],
+"ic_get_promis_ctrl_filter": [
+"wdev_get_promis_ctrl_filter"
+],
+"ic_register_promis_rx_cb": [
+"ppRegisterPromisRxCallback"
+],
+"ic_register_csi_rx_cb": [
+"wdev_set_csi_rx_cb"
+],
+"ic_register_config_cb": [
+"pp_register_config_cb"
+],
+"ic_is_mgmt_hwdecr_enabled": [
+"wdev_is_mgmt_hwdecr_enabled"
+],
+"ic_register_pm_tx_null_cb": [
+"pm_register_pm_tx_null_cb"
+],
+"ic_register_net80211_tx_cb": [
+"pp_register_net80211_tx_cb"
+],
+"ic_register_timer_cb": [
+"pp_register_timer_cb"
+],
+"ic_register_ftm_callbacks": [
+"wdev_ftm_set_callbacks"
+],
+"ic_pp_post": [
+"pp_post"
+],
+"ic_enable_sniffer": [
+"wdev_set_promis"
+],
+"ic_disable_sniffer": [
+"wdev_set_promis"
+],
+"ic_set_vif": [
+"ic_enable_sniffer",
+"memcpy",
+"pm_force_scan_unlock",
+"rc_disable_trc_by_interface",
+"wifi_log",
+"wifi_set_rx_policy"
+],
+"ic_get_next_tbtt": [
+"wDev_Get_Next_TBTT"
+],
+"ic_del_rx_ba": [
+"hal_agreement_del_rx_ba"
+],
+"ic_reset_rx_ba": [
+"hal_agreement_clr_rx_ba"
+],
+"ic_add_rx_ba": [
+"hal_agreement_add_rx_ba"
+],
+"ic_reset_tbtt": [
+"wDev_Reset_TBTT"
+],
+"ic_del_key_all": [
+"wDev_remove_KeyEntry_all_cnx"
+],
+"ic_del_key": [
+"wDev_remove_KeyEntry"
+],
+"ic_set_ac_param": [
+"lmacSetAcParam"
+],
+"ic_set_ac_muedca_param": [
+"hal_he_set_ac_muedca_param",
+"lmacSetMuEDCAParam"
+],
+"ic_ampdu_op": [
+"rc_get_trc_by_index",
+"trc_onAmpduOp"
+],
+"ic_set_trc": [
+"rcUpdateAMPDUParam",
+"rcUpdatePhyMode",
+"rc_disable_trc",
+"rc_enable_trc"
+],
+"ic_bb_check_noise_init": [
+"wifi_log"
+],
+"ic_deinit": [
+"pm_deattach",
+"pp_deattach",
+"trc_deinit",
+"wDev_Rxbuf_Deinit"
+],
+"ic_init": [
+"ic_deinit",
+"lmacInit",
+"pm_attach",
+"pm_enable_sta_disconnected_power_management",
+"pp_attach",
+"trc_init",
+"wDev_Rxbuf_Init"
+],
+"ic_set_interrupt_handler": [
+"hal_init"
+],
+"ic_clear_interrupt_handler": [
+"hal_deinit"
+],
+"ic_set_beacon_int": [
+"wDev_Set_Beacon_Int"
+],
+"ic_set_mac": [
+"hal_mac_set_addr"
+],
+"ic_set_bssid": [
+"hal_mac_set_bssid"
+],
+"ic_set_current_channel": [
+"wDev_SetCurChannel"
+],
+"ic_get_random": [
+"hal_random"
+],
+"ic_get_trc": [
+"rc_get_trc_by_index"
+],
+"ic_tx_is_idle": [
+"lmacIsIdle"
+],
+"ic_get_pp_hdl": [
+"ppGetTaskHdl"
+],
+"ic_set_rx_policy_ubssid_check": [
+"hal_mac_set_rxq_policy"
+],
+"ic_set_rx_policy": [
+"hal_mac_rx_set_policy"
+],
+"ic_set_sta_auth_flag": [
+"wDev_SetAuthed"
+],
+"ic_set_interface": [
+"ppSetInterface"
+],
+"ic_trc_set_per_pkt_rate": [
+"trc_set_per_pkt_rate"
+],
+"ic_trc_update_ifx_phy_mode": [
+"trc_update_ifx_phy_mode"
+],
+"ic_stop_hw_txq": [
+"lmac_stop_hw_txq"
+],
+"ic_stop_sw_txq": [
+"pp_stop_sw_txq",
+"wifi_log"
+],
+"ic_txq_empty": [
+"ppTxqEmpty"
+],
+"ic_set_fix_rate": [
+"rc_set_fix_rate"
+],
+"ic_get_fix_rate": [
+"rc_get_fix_rate"
+],
+"ic_create_wifi_task": [
+"pp_create_task"
+],
+"ic_delete_wifi_task": [
+"pp_delete_task"
+],
+"ic_set_csi": [
+"hal_mac_set_csi"
+],
+"ic_csi_set_config": [
+"hal_mac_set_csi_filter"
+],
+"ic_is_sta_tsf_active": [
+"hal_is_sta_tsf_active"
+],
+"ic_update_sta_tsf": [
+"hal_set_sta_tsf"
+],
+"ic_update_tsf_tick_interval": [
+"pm_update_tsf_tick_interval"
+],
+"ic_update_modem_sleep_default_params": [
+"pm_update_modem_sleep_default_params"
+],
+"ic_update_light_sleep_default_params": [
+"pm_update_light_sleep_default_params"
+],
+"ic_set_sleep_min_active_time": [
+"pm_set_sleep_min_active_time"
+],
+"ic_set_keep_alive_time": [
+"pm_set_keep_alive_time"
+],
+"ic_get_keep_alive_time": [
+"pm_get_keep_alive_time"
+],
+"ic_set_sleep_wait_broadcast_data_time": [
+"pm_set_sleep_wait_broadcast_data_time"
+],
+"ic_beacon_monitor_configure": [
+"pm_beacon_monitor_configure"
+],
+"ic_modem_state_configure": [
+"pm_modem_state_configure"
+],
+"ic_light_sleep_configure": [
+"pm_light_sleep_configure"
+],
+"ic_mac_retention_context_get": [
+"wDev_Get_Next_TBTT"
+],
+"ic_update_listen_interval": [
+"pm_is_open",
+"pm_scale_listen_interval",
+"wifi_nvs_set_sta_listen_interval"
+],
+"ic_rx_disable_bssid_check": [
+"hal_rx_disable_bssid_check"
+],
+"ic_rx_enable_bssid_check": [
+"hal_rx_enable_bssid_check"
+],
+"ic_set_bar_rate": [
+"ppSetBarRate"
+],
+"ic_trc_update_def_rate": [
+"trc_update_def_rate"
+],
+"ic_get_espnow_rate": [
+"trc_get_espnow_rate"
+],
+"ic_get_80211_tx_rate": [
+"trc_get_80211_tx_rate"
+],
+"ic_get_80211_tx_rate_config": [
+"trc_get_80211_tx_rate_config"
+],
+"ic_set_espnow_rate": [
+"trc_set_espnow_rate"
+],
+"ic_set_80211_tx_rate": [
+"trc_set_80211_tx_rate"
+],
+"ic_set_80211_tx_rate_config": [
+"trc_set_80211_tx_rate_config"
+],
+"ic_get_default_sched": [
+"rc_get_default_sched"
+],
+"ic_get_G6M_sched": [
+"rc_get_G6M_sched"
+],
+"ic_set_he_min_subframe_len_tab": [
+"he_get_min_subframe_len"
+],
+"ic_set_he_rts_threshold_bytes_tab": [
+"__divsf3",
+"__extendsfdf2",
+"__fixdfsi",
+"__floatsisf",
+"__ltsf2",
+"__subsf3",
+"floor",
+"get_estimated_batime"
+],
+"pp_default_event_handler": [
+"wifi_log"
+],
+"ppAddTimCount": [
+"pp_hdrsize"
+],
+"ppCheckTxConnTrafficIdle": [
+"__ctzsi2",
+"lmacGetTxFrame",
+"ppCheckIsConnTraffic"
+],
+"ppAssembleMicHdr": [
+"memcpy",
+"pp_gettid"
+],
+"ppCalTkipMic": [
+"getle32",
+"memcpy",
+"ppAssembleMicHdr",
+"putle32",
+"roundup2",
+"xswap"
+],
+"ppTxFragmentProc": [
+"esf_buf_alloc",
+"esf_buf_recycle",
+"getle32",
+"ic_get_key",
+"memcpy",
+"memmove",
+"memset",
+"ppAssembleMicHdr",
+"pp_hdrsize",
+"putle32",
+"rcGetSched",
+"roundup2",
+"xswap"
+],
+"ppClearRxFragment": [
+"ppRecycleRxPkt",
+"wifi_log"
+],
+"ppPrepareBarFrame": [
+"esf_buf_alloc",
+"memset",
+"rcGetSched",
+"rc_get_trc_by_index",
+"wifi_log"
+],
+"ppSetBarRate": [
+"rcSetBarRate"
+],
+"ppFillAMPDUBar": [
+"memcpy"
+],
+"ppCheckTxAMPDUlength": [
+"roundup2"
+],
+"ppReSendBar": [
+"lmacTxFrame",
+"rcGetRate"
+],
+"pp_create_task": [
+"config_get_wifi_task_stack_size",
+"wifi_log"
+],
+"pp_deattach": [
+"esf_buf_recycle",
+"esf_buf_setdown"
+],
+"pp_attach": [
+"dbg_lmac_init",
+"esf_buf_setup",
+"memset",
+"ppInitTxq",
+"ppPrepareBarFrame",
+"pp_deattach",
+"wifi_log"
+],
+"ppTxqEmpty": [
+"is_lmac_idle"
+],
+"pp_delete_task": [
+"pp_delete_task_manually",
+"pp_post"
+],
+"ppProcessWaitQ": [
+"ppProcessWaitingQueue"
+],
+"ppDisableQueue": [
+"ppProcessWaitingQueue"
+],
+"ppCheckTxIdle": [
+"__ctzsi2",
+"lmacIsIdle",
+"ppDisableQueue"
+],
+"ppDiscardMPDU": [
+"ppEnqueueTxDone",
+"pp_post"
+],
+"ppCalTxopDur": [
+"RC_GetCtsTime"
+],
+"ppClearTxq": [
+"esf_buf_recycle",
+"ppDequeueTxQ",
+"ppDirectRecycleAmpdu"
+],
+"pp_stop_sw_txq": [
+"esf_buf_recycle",
+"ppClearRxFragment",
+"ppClearTxq",
+"ppDequeueTxDone_Locked"
+],
+"pm_parse_mbssid_element": [
+"ieee80211_find_elem",
+"ieee80211_find_ie",
+"ieee80211_merge_mbssid_profile",
+"memset"
+],
+"bss_color_check_collision_status": [
+"__lshrdi3",
+"hal_he_get_bss_color",
+"hal_mac_color_clr_bitmap",
+"hal_mac_color_get_hw_bitmap",
+"pp_post"
+],
+"esf_buf_alloc_dynamic_default_handler": [
+"wifi_log"
+],
+"esf_buf_alloc_default_handler": [
+"wifi_log"
+],
+"esf_buf_recycle_default_handler": [
+"wifi_log"
+],
+"esf_buf_setup_static": [
+"esf_buf_alloc_dynamic",
+"esf_buf_recycle",
+"wifi_log"
+],
+"esf_buf_free_static": [
+"memset"
+],
+"esf_buf_setdown": [
+"esf_buf_free_static"
+],
+"esf_buf_setup": [
+"config_is_cache_tx_buf_enabled",
+"esf_buf_recycle",
+"esf_buf_setdown",
+"esf_buf_setup_static",
+"memset",
+"wifi_log"
+],
+"esf_buf_statis_dump": [
+"wifi_log"
+],
+"lmacSetAcParam": [
+"rx11AXRate2AMPDULimit_update"
+],
+"lmacInitAc": [
+"rx11AXRate2AMPDULimit_update"
+],
+"lmacInit": [
+"RC_SetBasicRate",
+"lmacInitAc",
+"rcAttach"
+],
+"lmacProcessTxopSuccess": [
+"lmacIsLongFrame",
+"lmacProcessLongFrameSuccess",
+"lmacProcessShortFrameSuccess",
+"wifi_log"
+],
+"lmacEndRetryAMPDUFail": [
+"ppFillAMPDUBar",
+"ppReSendBar",
+"ppRecordBarRRC",
+"ppRegressAmpdu",
+"ppResortTxAMPDU",
+"trc_isTxAmpduOperational"
+],
+"lmacDebugTxDrop": [
+"lmacMSDUAged"
+],
+"esp_wifi_internal_get_mib": [
+"memcpy"
+],
+"esp_wifi_internal_set_rts": [
+"wifi_log"
+],
+"lmac_record_txtime": [
+"wDev_ftm_record_t1t4"
+],
+"lmacDiscardMSDU": [
+"lmacDebugTxDrop",
+"lmacTxDone",
+"ppDequeueTxQ"
+],
+"lmacRetryTxFrame": [
+"lmacDiscardAgedMSDU",
+"lmacTxFrame",
+"ppCalFrameTimes",
+"ppRecycleAmpdu",
+"ppRemoveHTC",
+"rcGetRate",
+"wifi_log"
+],
+"lmacProcessTxopQComplete": [
+"hal_mac_get_txq_pmd",
+"lmacRecycleMPDU",
+"lmacReleaseTxopQueue",
+"wifi_log"
+],
+"lmacProcessShortRetryFail": [
+"esp_test_tx_count_retry",
+"is_use_muedca",
+"lmacDiscardFrameExchangeSequence",
+"lmacEndFrameExchangeSequence",
+"lmacIsLongFrame",
+"lmacMSDUAged",
+"lmacProcessTBSuccess",
+"rcReachRetryLimit",
+"wifi_log"
+],
+"lmacProcessCtsTimeout": [
+"wifi_log"
+],
+"lmacProcessLongRetryFail": [
+"esp_test_tx_count_retry",
+"is_use_muedca",
+"lmacDiscardFrameExchangeSequence",
+"lmacEndFrameExchangeSequence",
+"lmacMSDUAged",
+"lmacProcessTBSuccess",
+"lmacRetryTxFrame",
+"rcReachRetryLimit",
+"wifi_log"
+],
+"lmacProcessCollision": [
+"lmacIsLongFrame",
+"wifi_log"
+],
+"lmacProcessCollisions_task": [
+"__ctzsi2",
+"esp_test_tx_count_collision",
+"hal_mac_clr_txq_state",
+"hal_mac_get_txq_state",
+"hal_mac_tx_clr_mplen",
+"hal_mac_txq_disable",
+"lmacProcessCollision"
+],
+"lmacProcessAckTimeout": [
+"lmacProcessLongFrameSuccess",
+"lmacProcessShortFrameSuccess",
+"lmacProcessShortRetryFail",
+"lmacProcessTxopQComplete",
+"wifi_log"
+],
+"lmacProcessTxRtsError": [
+"ic_interface_enabled",
+"is_off_channel",
+"lmacEndFrameExchangeSequence",
+"wifi_log"
+],
+"lmacProcessTxseckiderr": [
+"lmacEndFrameExchangeSequence",
+"lmacProcessTxopQComplete"
+],
+"lmacProcessTxError": [
+"wifi_log"
+],
+"lmacRxDone": [
+"ppEnqueueRxq",
+"pp_post"
+],
+"lmacDisableTransmit": [
+"ets_delay_us",
+"hal_mac_is_txq_valid",
+"hal_mac_set_txq_invalid",
+"hal_mac_tx_clr_mplen",
+"hal_mac_tx_set_cca",
+"hal_mac_txq_disable",
+"lmacDiscardFrameExchangeSequence"
+],
+"lmacProcessTxTimeout": [
+"__ctzsi2",
+"esp_test_tx_count_timeout",
+"hal_mac_clr_txq_state",
+"hal_mac_get_txq_state",
+"lmacDisableTransmit"
+],
+"lmacStopTransmit": [
+"esf_buf_recycle",
+"ets_delay_us",
+"hal_mac_is_txq_valid",
+"hal_mac_set_txq_invalid",
+"hal_mac_tx_clr_mplen",
+"hal_mac_tx_set_cca",
+"hal_mac_txq_disable",
+"ppDirectRecycleAmpdu",
+"wifi_log"
+],
+"lmac_stop_hw_txq": [
+"lmacStopTransmit",
+"wifi_log"
+],
+"pm_show": [
+"pm_is_sleeping"
+],
+"pm_stop_twt": [
+"hal_clr_itwt_pti",
+"hal_disable_tsf_timer",
+"hal_disable_tsf_timer_wakeup",
+"hal_enable_sta_btwt_tsf",
+"hal_get_tsf_time",
+"hal_wdev_timer_target_enable",
+"pm_dream",
+"pm_is_twt_start",
+"pm_is_waked",
+"pm_set_sleep_type",
+"pm_twt_set_state",
+"pm_update_at_next_beacon",
+"pm_update_next_tbtt",
+"ppProcessWaitingQueue",
+"tsf_hal_set_tbtt_soc_wakeup_enable"
+],
+"pm_start_twt": [
+"__ctzsi2",
+"hal_disable_sta_tbtt",
+"hal_enable_sta_btwt_tsf",
+"hal_enable_tsf_timer_wakeup",
+"hal_get_tsf_time",
+"hal_he_get_rx_trigger_cnt",
+"hal_mac_tsf_set_time",
+"hal_set_itwt_pti",
+"hal_set_sta_light_sleep_wake_ahead_time",
+"pm_clear_wakeup_signal",
+"pm_is_dream",
+"pm_is_sleeping",
+"pm_is_twt_awake",
+"pm_is_waked",
+"pm_mac_try_enable_modem_state",
+"pm_sleep",
+"pm_stop_twt",
+"pm_twt_set_target_tsf",
+"wifi_log"
+],
+"pm_twt_wake_up": [
+"pm_wake_up"
+],
+"pm_twt_wake_done": [
+"pm_wake_done"
+],
+"pm_twt_disallow_tx": [
+"pm_is_sleeping",
+"pm_is_twt_sleeping"
+],
+"pm_tx_null_data_done_twt_process": [
+"pm_is_sleeping",
+"pm_is_twt_awake",
+"pm_send_nullfunc",
+"pm_sleep",
+"sta_twt_null_data_max_retry_times_reached"
+],
+"pm_on_twt_force_tx": [
+"pm_is_twt_start"
+],
+"pm_twt_keep_alive_timeout_process": [
+"hal_he_get_rx_trigger_cnt",
+"pm_is_twt_start",
+"pm_send_nullfunc"
+],
+"pm_enable_twt_keep_alive_timer": [
+"pm_is_twt_start",
+"wifi_log"
+],
+"pm_twt_keep_alive_timeout": [
+"pp_timer_process"
+],
+"pm_enable_twt_keep_alive": [
+"hal_he_get_rx_trigger_cnt",
+"pm_enable_twt_keep_alive_timer",
+"pm_is_twt_start",
+"pm_send_nullfunc",
+"pp_check_pending_data"
+],
+"pm_coex_set_reconnect_policy": [
+"wifi_log"
+],
+"pm_coex_pwr_configure": [
+"pm_coex_pwr_update"
+],
+"pm_coex_recalculate_wifi_time_slice": [
+"__umoddi3",
+"pm_coex_schm_overall_period_get",
+"wifi_log"
+],
+"pm_coex_update_wifi_time_slice_state": [
+"pm_coex_recalculate_wifi_time_slice"
+],
+"ppCalTxHESMPDULength": [
+"ppCalDeliNum",
+"ppCalSubFrameLength",
+"roundup2"
+],
+"rx11AXRate2AMPDULimit_update": [
+"__divsf3",
+"__fixsfsi",
+"__floatsisf",
+"__mulsf3",
+"__subsf3",
+"get_estimated_batime",
+"memcpy",
+"memset"
+],
+"rcGet11AXHighestRateIdx": [
+"wifi_log"
+],
+"rcGet11NHighestRateIdx": [
+"wifi_log"
+],
+"rcGet11GHighestRateIdx": [
+"wifi_log"
+],
+"rcGet11BHighestRateIdx": [
+"wifi_log"
+],
+"trc_set_bf_report_rate": [
+"hal_he_set_bf_report_rate",
+"hal_he_set_ersu_ack_rate"
+],
+"rcUpdatePhyMode": [
+"ampduTidState2str",
+"phytype2str",
+"rate2str",
+"rcClearCurAMPDUSched",
+"rcClearCurSched",
+"rcGetHighestRateIdx",
+"rcSetTxAmpduLimit",
+"rx11NRate2AMPDULimit",
+"trcAmpduSetState",
+"trc_set_bf_report_rate",
+"wifi_log"
+],
+"rcLowerSched": [
+"rcClearCurSched",
+"read_hw_noisefloor"
+],
+"rcUpSched": [
+"rcClearCurSched",
+"read_hw_noisefloor"
+],
+"trc_onAmpduOp": [
+"trcAmpduSetState"
+],
+"rcGetAmpduSched": [
+"rcSetTxAmpduLimit",
+"rx11NRate2AMPDULimit",
+"wifi_log"
+],
+"TRC_PER_IS_GOOD": [
+"rssi_margin"
+],
+"TRC_AMPDU_PER_DOWN_THRESHOLD": [
+"rssi_margin"
+],
+"rcAmpduLowerRate": [
+"TRC_AMPDU_PER_DOWN_THRESHOLD",
+"rcClearCurAMPDUSched",
+"rcClearCurSched",
+"rcSetTxAmpduLimit",
+"rx11NRate2AMPDULimit",
+"trcAmpduSetState"
+],
+"TRC_AMPDU_PER_UP_THRESHOLD": [
+"rssi_margin"
+],
+"rcUpdateRate": [
+"TRC_PER_IS_GOOD",
+"rcClearCurSched",
+"rcLowerSched",
+"rcUpSched",
+"rssi_margin",
+"trc_calc_duration"
+],
+"rcReachRetryLimit": [
+"wifi_log"
+],
+"rcAttach": [
+"rcBuildIndex"
+],
+"rc_disable_trc": [
+"memcmp",
+"wifi_log"
+],
+"rc_get_sta_trc": [
+"__ctzsi2"
+],
+"trc_init": [
+"wifi_log"
+],
+"trc_update_def_rate": [
+"wifi_log"
+],
+"trc_update_ifx_phy_mode": [
+"wifi_log"
+],
+"rc_enable_trc": [
+"memcmp",
+"memcpy",
+"memset",
+"rc_set_per_conn_fix_rate",
+"wifi_log"
+],
+"rc_set_fix_rate": [
+"rc_set_per_conn_fix_rate"
+],
+"dbg_lmac_rxtx_statis_dump": [
+"wifi_log"
+],
+"dbg_lmac_hw_statis_dump": [
+"wifi_log"
+],
+"dbg_lmac_diag_statis_dump": [
+"wifi_log"
+],
+"dbg_lmac_ps_statis_dump": [
+"__divsf3",
+"__extendsfdf2",
+"__floatundisf",
+"__mulsf3",
+"wifi_log"
+],
+"dbg_lmac_statis_dump": [
+"dbg_lmac_diag_statis_dump",
+"dbg_lmac_hw_statis_dump",
+"dbg_lmac_rxtx_statis_dump",
+"esf_buf_statis_dump"
+],
+"dbg_perf_throughput_cal": [
+"wifi_log"
+],
+"wdev_csi_rx_process": [
+"memcpy",
+"memset"
+],
+"wDev_IndicateCtrlFrame": [
+"memcpy",
+"wdev_csi_rx_process",
+"wifi_log"
+],
+"wDev_SnifferRxAmpdu": [
+"memcpy",
+"pp_post"
+],
+"wDev_Reset_TBTT": [
+"hal_mac_tsf_reset"
+],
+"wDev_Mesh_Enable_Tsf": [
+"hal_mac_tsf_reset"
+],
+"wDev_Mesh_Set_TBTT": [
+"hal_mac_tsf_set_time"
+],
+"wDev_Get_Next_TBTT": [
+"hal_get_tsf_time"
+],
+"wdev_set_promis_misc_pkt": [
+"hal_sniffer_set_promis_misc_pkt"
+],
+"wdev_set_promis_ctrl_pkt": [
+"hal_sniffer_rx_set_promis"
+],
+"wdev_set_promis": [
+"hal_sniffer_disable",
+"hal_sniffer_enable",
+"wdev_set_promis_ctrl_pkt",
+"wdev_set_promis_misc_pkt",
+"wifi_log"
+],
+"wdev_set_promis_filter": [
+"memcpy",
+"wdev_set_promis_misc_pkt"
+],
+"wdev_get_promis_filter": [
+"memcpy"
+],
+"wdev_set_promis_ctrl_filter": [
+"memcpy",
+"wdev_set_promis_ctrl_pkt"
+],
+"wdev_get_promis_ctrl_filter": [
+"memcpy"
+],
+"wDev_record_ftm_data_local": [
+"ets_delay_us",
+"hal_mac_ftm_get_t3"
+],
+"wDev_SnifferRxData": [
+"get_sublen_offset",
+"memcpy",
+"pp_post",
+"wdev_csi_rx_process"
+],
+"is_ndpa_to_dut": [
+"hal_he_get_aid",
+"wifi_log"
+],
+"wDev_Rxbuf_Deinit": [
+"wifi_log"
+],
+"wDev_Rxbuf_Init": [
+"hal_mac_set_rx_beacon_memory_addr_map",
+"memset",
+"pwr_hal_set_modem_state_rxend_exit_code",
+"wDev_Rxbuf_Deinit",
+"wifi_log"
+],
+"wDev_disable_low_rate": [
+"hal_mac_disable_low_rate"
+],
+"wDev_enable_low_rate": [
+"hal_mac_enable_low_rate"
+],
+"wDev_is_low_rate_enable": [
+"hal_mac_is_low_rate_enabled"
+],
+"wDev_Insert_KeyEntry": [
+"hal_crypto_enable",
+"hal_crypto_set_key_entry",
+"memcpy"
+],
+"wDev_remove_KeyEntry": [
+"hal_crypto_clr_key_entry"
+],
+"wDev_remove_KeyEntry_all_cnx": [
+"wDev_remove_KeyEntry"
+],
+"wDev_Crypto_Disable": [
+"hal_crypto_disable"
+],
+"wdev_is_mgmt_hwdecr_enabled": [
+"hal_crypto_mgmt_rx_enabled"
+],
+"wdev_funcs_init": [
+"esp_pp_rom_version_get",
+"pp_printf",
+"wdev_data_init",
+"wdev_funcs_init",
+"wifi_log"
+],
+"pm_beacon_offset_get_rx_beacon_success_rate": [
+"__divsf3",
+"__floatunsisf"
+],
+"pm_beacon_offset_configure": [
+"__divsf3",
+"__extendsfdf2",
+"__floatunsisf",
+"wifi_log"
+],
+"pm_beacon_offset_set_rx_beacon_standard": [
+"__divsf3",
+"__extendsfdf2",
+"__floatunsisf",
+"wifi_log"
+],
+"pm_beacon_offset_init": [
+"pm_beacon_offset_reset"
+],
+"pm_beacon_offset_deinit": [
+"pm_beacon_offset_reset"
+],
+"pm_beacon_offset_resample_timeout_process": [
+"pm_on_sample_beacon"
+],
+"pm_beacon_offset_check": [
+"__divsf3",
+"__extendsfdf2",
+"__floatunsisf",
+"__ltsf2",
+"__mulsf3",
+"__subsf3",
+"pm_beacon_offset_get_rx_beacon_success_rate",
+"wifi_event_post",
+"wifi_log"
+],
+"pm_beacon_offset_resample_timeout": [
+"pp_timer_process"
+],
+"pm_funcs_init": [
+"empty_func_p_pvoid_r_void",
+"wifi_log"
+],
+"hal_agreement_add_rx_ba": [
+"wifi_log"
+],
+"hal_agreement_clr_rx_ba": [
+"wifi_log"
+],
+"hal_agreement_del_rx_ba": [
+"wifi_log"
+],
+"hal_set_ofdma_sequence_pti": [
+"hal_set_beamf_mt_pti",
+"hal_set_beamf_pti",
+"hal_set_tb_pti",
+"wifi_log"
+],
+"hal_crypto_set_key_entry": [
+"memcpy",
+"memset",
+"wifi_log"
+],
+"hal_crypto_get_key_entry": [
+"memcpy",
+"wifi_log"
+],
+"dbg_dump_rx_links": [
+"pp_printf",
+"wifi_log"
+],
+"dbg_read_rx_ba": [
+"pp_printf"
+],
+"dbg_read_wdevdelay": [
+"wifi_log"
+],
+"dbg_read_rx_misc": [
+"pp_printf",
+"wifi_log"
+],
+"dbg_dump_trs_control": [
+"pp_printf",
+"ru2str"
+],
+"dbg_dump_uph_control": [
+"pp_printf"
+],
+"dbg_dump_trig_common_info": [
+"giltf2str",
+"pp_printf",
+"trig2str"
+],
+"dbg_dump_trig_user_ru": [
+"pp_printf",
+"ru2str"
+],
+"dbg_dump_trig_user_ss": [
+"pp_printf",
+"ru2str"
+],
+"dbg_dump_trig_basic_dependent": [
+"pp_printf"
+],
+"dbg_dump_trig_bfrp_dependent": [
+"pp_printf"
+],
+"dbg_dump_trig_mubar_dependent": [
+"pp_printf",
+"wifi_log"
+],
+"dbg_dump_trig_nfrp_user": [
+"pp_printf"
+],
+"dbg_dump_musigb_non_mimo": [
+"wifi_log"
+],
+"dbg_dump_musigb_mimo": [
+"wifi_log"
+],
+"get_queue_size": [
+"wifi_log"
+],
+"dbg_read_internal_txba": [
+"wifi_log"
+],
+"test_rx_ba_check": [
+"dbg_read_internal_txba",
+"wifi_log"
+],
+"dbg_dump_rx_ba": [
+"dbg_read_internal_txba",
+"esp_wifi_get_mac",
+"esp_wifi_get_mode",
+"hal_he_get_aid",
+"memcmp",
+"test_rx_ba_check",
+"wifi_log"
+],
+"dbg_dump_rx_ppdu": [
+"dbg_dump_rx_ba",
+"get_immediate_response_txtime",
+"get_queue_size",
+"lratecoding2str",
+"memcpy",
+"pp_printf",
+"putchar",
+"rxformat2str",
+"wifi_log"
+],
+"print_link": [
+"pp_printf"
+],
+"dbg_dump_tx_link": [
+"pp_printf",
+"wifi_log"
+],
+"dbg_dump_tx_end": [
+"hal_now",
+"pp_printf",
+"wifi_log"
+],
+"dbg_dump_txq_txinfo": [
+"wifi_log"
+],
+"dbg_read_bsr_info": [
+"__popcountsi2",
+"wifi_log"
+],
+"dbg_read_txq_conf2": [
+"wifi_log"
+],
+"dbg_read_tb_diag": [
+"wifi_log"
+],
+"dbg_dump_rx_errors": [
+"esp_wifi_get_mode",
+"wifi_log"
+],
+"dbg_read_color_collision": [
+"wifi_log"
+],
+"dbg_read_tx_power": [
+"hal_get_tx_pwr",
+"phy_get_max_pwr",
+"rate2str",
+"wifi_log"
+],
+"dbg_read_imrsp_power": [
+"rate2str",
+"wifi_log"
+],
+"dbg_read_ack_rate": [
+"rate2str",
+"wifi_log"
+],
+"dbg_read_cts_rate": [
+"rate2str",
+"wifi_log"
+],
+"dbg_read_bfr_rate": [
+"rate2str",
+"wifi_log"
+],
+"print_maxpwr_rate": [
+"phy_get_max_pwr",
+"rate2str",
+"wifi_log"
+],
+"dbg_read_key_entry": [
+"wifi_log"
+],
+"dbg_tb_ignore_cca_enable": [
+"wifi_log"
+],
+"dbg_complete_ignore_no_key": [
+"esp_wifi_get_mode",
+"ieee80211_sta_is_connected",
+"txformat2str",
+"wifi_log"
+],
+"dbg_read_axtb_diag": [
+"pp_printf"
+],
+"dbg_read_txq_conf1": [
+"wifi_log"
+],
+"dbg_read_tx_sig": [
+"dbg_read_txq_conf1",
+"rate2str",
+"wifi_log"
+],
+"dbg_read_tx_ppdu": [
+"pp_printf",
+"putchar",
+"rate2str",
+"txformat2str",
+"wifi_log"
+],
+"dbg_read_tx_mplen": [
+"pp_printf",
+"wifi_log"
+],
+"dbg_read_muedca_timer": [
+"wifi_log"
+],
+"dbg_read_ax_diag": [
+"pp_printf",
+"wifi_log"
+],
+"dbg_check_mutimer": [
+"hal_now",
+"is_use_muedca",
+"memcpy",
+"wifi_log"
+],
+"dbg_read_rx_count": [
+"pp_printf"
+],
+"dbg_disable_report_cbf": [
+"wifi_log"
+],
+"esp_test_get_bfr_avgsnr": [
+"__addsf3",
+"__extendsfdf2",
+"__floatsisf",
+"__mulsf3",
+"wifi_log"
+],
+"hal_set_dump_ctrl_frame_cfg": [
+"wifi_log"
+],
+"print_isr_regs": [
+"pp_printf"
+],
+"hal_mac_disable_low_rate": [
+"hal_he_set_bbrxhung_time",
+"phy_disable_low_rate"
+],
+"hal_mac_enable_low_rate": [
+"hal_he_set_bbrxhung_time",
+"phy_enable_low_rate"
+],
+"mac_txrx_init": [
+"hal_he_set_ack_rate",
+"hal_he_set_bbrxhung_time",
+"hal_he_set_mac_delay"
+],
+"hal_deinit": [
+"hal_set_rx_ack_pti",
+"hal_set_rx_active_pti",
+"hal_set_wifi_default_pti"
+],
+"hal_mac_rx_set_policy": [
+"hal_mac_set_bssid"
+],
+"wDev_Mesh_Disable_Tsf": [
+"hal_disable_sta_tsf"
+],
+"hal_mac_tsf_reset": [
+"wDev_reset_bcnSendTick"
+],
+"hal_init": [
+"hal_attenna_init",
+"hal_coex_pti_init",
+"hal_crypto_init",
+"hal_he_init",
+"hal_mac_disable_low_rate",
+"hal_mac_rate_autoack_init",
+"hal_mac_rx_set_policy",
+"hal_mac_set_rxbuf_reload_use_hw_beacon_enable",
+"hal_set_ofdma_sequence_pti",
+"hal_set_rx_ack_pti",
+"hal_set_rx_active_pti",
+"hal_set_wifi_default_pti",
+"hal_timer_update_by_rtc",
+"mac_last_rxbuf_init",
+"mac_rxbuf_init",
+"mac_txrx_init"
+],
+"hal_he_set_ack_rate": [
+"rate2str",
+"wifi_log"
+],
+"hal_he_set_multi_bssid": [
+"wifi_log"
+],
+"hal_he_clr_multi_bssid": [
+"hal_mac_rx_set_policy",
+"hal_mac_set_addr",
+"hal_mac_set_bssid",
+"hal_mac_set_rxq_policy"
+],
+"hal_init_tb_power": [
+"hal_get_tx_pwr",
+"phy_get_max_pwr"
+],
+"hal_init_imrsp_power": [
+"hal_get_tx_pwr"
+],
+"hal_init_bf": [
+"__extendsfdf2",
+"__floatsisf",
+"__mulsf3",
+"hal_he_set_bf_report_rate",
+"wifi_log"
+],
+"hal_he_init": [
+"hal_he_clr_multi_bssid",
+"hal_he_set_bcast_ru",
+"hal_he_set_co_hosted_bss",
+"hal_he_set_ersu",
+"hal_he_set_uora_parameter",
+"hal_init_bf",
+"hal_init_tb_tx",
+"hal_init_tx_pwr",
+"hal_set_tx_min_pwr"
+],
+"hal_init_tx_pwr": [
+"hal_init_imrsp_power",
+"hal_init_tb_power",
+"phy_get_max_pwr"
+],
+"mac_tx_set_legacysig": [
+"mac_tx_set_len"
+],
+"hal_mac_get_txq_pmd": [
+"memcpy"
+],
+"esp_test_set_muedca_paras": [
+"memcpy",
+"wifi_log"
+],
+"esp_test_get_muedca_paras": [
+"memcpy",
+"wifi_log"
+],
+"rate2str": [
+"sprintf"
+],
+"giltf2str": [
+"wifi_log"
+],
+"su_giltf2str": [
+"wifi_log"
+],
+"ru2str": [
+"sprintf"
+],
+"phytype2str": [
+"wifi_log"
+],
+"txformat2str": [
+"wifi_log"
+],
+"rxformat2str": [
+"wifi_log"
+],
+"get_user_num": [
+"rutype2str",
+"wifi_log"
+],
+"mumimo_spatial_cfg_get_nsts": [
+"wifi_log"
+],
+"mumimo_spatial_cfg_get_nsts_tot": [
+"mumimo_spatial_cfg_get_nsts"
+],
+"test_mumimo_get_heltf_num": [
+"mumimo_spatial_cfg_get_nsts_tot"
+],
+"test_mimo_update_user_info": [
+"hal_he_get_aid",
+"wifi_log"
+],
+"test_parse_rx_mu_mimo": [
+"mumimo_spatial_cfg_get_nsts"
+],
+"test_nonmimo_update_user_info": [
+"get_user_num",
+"hal_he_get_aid",
+"rutype2str",
+"wifi_log"
+],
+"test_rx_parse_mumimo": [
+"mumimo_spatial_cfg_get_nsts_tot",
+"test_parse_rx_mu_mimo",
+"wifi_log"
+],
+"test_rx_parse_nonmumimo": [
+"get_user_num",
+"test_parse_rx_mu_nonmimo",
+"wifi_log"
+],
+"esp_test_get_rx_mu_statistics": [
+"hal_he_get_aid",
+"memcpy",
+"wifi_log"
+],
+"esp_test_clr_rx_mu_statistics": [
+"memset"
+],
+"esp_test_enable_rx_mu_statistics": [
+"esp_test_disable_rx_mu_statistics"
+],
+"test_rx_process_complete_noeb": [
+"wifi_log"
+],
+"test_rx_process_complete_retry": [
+"wifi_log"
+],
+"esp_test_rx_process_complete": [
+"test_rx_process_complete_retry",
+"wifi_log"
+],
+"esp_test_clr_rx_statistics": [
+"memset",
+"wifi_log"
+],
+"esp_test_get_rx_statistics": [
+"memcpy",
+"wifi_log"
+],
+"esp_test_get_rx_error_occurs": [
+"memcpy"
+],
+"esp_test_clr_rx_error_occurs": [
+"memset"
+],
+"hal_enable_rx_statistics": [
+"esp_test_disable_rx_mu_statistics",
+"esp_test_disable_rx_statistics",
+"esp_test_enable_rx_mu_statistics",
+"esp_test_enable_rx_statistics"
+],
+"esp_test_enable_tx_statistics": [
+"esp_test_disable_tx_statistics",
+"wifi_log"
+],
+"esp_test_clr_tx_statistics": [
+"memset"
+],
+"esp_test_get_tx_statistics": [
+"memcpy"
+],
+"esp_test_clr_tx_tb_statistics": [
+"memset"
+],
+"esp_test_get_tx_tb_statistics": [
+"memcpy"
+],
+"esp_test_tx_enab_statistics": [
+"GetAccess",
+"is_use_muedca",
+"wifi_he_get_hetb_tid_bitmap"
+],
+"hal_enable_tx_statistics": [
+"esp_test_disable_tx_statistics",
+"esp_test_enable_tx_statistics"
+],
+"sms4_decap": [
+"ieee80211_gettid",
+"wifi_log"
+],
+"sms4_encap": [
+"memcpy"
+],
+"btwt_setup_timeout_fn": [
+"ieee80211_timer_process"
+],
+"btwt_setup_dwell_timeout_fn": [
+"ieee80211_timer_process"
+],
+"ieee80211_process_btwt_setup_action": [
+"hal_get_tsf_time",
+"memcpy",
+"memset",
+"twtsetupcmd_str",
+"wifi_event_post",
+"wifi_log"
+],
+"ieee80211_btwt_setup_txcb": [
+"memcpy",
+"memset",
+"wifi_event_post"
+],
+"he_btwt_teardown_post_event": [
+"wifi_event_post"
+],
+"btwt_setup_dwell_timeout_fn_process": [
+"hal_get_tsf_time",
+"memset",
+"pm_get_sleep_type",
+"pm_set_sleep_type",
+"pm_start_twt",
+"twt_update_inactive_time_secs",
+"twtsetupcmd_str",
+"wifi_event_post",
+"wifi_log"
+],
+"btwt_setup_timeout_fn_process": [
+"memset",
+"wifi_event_post"
+],
+"ieee80211_btwt_teardown_txcb": [
+"he_btwt_teardown_post_event",
+"memset",
+"pm_start_twt",
+"twt_update_inactive_time_secs"
+],
+"ieee80211_btwt_setup": [
+"ieee80211_send_action",
+"twtsetupcmd_str",
+"wifi_log"
+],
+"ieee80211_btwt_teardown": [
+"ieee80211_send_action",
+"pm_twt_wake_up",
+"wifi_log"
+],
+"ieee80211_update_twt": [
+"memcpy",
+"memset"
+],
+"ieee80211_get_btwt_info": [
+"wifi_log"
+],
+"ieee80211_regdomain_max_tx_power": [
+"phy_get_most_tpw"
+],
+"ieee80211_update_phy_country": [
+"hal_init_tx_pwr",
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_update": [
+"chm_get_current_band",
+"ieee80211_update_phy_country",
+"memcmp",
+"memcpy"
+],
+"ieee80211_add_countryie": [
+"ieee80211_regdomain_get_country",
+"memcmp"
+],
+"ieee80211_regdomain_max_chan": [
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_ap_max_chan": [
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_min_chan": [
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_ap_min_chan": [
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_chan_num": [
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_policy": [
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_chan_in_range": [
+"chm_get_band_from_chan",
+"ieee80211_regdomain_max_chan",
+"ieee80211_regdomain_min_chan"
+],
+"ieee80211_regdomain_check_channel": [
+"chm_check_channel_is_valid",
+"ieee80211_regdomain_chan_in_range"
+],
+"ieee80211_regdomain_check_ap_channel": [
+"chm_check_channel_is_valid",
+"chm_get_band_from_chan",
+"ieee80211_regdomain_ap_max_chan",
+"ieee80211_regdomain_ap_min_chan"
+],
+"ieee80211_get_regdomain": [
+"memcmp"
+],
+"get_channel_max_bandwidth": [
+"chm_get_band_from_chan",
+"ieee80211_regdomain_min_chan",
+"wifi_log"
+],
+"ieee80211_is_40mhz_valid_bw": [
+"get_channel_max_bandwidth",
+"ieee80211_get_regdomain",
+"ieee80211_regdomain_get_country"
+],
+"ieee80211_regdomain_get_country_info": [
+"chm_get_band_from_chan",
+"ieee80211_get_regdomain",
+"memcpy"
+],
+"ieee80211_send_sa_query": [
+"ieee80211_get_robustmgtframe",
+"ieee80211_mgmt_output",
+"ieee80211_set_tx_desc",
+"wifi_log"
+],
+"ieee80211_recv_sa_query_req": [
+"ieee80211_send_action"
+],
+"ieee80211_recv_sa_query_resp": [
+"wifi_ap_reg_rxcb",
+"wifi_log"
+],
+"band2str": [
+"wifi_log"
+],
+"ieee80211_freedom_inside_cb": [
+"ieee80211_get_tx_info_from_eb",
+"memset"
+],
+"ieee80211_freedom_init": [
+"ic_register_tx_cb"
+],
+"ieee80211_freedom_deinit": [
+"pp_unregister_tx_cb"
+],
+"ieee80211_user_ie_init": [
+"memset"
+],
+"ieee80211_ifattach": [
+"ftm_validate_initiator_config",
+"ieee80211_action_vendor_spec_attach",
+"ieee80211_crypto_attach",
+"ieee80211_freedom_init",
+"ieee80211_he_attach",
+"ieee80211_ht_attach",
+"ieee80211_phy_init",
+"ieee80211_proto_attach",
+"ieee80211_rate_ref_init",
+"ieee80211_rfid_locp_recv_reset",
+"ieee80211_scan_attach",
+"ieee80211_user_ie_init"
+],
+"ieee80211_ifdetach": [
+"ieee80211_freedom_deinit",
+"ieee80211_ftm_detach",
+"ieee80211_phy_deinit",
+"ieee80211_scan_deattach"
+],
+"wifi_destroy_softap": [
+"cipher_type_map_public_to_internal",
+"ic_register_rx_cb",
+"ic_set_interface",
+"ieee80211_ht_deattach"
+],
+"wifi_destroy_sta": [
+"cnx_clear_blacklist",
+"cnx_remove_all_rc",
+"ic_register_rx_cb",
+"ic_set_interface",
+"ieee80211_ht_deattach"
+],
+"wifi_recycle_rx_pkt": [
+"ic_ebuf_recycle_rx"
+],
+"ieee80211_find_elem_match": [
+"memcmp"
+],
+"ieee80211_find_ext_elem": [
+"ieee80211_find_elem_match"
+],
+"ieee80211_setup_pmf": [
+"ieee80211_recv_action_register",
+"ieee80211_send_action_register"
+],
+"wifi_create_softap": [
+"chm_get_current_band",
+"ic_register_rx_cb",
+"ic_set_interface",
+"ieee80211_he_attach",
+"ieee80211_he_deattach",
+"ieee80211_ht_attach",
+"ieee80211_phy_init",
+"ieee80211_setup_pmf",
+"memcpy"
+],
+"wifi_create_sta": [
+"chm_get_current_band",
+"ic_register_michael_mic_failure_cb",
+"ic_register_rx_cb",
+"ic_set_interface",
+"ieee80211_he_attach",
+"ieee80211_ht_attach",
+"ieee80211_phy_init",
+"ieee80211_setup_pmf",
+"memcpy"
+],
+"wifi_mode_set": [
+"wifi_create_sta",
+"wifi_destroy_sta",
+"wifi_log"
+],
+"ieee80211_merge_mbssid_profile": [
+"ieee80211_find_elem",
+"memcpy"
+],
+"ieee80211_parse_mbssid": [
+"ic_ebuf_alloc",
+"ic_ebuf_recycle_rx",
+"ieee80211_find_elem",
+"ieee80211_find_ext_elem",
+"ieee80211_find_ext_ie",
+"ieee80211_find_ie",
+"ieee80211_merge_mbssid_profile",
+"ieee80211_parse_beacon",
+"memcmp",
+"memcpy",
+"memset",
+"scan_parse_beacon"
+],
+"sta_update_mbssid": [
+"hal_he_clr_multi_bssid",
+"hal_he_set_multi_bssid",
+"memcmp",
+"memcpy",
+"memset"
+],
+"ieee80211_crypto_encap": [
+"wifi_log"
+],
+"ieee80211_crypto_decap": [
+"wifi_log"
+],
+"ieee80211_crypto_bip_encrypt": [
+"ieee80211w_get_active_igtk_key_id",
+"ieee80211w_get_igtk_from_keyidx",
+"memcpy",
+"wifi_log"
+],
+"ieee80211_crypto_aes_128_cmac_decrypt": [
+"ieee80211w_get_igtk_from_keyidx",
+"memcmp",
+"memcpy",
+"wifi_log"
+],
+"ieee80211_crypto_gmac_decrypt": [
+"ieee80211w_get_igtk_from_keyidx",
+"memcmp",
+"memcpy",
+"wifi_log"
+],
+"ccmp_decap": [
+"ieee80211_gettid"
+],
+"ieee80211_decrypt_espnow_pkt": [
+"get_iav_key"
+],
+"ieee80211_ccmp_decrypt": [
+"ieee80211_gettid",
+"wifi_log"
+],
+"ieee80211_ccmp_encrypt": [
+"memcpy",
+"wifi_log"
+],
+"ieee80211_recv_action": [
+"wifi_log"
+],
+"cnx_sta_color_change_fn": [
+"ieee80211_timer_process"
+],
+"he_recv_action_muedca_reset": [
+"hal_he_reset_muedca_timer",
+"wifi_log"
+],
+"wifi_htc_omc_txcb": [
+"hal_he_reset_muedca_timer",
+"hal_he_set_ul_mu",
+"pp_unregister_tx_cb",
+"wifi_log"
+],
+"bandmode2str": [
+"wifi_log"
+],
+"wifi_set_bss_color": [
+"hal_he_set_bss_color"
+],
+"esp_wifi_set_tf_padding_duration": [
+"wifi_log"
+],
+"ieee80211_add_hecap": [
+"memcpy",
+"wifi_log"
+],
+"ieee80211_add_heopr": [
+"wifi_log"
+],
+"ieee80211_add_ulmu_pwrcap": [
+"memcpy",
+"phy_get_max_pwr",
+"wifi_log"
+],
+"ieee80211_add_power_cap": [
+"hal_get_tx_min_pwr",
+"hal_get_tx_pwr",
+"wifi_log"
+],
+"ieee80211_he_attach": [
+"chm_get_current_band",
+"hal_he_bssid_init",
+"ic_register_tx_cb",
+"ieee80211_recv_action_register",
+"ieee80211_send_action_register",
+"ieee80211_set_phy_bw",
+"phymode2str",
+"wifi_log"
+],
+"ieee80211_he_deattach": [
+"chm_get_current_band",
+"hal_he_bssid_deinit",
+"phymode2str",
+"wifi_log"
+],
+"ieee80211_parse_hecap": [
+"__popcountsi2",
+"hal_he_set_packet_padding_us",
+"ieee80211_is_he_cipher",
+"memcmp",
+"wifi_log"
+],
+"ieee80211_parse_heopr": [
+"hal_he_disable_rts_threshold",
+"hal_he_set_bss_color",
+"hal_he_set_co_hosted_bss",
+"hal_he_set_default_pe",
+"hal_he_set_ersu",
+"ic_set_he_rts_threshold_bytes_tab",
+"ieee80211_sta_is_connected",
+"wifi_log"
+],
+"ieee80211_parse_he_mu_edca": [
+"memcmp",
+"memcpy"
+],
+"cnx_sta_color_change_fn_process": [
+"hal_he_set_bss_color"
+],
+"ieee80211_parse_spatial_reuse": [
+"memcpy",
+"wifi_log"
+],
+"ieee80211_parse_uora": [
+"hal_he_set_uora_parameter",
+"wifi_log"
+],
+"ieee80211_he_updateparams": [
+"ieee80211_muedca_updateparams",
+"ieee80211_parse_he_mu_edca",
+"ieee80211_parse_hecap",
+"ieee80211_parse_heopr",
+"ieee80211_parse_spatial_reuse",
+"ieee80211_sta_parse_he_color_change_announcent"
+],
+"ieee80211_he_updatecaps": [
+"ieee80211_parse_hecap"
+],
+"ieee80211_he_node_cleanup": [
+"memset",
+"wifi_log"
+],
+"ieee80211_he_node_init": [
+"ieee80211_he_node_cleanup",
+"wifi_log"
+],
+"ieee80211_event_report_bsscolor_collision": [
+"hal_get_tsf_time",
+"hal_mac_color_clr_bitmap",
+"hal_mac_color_get_bitmap",
+"ieee80211_send_action",
+"memset",
+"wifi_log"
+],
+"ieee80211_event_report_bsscolor_inuse": [
+"hal_get_tsf_time",
+"ieee80211_send_action",
+"memset"
+],
+"bsscolor_event_dump": [
+"wifi_log"
+],
+"he_send_action_bsscolor_collision": [
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"memcpy",
+"wifi_log"
+],
+"he_send_action_bsscolor_inuse": [
+"bsscolor_event_dump",
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"memcpy",
+"wifi_log"
+],
+"is_bss_color_collision": [
+"__lshrdi3"
+],
+"softap_choose_bss_color_without_conflict": [
+"__ashldi3",
+"__lshrdi3",
+"__popcountdi2",
+"hal_he_get_bss_color",
+"wifi_log"
+],
+"wifi_softap_process_bsscolor_collision": [
+"__lshrdi3",
+"hal_he_get_bss_color",
+"hal_mac_color_clr_bitmap",
+"softap_choose_bss_color_without_conflict",
+"wifi_log"
+],
+"he_recv_action_bsscolor_collision": [
+"bsscolor_event_dump",
+"wifi_softap_process_bsscolor_collision"
+],
+"he_recv_action_event_bsscolor": [
+"bsscolor_event_dump",
+"he_recv_action_bsscolor_collision"
+],
+"he_recv_action_bsscolor_inuse": [
+"bsscolor_event_dump"
+],
+"esp_wifi_sta_report_bsscolor_collision": [
+"ieee80211_event_report_bsscolor_collision",
+"ieee80211_sta_is_connected"
+],
+"wifi_process_bsscolor_collision": [
+"__lshrdi3",
+"esp_wifi_sta_report_bsscolor_collision",
+"hal_he_get_bss_color",
+"hal_mac_color_get_bitmap",
+"wifi_softap_process_bsscolor_collision"
+],
+"esp_wifi_sta_report_bsscolor_inuse": [
+"ieee80211_event_report_bsscolor_inuse",
+"ieee80211_sta_is_connected"
+],
+"ieee80211_parse_extcap": [
+"wifi_log"
+],
+"sta_recv_ctl": [
+"ieee80211_recv_bar",
+"strcpy",
+"wifi_log"
+],
+"esp_wifi_enable_htc_uph": [
+"ieee80211_search_node"
+],
+"wifi_set_htc_omc": [
+"ieee80211_encap_null_data",
+"ieee80211_search_node",
+"ppTxPkt",
+"pp_register_tx_cb",
+"wifi_log"
+],
+"ieee80211_parse_htc": [
+"wifi_log"
+],
+"ieee80211_update_bandwidth": [
+"chm_get_current_band",
+"ieee80211_he_deattach",
+"wifi_log"
+],
+"add_appie": [
+"memcpy"
+],
+"ieee80211_add_tie_param": [
+"hal_now"
+],
+"ieee80211_recycle_cache_eb": [
+"ic_ebuf_recycle_tx"
+],
+"ieee80211_empty_txq": [
+"ieee80211_recycle_cache_eb"
+],
+"ieee80211_wapi_alloc_tx_buf": [
+"ic_ebuf_alloc"
+],
+"ieee80211_output_pending_eb": [
+"chm_is_at_home_channel",
+"ppTxPkt"
+],
+"ieee80211_copy_eb_header": [
+"memcpy"
+],
+"ieee80211_amsdu_adjust_head": [
+"memcpy",
+"roundup2"
+],
+"ieee80211_amsdu_adjust_last_length": [
+"roundup2"
+],
+"ieee80211_amsdu_length_check": [
+"roundup2"
+],
+"ieee80211_output_init": [
+"ic_register_net80211_tx_cb"
+],
+"ieee80211_send_setup": [
+"memcpy",
+"wifi_log"
+],
+"ieee80211_tx_mgt_cb": [
+"cnx_node_search",
+"cnx_sta_associated",
+"ic_del_key_all",
+"offchan_in_progress",
+"offchan_send_action_tx_status",
+"wifi_ap_reg_rxcb",
+"wifi_log",
+"wifi_softap_stop"
+],
+"ieee80211_classify": [
+"__bswapsi2",
+"ic_trc_set_per_pkt_rate",
+"wifi_log"
+],
+"ieee80211_add_rates": [
+"memcpy"
+],
+"ieee80211_add_xrates": [
+"memcpy"
+],
+"ieee80211_add_probe_resp_app_ies": [
+"memcpy"
+],
+"ieee80211_add_beacon_app_ies": [
+"memcpy"
+],
+"ieee80211_add_assoc_resp_ies": [
+"memcpy"
+],
+"ieee80211_add_assoc_req_ies": [
+"memcpy"
+],
+"ieee80211_add_probe_req_ies": [
+"memcpy"
+],
+"ieee80211_add_wme_param": [
+"memcpy"
+],
+"ieee80211_add_dh_param": [
+"memcpy",
+"wifi_log"
+],
+"ieee80211_add_rm_enable_cap": [
+"memcpy"
+],
+"ieee80211_add_supportedchannels": [
+"chm_get_current_band"
+],
+"ieee80211_add_extcap": [
+"ftm_is_initiator_supported",
+"ftm_is_responder_supported",
+"ieee80211_is_he_cipher",
+"memcpy",
+"wifi_log"
+],
+"ieee80211_vnd_ie_size": [
+"ieee80211_vnd_ie_size.part.0"
+],
+"ieee80211_vnd_ie_set": [
+"memcpy"
+],
+"ieee80211_vnd_lora_ie_size": [
+"chm_get_current_band"
+],
+"ieee80211_vnd_lora_ie_set": [
+"chm_get_current_band",
+"memcpy"
+],
+"ieee80211_setup_robust_mgmtframe": [
+"ieee80211_crypto_encap",
+"memmove"
+],
+"ieee80211_mgmt_output": [
+"chm_is_at_home_channel",
+"hostap_input",
+"ic_ebuf_recycle_tx",
+"ic_tx_pkt",
+"ieee80211_psq_is_buff_pkt",
+"ieee80211_pwrsave_txcb",
+"ieee80211_send_setup",
+"ieee80211_setup_robust_mgmtframe",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_getcapinfo": [
+"wifi_log"
+],
+"ieee80211_assoc_req_construct": [
+"add_appie",
+"esp_wifi_sta_prof_is_wpa_internal",
+"ieee80211_add_assoc_req_ies",
+"ieee80211_add_assoc_resp_ies",
+"ieee80211_add_bss_max_idle",
+"ieee80211_add_dh_param",
+"ieee80211_add_extcap",
+"ieee80211_add_he_mu_edca_parameter_set",
+"ieee80211_add_hecap",
+"ieee80211_add_heopr",
+"ieee80211_add_htcap",
+"ieee80211_add_htcap_vendor",
+"ieee80211_add_htinfo",
+"ieee80211_add_htinfo_vendor",
+"ieee80211_add_ie_vendor_esp_manufacturer",
+"ieee80211_add_power_cap",
+"ieee80211_add_rates",
+"ieee80211_add_supportedchannels",
+"ieee80211_add_tie_param",
+"ieee80211_add_ulmu_pwrcap",
+"ieee80211_add_wme_param",
+"ieee80211_add_xrates",
+"ieee80211_getcapinfo",
+"ieee80211_getmgtframe",
+"ieee80211_is_he_cipher",
+"ieee80211_is_ht_cipher",
+"ieee80211_softap_add_bss_color_change_announcement",
+"ieee80211_vnd_ie_set",
+"ieee80211_vnd_ie_size.part.0",
+"ieee80211_vnd_lora_ie_set",
+"ieee80211_vnd_lora_ie_size",
+"memcmp",
+"memcpy",
+"sta_get_owe_data",
+"sta_is_bss_max_idle_enabled",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_auth_construct": [
+"ieee80211_crypto_encap",
+"ieee80211_getmgtframe",
+"ieee80211_sta_new_state",
+"memcpy",
+"sta_is_wpa3_enabled",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_get_robustmgtframe": [
+"ieee80211_get_cipher_mic_len",
+"ieee80211_getmgtframe"
+],
+"ieee80211_deauth_construct": [
+"ieee80211_get_robustmgtframe",
+"wifi_log"
+],
+"ieee80211_disassoc_construct": [
+"ieee80211_get_robustmgtframe",
+"wifi_log"
+],
+"ieee80211_search_node": [
+"cnx_node_search",
+"ieee80211_is_tx_allowed"
+],
+"esp_wifi_internal_tx_by_ref": [
+"ieee80211_output_do",
+"wifi_gpio_debug"
+],
+"ieee80211_output": [
+"ieee80211_output_do"
+],
+"esp_wifi_mesh_tx": [
+"get_wifi_internal_state",
+"ieee80211_output_do"
+],
+"ieee80211_amsdu_send_check": [
+"ieee80211_classify",
+"ieee80211_search_node"
+],
+"ieee80211_amsdu_encap_check": [
+"ieee80211_classify",
+"ieee80211_search_node",
+"memcmp"
+],
+"ieee80211_encap_amsdu": [
+"add_appie",
+"chm_get_chan_info",
+"chm_get_home_channel",
+"ieee80211_add_countryie",
+"ieee80211_add_csa",
+"ieee80211_add_dsparams",
+"ieee80211_add_extcap",
+"ieee80211_add_he_mu_edca_parameter_set",
+"ieee80211_add_hecap",
+"ieee80211_add_heopr",
+"ieee80211_add_htcap",
+"ieee80211_add_htinfo",
+"ieee80211_add_ie_vendor_esp_manufacturer",
+"ieee80211_add_probe_resp_app_ies",
+"ieee80211_add_rates",
+"ieee80211_add_wme_param",
+"ieee80211_add_xrates",
+"ieee80211_amsdu_adjust_head",
+"ieee80211_amsdu_encap_check",
+"ieee80211_amsdu_length_check",
+"ieee80211_amsdu_send_check",
+"ieee80211_getcapinfo",
+"ieee80211_getmgtframe",
+"ieee80211_recycle_cache_eb",
+"ieee80211_softap_add_bss_color_change_announcement",
+"ieee80211_vnd_ie_set",
+"ieee80211_vnd_ie_size.part.0",
+"ieee80211_vnd_lora_ie_set",
+"ieee80211_vnd_lora_ie_size",
+"memcpy",
+"memmove",
+"memset",
+"roundup2",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_alloc_deauth": [
+"ieee80211_getmgtframe",
+"wifi_log"
+],
+"ieee80211_output_raw_process": [
+"cnx_node_search",
+"hal_now",
+"ic_ebuf_recycle_tx",
+"memcmp",
+"ppTxPkt",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_raw_frame_sanity_check": [
+"cnx_node_search",
+"memcmp",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"esp_wifi_80211_tx": [
+"chm_get_band_from_chan",
+"chm_get_chan_info",
+"chm_get_current_channel",
+"chm_get_home_channel",
+"ic_ebuf_alloc",
+"ic_get_80211_tx_rate",
+"ic_get_80211_tx_rate_config",
+"ic_get_default_sched",
+"ieee80211_add_beacon_app_ies",
+"ieee80211_add_countryie",
+"ieee80211_add_csa",
+"ieee80211_add_dsparams",
+"ieee80211_add_extcap",
+"ieee80211_add_he_mu_edca_parameter_set",
+"ieee80211_add_hecap",
+"ieee80211_add_heopr",
+"ieee80211_add_htcap",
+"ieee80211_add_htinfo",
+"ieee80211_add_ie_vendor_esp_manufacturer",
+"ieee80211_add_rates",
+"ieee80211_add_wme_param",
+"ieee80211_add_xrates",
+"ieee80211_getcapinfo",
+"ieee80211_post_hmac_tx",
+"ieee80211_raw_frame_sanity_check",
+"ieee80211_softap_add_bss_color_change_announcement",
+"ieee80211_softap_add_uora_parameter",
+"ieee80211_vnd_ie_set",
+"ieee80211_vnd_lora_ie_set",
+"memcpy",
+"memset",
+"wifi_get_macaddr"
+],
+"ieee80211_send_nulldata": [
+"chm_is_at_home_channel",
+"ic_get_addr",
+"ic_tx_pkt",
+"ieee80211_getmgtframe",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"memset",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_encap_keep_alive_data": [
+"ic_ebuf_alloc",
+"ieee80211_encap_esfbuf",
+"memcpy",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_send_probereq": [
+"add_appie",
+"chm_get_chan_info",
+"chm_get_current_channel",
+"ic_tx_pkt",
+"ieee80211_add_dsparams",
+"ieee80211_add_ie_vendor_esp_manufacturer",
+"ieee80211_add_probe_req_ies",
+"ieee80211_add_rates",
+"ieee80211_add_xrates",
+"ieee80211_getmgtframe",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"ieee80211_set_tx_pti",
+"ieee80211_vnd_ie_set",
+"ieee80211_vnd_ie_size.part.0",
+"ieee80211_vnd_lora_ie_set",
+"ieee80211_vnd_lora_ie_size",
+"memcpy",
+"reset_cs_thres",
+"wifi_log"
+],
+"ieee80211_send_mgmt": [
+"ic_ebuf_recycle_tx",
+"ieee80211_assoc_req_construct",
+"ieee80211_auth_construct",
+"ieee80211_deauth_construct",
+"ieee80211_disassoc_construct",
+"ieee80211_mgmt_output",
+"ieee80211_set_tx_desc",
+"ieee80211_set_tx_pti",
+"wifi_log"
+],
+"ieee80211_send_proberesp": [
+"chm_is_at_home_channel",
+"ic_ebuf_recycle_tx",
+"ic_tx_pkt",
+"ieee80211_encap_amsdu",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_send_deauth_no_bss": [
+"chm_is_at_home_channel",
+"ic_tx_pkt",
+"ieee80211_alloc_deauth",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"wifi_ap_reg_rxcb",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_beacon_alloc": [
+"chm_get_chan_info",
+"chm_get_home_channel",
+"esp_wifi_80211_tx",
+"ieee80211_getbcnframe",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"ieee80211_set_tx_pti",
+"ieee80211_vnd_ie_size.part.0",
+"ieee80211_vnd_lora_ie_size",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_encap_null_data": [
+"ic_get_addr",
+"ieee80211_encap_esfbuf_htc",
+"ieee80211_getmgtframe",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"ieee80211_set_tx_pti",
+"memset",
+"wifi_log"
+],
+"ieee80211_pm_tx_null_process": [
+"ieee80211_encap_keep_alive_data",
+"ieee80211_encap_null_data",
+"pm_is_sending_keep_alive",
+"ppTxPkt",
+"wifi_log"
+],
+"ieee80211_hostapd_beacon_txcb": [
+"ic_get_next_tbtt",
+"ieee80211_sta_is_connected",
+"pm_is_open",
+"pwrsave_flushq"
+],
+"ieee80211_hostap_send_beacon": [
+"ieee80211_timer_process"
+],
+"hostap_handle_timer": [
+"ieee80211_timer_process"
+],
+"ap_try_sa_query": [
+"ieee80211_timer_process"
+],
+"ap_sa_query_timeout": [
+"ieee80211_timer_process"
+],
+"free_mac_info": [
+"wifi_log"
+],
+"clear_mac_queue": [
+"free_mac_info",
+"wifi_log"
+],
+"ieee80211_hostapd_ps_txcb": [
+"cnx_node_search",
+"ieee80211_pwrsave_txcb"
+],
+"cipher_type_map_public_to_internal": [
+"ic_ebuf_recycle_tx"
+],
+"ieee80211_hostap_send_beacon_process": [
+"__divdi3",
+"__moddi3",
+"chm_get_home_channel",
+"chm_is_at_home_channel",
+"esp_mesh_get_running_active_duty_cycle",
+"hal_get_tsf_time",
+"hal_he_get_bss_color",
+"hal_he_set_bss_color",
+"hal_mac_color_get_bitmap",
+"hal_now",
+"ic_get_next_tbtt",
+"ic_interface_enabled",
+"ic_tx_pkt",
+"ieee80211_beacon_alloc",
+"ieee80211_sta_is_connected",
+"memcpy",
+"softap_choose_bss_color_without_conflict",
+"wifi_get_bss_color",
+"wifi_gpio_debug",
+"wifi_log",
+"wifi_mesh_event_post"
+],
+"hostap_delete_ptk": [
+"ic_del_key",
+"wifi_softap_max_support_num"
+],
+"ieee80211_hostap_attach": [
+"hostap_delete_ptk",
+"ic_get_next_tbtt",
+"ic_register_tx_cb",
+"ic_reset_tbtt",
+"ieee80211_beacon_alloc",
+"ieee80211_gpsq_init",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"hostap_deliver_data": [
+"ic_ebuf_recycle_rx",
+"ieee80211_output",
+"memcmp"
+],
+"hostap_handle_timer_process": [
+"cnx_node_is_existing",
+"cnx_sta_associated",
+"hal_now",
+"ieee80211_send_mgmt",
+"pwrsave_flushq",
+"wifi_log"
+],
+"ieee80211_hostapd_data_txcb": [
+"cnx_node_search",
+"hal_now"
+],
+"wifi_ap_reg_rxcb": [
+"free_mac_info",
+"memcmp",
+"memcpy",
+"wifi_ap_reg_rxcb",
+"wifi_log"
+],
+"hostap_auth_open": [
+"cnx_node_alloc",
+"cnx_node_search",
+"hal_now",
+"ieee80211_psq_init",
+"ieee80211_send_deauth_no_bss",
+"ieee80211_send_mgmt",
+"memcpy",
+"pwrsave_flushq",
+"wifi_event_post",
+"wifi_log"
+],
+"hostap_recv_ctl": [
+"chm_is_at_home_channel",
+"cnx_sta_associated",
+"hal_now",
+"ic_tx_pkt",
+"ieee80211_psq_find_max_bss",
+"ieee80211_recv_bar",
+"ieee80211_send_deauth_no_bss",
+"ieee80211_send_mgmt",
+"ieee80211_send_nulldata",
+"wifi_log"
+],
+"wifi_softap_start": [
+"chm_get_current_band",
+"chm_set_current_channel",
+"chm_set_home_channel",
+"chm_set_snd_chan",
+"hal_he_set_bss_color",
+"hal_mac_color_get_bitmap",
+"ic_set_beacon_int",
+"ic_set_vif",
+"ieee80211_adjust_2nd_chan",
+"ieee80211_hostap_attach",
+"ieee80211_ht_deattach",
+"ieee80211_is_40mhz_valid_bw",
+"ieee80211_phy_init",
+"ieee80211_set_phy_bw",
+"ieee80211_update_bandwidth",
+"ieee80211_update_channel",
+"softap_choose_bss_color_without_conflict",
+"wifi_event_post",
+"wifi_init_bss_color",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set",
+"wifi_set_default_ssid"
+],
+"wifi_softap_stop": [
+"clear_mac_queue",
+"cnx_node_alloc",
+"cnx_sta_associated",
+"ftm_responder_cleanup",
+"hal_disable_softap_tsf",
+"hal_mac_color_clr_bitmap",
+"hal_now",
+"ic_del_key_all",
+"ic_disable_crypto",
+"ic_set_vif",
+"ieee80211_empty_txq",
+"ieee80211_psq_init",
+"ieee80211_send_deauth_no_bss",
+"ieee80211_send_mgmt",
+"memcpy",
+"pwrsave_flushq",
+"wifi_event_post",
+"wifi_log"
+],
+"ap_sa_query_timeout_process": [
+"cnx_node_is_existing",
+"cnx_sta_associated",
+"ieee80211_send_mgmt",
+"memcpy",
+"pwrsave_flushq",
+"wifi_ap_reg_rxcb",
+"wifi_log",
+"wifi_softap_stop"
+],
+"ap_try_sa_query_process": [
+"cnx_node_is_existing",
+"ieee80211_send_action",
+"wifi_log"
+],
+"hostap_recv_mgmt": [
+"ap_try_sa_query_process",
+"chm_get_current_band",
+"cnx_node_alloc",
+"cnx_node_join",
+"cnx_node_search",
+"cnx_rc_update_rssi",
+"cnx_sta_associated",
+"esp_wifi_get_event_mask",
+"get_iav_key",
+"hal_now",
+"hostap_auth_open",
+"hostap_ht_operation_update",
+"hostap_recv_mgmt",
+"ic_del_key",
+"ic_is_mgmt_hwdecr_enabled",
+"ieee80211_ccmp_decrypt",
+"ieee80211_decrypt_espnow_pkt",
+"ieee80211_find_ie",
+"ieee80211_he_node_cleanup",
+"ieee80211_he_node_init",
+"ieee80211_he_updatecaps",
+"ieee80211_ht_node_cleanup",
+"ieee80211_ht_node_init",
+"ieee80211_ht_updatehtcap",
+"ieee80211_is_action_category_robust",
+"ieee80211_is_lr_only",
+"ieee80211_parse_beacon",
+"ieee80211_parse_extcap",
+"ieee80211_psq_init",
+"ieee80211_pwrsave_node_cleanup",
+"ieee80211_recv_action",
+"ieee80211_send_deauth_no_bss",
+"ieee80211_send_mgmt",
+"ieee80211_send_proberesp",
+"ieee80211_set_phy_bw",
+"ieee80211_setup_lr_rates",
+"ieee80211_setup_phy_mode",
+"ieee80211_setup_rates",
+"ieee80211_update_channel",
+"is_esp_manufacturer_oui",
+"is_esp_mesh_assoc",
+"is_non_esp_oui",
+"memcmp",
+"memcpy",
+"wifi_ap_reg_rxcb",
+"wifi_event_post",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"hostap_input": [
+"cnx_node_search",
+"cnx_rc_update_rssi",
+"cnx_sta_associated",
+"hal_now",
+"hostap_deliver_data",
+"hostap_recv_ctl",
+"hostap_recv_mgmt",
+"ic_ebuf_recycle_rx",
+"ieee80211_ampdu_reorder",
+"ieee80211_crypto_bip_encrypt",
+"ieee80211_crypto_decap",
+"ieee80211_decap",
+"ieee80211_decap_amsdu",
+"ieee80211_gettid",
+"ieee80211_is_action_category_robust",
+"ieee80211_node_pwrsave",
+"ieee80211_parse_htc",
+"ieee80211_rfid_locp_recv",
+"ieee80211_send_deauth_no_bss",
+"ieee80211_send_mgmt",
+"ieee80211w_get_active_igtk_key_id",
+"memcmp",
+"memcpy",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_mesh_quick_init": [
+"esp_wifi_internal_set_msdu_lifetime",
+"esp_wifi_internal_set_retry_counter",
+"ieee80211_init_mesh_assoc_ie",
+"ieee80211_recv_action_register",
+"memset",
+"pp_register_tx_cb",
+"wDev_Mesh_Enable_Tsf"
+],
+"ieee80211_mesh_quick_deinit": [
+"pp_unregister_tx_cb",
+"wDev_Mesh_Disable_Tsf"
+],
+"ieee80211_public_action_send_mesh_awake": [
+"chm_is_at_home_channel",
+"ic_tx_pkt",
+"ieee80211_getmgtframe",
+"ieee80211_send_setup",
+"ieee80211_set_tx_desc",
+"memcpy",
+"wifi_get_macaddr"
+],
+"itwt_setup_timeout_fn": [
+"ieee80211_timer_process"
+],
+"itwt_setup_dwell_timeout_fn": [
+"ieee80211_timer_process"
+],
+"itwt_information_timeout_fn": [
+"ieee80211_timer_process"
+],
+"itwt_probe_timeout_fn": [
+"ieee80211_timer_process"
+],
+"twt_dump_setup": [
+"hal_get_tsf_time",
+"net80211_printf",
+"twtsetupcmd_str",
+"wifi_log"
+],
+"twt_dump_teardown": [
+"wifi_log"
+],
+"ieee80211_itwt_teardown": [
+"ieee80211_send_action",
+"pm_twt_wake_up",
+"wifi_log"
+],
+"he_twt_teardown_post_event": [
+"pm_start_twt",
+"wifi_event_post"
+],
+"he_send_action_twt_teardown": [
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"ieee80211_getmgtframe",
+"memcpy",
+"wifi_log"
+],
+"ieee80211_itwt_setup": [
+"__ffssi2",
+"__umoddi3",
+"hal_get_tsf_time",
+"ieee80211_send_action",
+"memcpy",
+"wifi_log"
+],
+"he_send_action_twt_setup": [
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"ieee80211_getmgtframe",
+"memcpy",
+"wifi_log"
+],
+"is_twt_id_exist": [
+"wifi_log"
+],
+"twt_dump_information": [
+"wifi_log"
+],
+"get_suspend_sp_number": [
+"__udivdi3",
+"__umoddi3"
+],
+"he_twt_information_suspend": [
+"pm_start_twt",
+"wifi_log"
+],
+"_he_twt_information_resume": [
+"pm_start_twt"
+],
+"he_twt_information_resume": [
+"_he_twt_information_resume",
+"get_suspend_sp_number",
+"pm_get_sleep_type",
+"pm_set_sleep_type",
+"wifi_log"
+],
+"he_twt_setup_event_post": [
+"wifi_event_post"
+],
+"he_recv_action_twt_setup": [
+"hal_get_tsf_time",
+"he_twt_setup_event_post",
+"ieee80211_process_btwt_setup_action",
+"memcpy",
+"twtsetupcmd_str",
+"wifi_log"
+],
+"he_twt_setup_txcb": [
+"__ctzsi2",
+"he_twt_setup_event_post",
+"ieee80211_btwt_setup_txcb",
+"wifi_log"
+],
+"he_twt_information_event_post": [
+"memset",
+"wifi_event_post"
+],
+"he_twt_information_txcb": [
+"hal_get_tsf_time",
+"he_twt_information_event_post",
+"he_twt_information_suspend",
+"is_fid_setup",
+"memcpy",
+"memset",
+"pm_twt_wake_done",
+"wifi_log"
+],
+"ieee80211_itwt_information": [
+"get_suspend_sp_number",
+"hal_get_tsf_time",
+"he_twt_information_event_post",
+"ieee80211_send_action",
+"pm_twt_wake_up",
+"wifi_log"
+],
+"he_recv_action_twt_information": [
+"get_suspend_sp_number",
+"hal_get_tsf_time",
+"he_twt_information_event_post",
+"he_twt_information_suspend",
+"memcpy",
+"memset",
+"wifi_log"
+],
+"itwt_setup_timeout_fn_process": [
+"__ctzsi2",
+"he_twt_setup_event_post",
+"wifi_log"
+],
+"he_send_action_twt_information": [
+"he_twt_information_event_post",
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"ieee80211_getmgtframe",
+"memcpy",
+"wifi_log"
+],
+"itwt_stop_process": [
+"pm_wake_done",
+"wifi_log"
+],
+"itwt_information_timeout_fn_process": [
+"he_twt_information_resume",
+"wifi_log"
+],
+"itwt_probe_timeout_fn_process": [
+"pm_wake_done",
+"wifi_event_post",
+"wifi_log"
+],
+"itwt_probe_rc_tx_cb": [
+"hal_now",
+"pm_wake_done",
+"wifi_event_post",
+"wifi_log"
+],
+"itwt_cal_conts_miss_beacon_sp_count": [
+"__umoddi3",
+"wifi_log"
+],
+"twt_update_inactive_time_secs": [
+"get_max_conts_miss_beacon_sp_count",
+"itwt_cal_conts_miss_beacon_sp_count",
+"memset",
+"sta_reset_beacon_timeout",
+"wifi_log"
+],
+"he_twt_teardown_txcb": [
+"he_twt_teardown_post_event",
+"ieee80211_btwt_teardown_txcb",
+"memset",
+"pm_twt_wake_done"
+],
+"ieee80211_close_all_twt_sessions": [
+"memset",
+"pm_start_twt",
+"twt_update_inactive_time_secs"
+],
+"itwt_setup_dwell_timeout_fn_process": [
+"__ctzsi2",
+"he_twt_setup_event_post",
+"pm_get_sleep_type",
+"pm_set_sleep_type",
+"pm_start_twt",
+"twt_update_inactive_time_secs",
+"wifi_log"
+],
+"ieee80211_twt_teardown_all": [
+"ieee80211_btwt_teardown",
+"ieee80211_itwt_teardown"
+],
+"phymode2str": [
+"wifi_log"
+],
+"ieee80211_phy_deinit": [
+"esp_wifi_vnd_lora_disable"
+],
+"ieee80211_setup_ratetable": [
+"__ctzsi2",
+"memcpy",
+"wifi_log"
+],
+"ieee80211_phy_init": [
+"esp_wifi_vnd_lora_disable",
+"esp_wifi_vnd_lora_enable",
+"ic_trc_update_ifx_phy_mode",
+"ieee80211_setup_ratetable",
+"wDev_disable_low_rate",
+"wDev_enable_low_rate",
+"wifi_log"
+],
+"ieee80211_set_user_sup_rate": [
+"chm_get_current_band",
+"ieee80211_setup_ratetable",
+"wifi_log"
+],
+"chm_end_op_timeout": [
+"ieee80211_timer_process"
+],
+"chm_phy_change_channel.constprop.0": [
+"hal_mac_set_csi_cbw",
+"ic_mac_deinit",
+"ic_mac_init",
+"phy_change_channel",
+"pm_wake_done",
+"pm_wake_up"
+],
+"chm_end_op": [
+"memset"
+],
+"chm_cancel_op": [
+"chm_end_op"
+],
+"chm_acquire_lock": [
+"chm_cancel_op"
+],
+"chm_get_snd_chan_mode": [
+"ieee80211_regdomain_max_chan",
+"ieee80211_regdomain_min_chan"
+],
+"chm_set_snd_chan": [
+"chm_get_snd_chan_mode"
+],
+"chm_set_home_channel": [
+"wifi_event_post",
+"wifi_log"
+],
+"chm_set_current_channel": [
+"chm_get_chan_info",
+"chm_phy_change_channel.constprop.0",
+"ic_set_current_channel",
+"wifi_log"
+],
+"chm_init": [
+"chm_mhz2num",
+"chm_set_current_channel",
+"chm_set_home_channel",
+"ieee80211_regdomain_min_chan"
+],
+"chm_change_channel": [
+"chm_set_current_channel",
+"memset",
+"wifi_log"
+],
+"chm_start_op": [
+"chm_change_channel"
+],
+"chm_return_home_channel": [
+"wifi_log"
+],
+"tkip_decap": [
+"ieee80211_gettid"
+],
+"ieee80211_psq_init": [
+"memset"
+],
+"ieee80211_gpsq_init": [
+"memset",
+"wifi_log"
+],
+"ieee80211_psq_drop_one_pkt": [
+"ic_ebuf_recycle_tx",
+"ieee80211_psq_find_max_bss",
+"ieee80211_psq_take_head"
+],
+"ieee80211_psq_send_one_pkt": [
+"chm_is_at_home_channel",
+"ic_tx_pkt",
+"ieee80211_psq_take_head"
+],
+"ieee80211_psq_is_buff_pkt": [
+"ic_ebuf_recycle_tx",
+"ieee80211_psq_drop_one_pkt",
+"ieee80211_psq_find_max_bss",
+"ieee80211_psq_is_buff_pkt",
+"ieee80211_psq_send_one_pkt"
+],
+"pwrsave_flushq": [
+"chm_is_at_home_channel",
+"hal_now",
+"ic_ebuf_recycle_tx",
+"ic_tx_pkt"
+],
+"ieee80211_node_pwrsave": [
+"ieee80211_psq_find_max_bss",
+"pwrsave_flushq"
+],
+"ieee80211_pwrsave_node_cleanup": [
+"pwrsave_flushq"
+],
+"ieee80211_pwrsave_txcb": [
+"hal_now"
+],
+"ieee80211_getmgtframe": [
+"ic_ebuf_alloc",
+"roundup2"
+],
+"ieee80211_getbcnframe": [
+"ic_ebuf_alloc",
+"wifi_log"
+],
+"offchan_flush_tx_buf": [
+"ic_ebuf_recycle_tx"
+],
+"offchan_send_action_tx_status": [
+"wifi_event_post"
+],
+"roc_op_start": [
+"chm_get_current_channel"
+],
+"roc_op_end": [
+"chm_get_home_channel",
+"chm_release_lock",
+"chm_return_home_channel",
+"pm_offchan_execute_ready_cb",
+"pm_offchan_is_waiting",
+"pm_on_channel",
+"pm_wake_done",
+"wifi_event_post",
+"wifi_log"
+],
+"offchan_txop_end": [
+"chm_get_home_channel",
+"chm_release_lock",
+"chm_return_home_channel",
+"memset",
+"offchan_flush_tx_buf",
+"offchan_send_action_tx_status",
+"pm_offchan_execute_ready_cb",
+"pm_offchan_is_waiting",
+"pm_on_channel",
+"wifi_log"
+],
+"offchan_construct_normal_action": [
+"cnx_node_search",
+"ieee80211_getmgtframe",
+"ieee80211_set_tx_desc",
+"memcmp",
+"memcpy",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"offchan_txop_start": [
+"chm_cancel_op",
+"ieee80211_construct_action_vendor_spec",
+"ieee80211_output_raw_process",
+"mt_get_peer_info",
+"offchan_construct_normal_action",
+"wifi_log"
+],
+"dbg_hmac_rxtx_statis_dump": [
+"wifi_log"
+],
+"scan_enter_oper_channel": [
+"ieee80211_timer_process"
+],
+"scan_inter_channel_timeout": [
+"ieee80211_timer_process"
+],
+"scan_op_start": [
+"chm_get_chan_info",
+"ieee80211_regdomain_is_active_scan",
+"ieee80211_send_probereq",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"sta_update_owe_bssid.isra.0": [
+"memcpy",
+"sta_get_owe_data"
+],
+"scan_reset_default_app_params": [
+"scan_set_global_scan_times.constprop.0"
+],
+"ieee80211_scan_attach": [
+"scan_reset_default_app_params",
+"wifi_log"
+],
+"scan_set_default_params": [
+"scan_set_global_scan_times.constprop.0"
+],
+"wifi_sta_set_scan_default_params": [
+"scan_set_default_params",
+"wifi_log"
+],
+"scan_pm_offchan": [
+"pm_offchan_ready_or_defer",
+"wifi_log"
+],
+"scan_start": [
+"chm_acquire_lock",
+"wifi_gpio_debug",
+"wifi_log"
+],
+"scan_flush_all_tx_buf": [
+"ic_ebuf_recycle_tx",
+"ic_tx_pkt",
+"wifi_log"
+],
+"scan_cancel": [
+"chm_cancel_op",
+"scan_set_global_scan_times.constprop.0",
+"wifi_log"
+],
+"scan_add_bssid": [
+"memcpy"
+],
+"scan_add_probe_ssid": [
+"memcpy",
+"memset"
+],
+"scan_prefer_chan": [
+"chm_get_home_channel",
+"memcpy",
+"memset",
+"strlen",
+"strncmp",
+"wifi_log"
+],
+"scan_update_scan_history": [
+"memcpy",
+"strncmp",
+"wifi_log"
+],
+"scan_build_chan_list": [
+"wifi_log"
+],
+"scan_enter_oper_channel_process": [
+"hal_now",
+"scan_pm_offchan",
+"wifi_log"
+],
+"scan_bitmap_to_channel_list": [
+"wifi_log"
+],
+"scan_connect_state": [
+"ppCheckTxIdle",
+"scan_start"
+],
+"scan_add_ssid_do.constprop.0": [
+"ieee80211_regdomain_update_in_scan",
+"memcpy",
+"memset",
+"scan_check_hidden",
+"strncpy",
+"wifi_log"
+],
+"scan_add_ssid.isra.0": [
+"memcpy",
+"scan_add_ssid_do.constprop.0"
+],
+"scan_profile_check": [
+"cnx_check_bssid_in_blacklist",
+"cnx_get_authtype_strength",
+"ieee80211_parse_rsn",
+"ieee80211_parse_wapi",
+"ieee80211_parse_wpa",
+"memcmp",
+"memcpy",
+"memset",
+"scan_check_hidden",
+"scan_reset_cipher_and_akm",
+"sta_get_owe_data",
+"strlen",
+"wifi_log",
+"wifi_sta_get_prof_password"
+],
+"free_bss_info": [
+"wifi_log"
+],
+"clear_bss_queue": [
+"free_bss_info",
+"wifi_log"
+],
+"scan_done": [
+"chm_release_lock",
+"chm_return_home_channel",
+"clear_bss_queue",
+"hal_now",
+"pm_offchan_execute_ready_cb",
+"pm_offchan_is_waiting",
+"pm_on_channel",
+"scan_build_chan_list",
+"scan_flush_all_tx_buf",
+"scan_set_global_scan_times.constprop.0",
+"wifi_event_post",
+"wifi_gpio_debug",
+"wifi_log",
+"wifi_set_rx_policy",
+"wifi_station_get_reconnect_policy"
+],
+"scan_next_channel": [
+"chm_get_chan_info",
+"chm_get_home_channel",
+"chm_start_op",
+"ieee80211_regdomain_chan_in_range",
+"ieee80211_regdomain_is_active_scan",
+"pm_on_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"scan_done",
+"wifi_gpio_debug",
+"wifi_log"
+],
+"scan_enter_oper_channel_handler": [
+"wifi_log"
+],
+"scan_inter_channel_timeout_process": [
+"wifi_log"
+],
+"scan_op_end": [
+"chm_return_home_channel",
+"pm_coex_update_wifi_time_slice_state",
+"pm_is_open",
+"pm_on_channel",
+"pm_on_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"scan_flush_all_tx_buf",
+"sta_reset_beacon_timeout",
+"wifi_log"
+],
+"scan_start_handler": [
+"chm_get_channel_index",
+"clear_bss_queue",
+"hal_now",
+"wifi_log",
+"wifi_set_rx_policy"
+],
+"check_bss_queue": [
+"memcmp"
+],
+"scan_set_scan_id": [
+"wifi_log"
+],
+"scan_get_scan_id": [
+"wifi_log"
+],
+"scan_parse_ht2040_coex": [
+"wifi_log"
+],
+"scan_get_owe_channel_info": [
+"memcmp"
+],
+"scan_validate_owe_scenarios": [
+"memcmp",
+"wifi_log",
+"wifi_sta_get_prof_password"
+],
+"scan_parse_beacon": [
+"check_bss_queue",
+"chm_get_chan_info",
+"cnx_add_rc",
+"cnx_bss_alloc",
+"cnx_bss_init",
+"cnx_rc_search",
+"cnx_rc_update_age",
+"cnx_rc_update_rssi",
+"cnx_rc_update_state_metric",
+"cnx_update_bss",
+"cnx_update_bss_more",
+"hal_get_tsf_time",
+"ieee80211_amsdu_negotiate",
+"ieee80211_regdomain_chan_in_range",
+"ieee80211_update_twt",
+"memcmp",
+"memcpy",
+"memset",
+"scan_add_ssid.isra.0",
+"scan_add_ssid_do.constprop.0",
+"scan_fill_wps_scan_ie",
+"scan_parse_beacon",
+"scan_parse_ht2040_coex",
+"scan_profile_check",
+"scan_update_scan_history",
+"scan_validate_owe_scenarios",
+"sta_get_owe_data",
+"sta_update_mbssid",
+"sta_update_owe_bssid.isra.0",
+"strncmp",
+"wifi_event_post",
+"wifi_log",
+"wifi_mesh_event_post",
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set",
+"wifi_sta_get_prof_password"
+],
+"ieee80211_decap": [
+"ic_ebuf_recycle_rx",
+"memcpy",
+"wifi_log"
+],
+"ieee80211_setup_rates": [
+"ieee80211_is_support_rate",
+"memset"
+],
+"ieee80211_set_max_rate": [
+"ic_set_sta",
+"wifi_log"
+],
+"ieee80211_setup_phy_mode": [
+"ieee80211_is_11b_bss",
+"ieee80211_is_lr_only",
+"wifi_log"
+],
+"ieee80211_alloc_challenge": [
+"wifi_log"
+],
+"ieee80211_parse_beacon": [
+"ieee80211_parse_extcap",
+"ieee80211_regdomain_chan_in_range",
+"memcpy",
+"memset",
+"wifi_log"
+],
+"ieee80211_parse_wpa": [
+"wifi_log",
+"wpa_cipher"
+],
+"ieee80211_rsn_cipher_priority": [
+"memcpy"
+],
+"ieee80211_better_rsn_pairwise_cipher": [
+"ieee80211_rsn_cipher_priority"
+],
+"ieee80211_parse_rsn": [
+"ieee80211_better_rsn_pairwise_cipher",
+"rsn_cipher",
+"sta_is_11r_enabled",
+"sta_is_wifi_ent_enabled",
+"sta_is_wpa3_enabled",
+"wifi_log"
+],
+"ieee80211_parse_wapi": [
+"wifi_log"
+],
+"ieee80211_parse_action": [
+"memcmp"
+],
+"ieee80211_add_ie_vendor_esp_head": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_now_head": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_mesh_group": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_simple_pair": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_freq_annon": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_now": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_ssid": [
+"memcpy"
+],
+"ieee80211_add_ie_vendor_esp_manufacturer": [
+"memcpy"
+],
+"ampdu_tx_stop": [
+"addba_stop_timeout",
+"ic_ampdu_op",
+"wifi_log"
+],
+"ieee80211_ampdu_timeout": [
+"ieee80211_timer_process"
+],
+"addba_timeout": [
+"ieee80211_timer_process"
+],
+"ieee80211_add_htcap_body": [
+"memset",
+"wifi_log"
+],
+"ht_recv_action_ba_addba_response": [
+"addba_stop_timeout",
+"hal_he_set_tid_bitmap",
+"ic_ampdu_op",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"ieee80211_ht_attach": [
+"chm_get_current_band",
+"ic_register_tx_cb",
+"ieee80211_is_40mhz_valid_bw",
+"ieee80211_recv_action_register",
+"ieee80211_send_action_register",
+"wifi_log"
+],
+"ampdu_free_rx_ba_index": [
+"wifi_log"
+],
+"ampdu_rx_stop.constprop.0": [
+"ampdu_free_rx_ba_index",
+"ic_del_rx_ba",
+"ic_ebuf_recycle_rx",
+"wifi_log"
+],
+"ht_recv_action_ba_delba": [
+"ampdu_rx_stop.constprop.0",
+"ampdu_tx_stop",
+"hal_he_clr_tid_bitmap",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"addba_response_txcb": [
+"cnx_node_search",
+"wifi_log"
+],
+"ampdu_alloc_rx_ba_index": [
+"wifi_log"
+],
+"ampdu_rx_start.constprop.0": [
+"ampdu_alloc_rx_ba_index",
+"ampdu_rx_stop.constprop.0",
+"wifi_log"
+],
+"ht_recv_action_ba_addba_request": [
+"__ctzsi2",
+"ampdu_rx_start.constprop.0",
+"ampdu_rx_stop.constprop.0",
+"cnx_node_search",
+"ic_add_rx_ba",
+"ieee80211_send_action",
+"memcmp",
+"wifi_log"
+],
+"ieee80211_ht_deattach": [
+"ieee80211_ampdu_stop_age_timer.part.0",
+"wifi_log"
+],
+"ieee80211_cal_tx_pps": [
+"hal_now"
+],
+"ieee80211_ampdu_request": [
+"hal_now",
+"ieee80211_send_action",
+"wifi_he_get_hetb_tid_bawin",
+"wifi_log"
+],
+"ieee80211_ampdu_stop": [
+"ampdu_tx_stop",
+"ieee80211_send_action"
+],
+"ieee80211_ampdu_age_bss.isra.0": [
+"__ctzsi2",
+"ampdu_dispatch_upto",
+"hal_now",
+"wifi_log"
+],
+"ieee80211_ampdu_start_age_timer": [
+"wifi_log"
+],
+"ieee80211_ampdu_age_all": [
+"__ctzsi2",
+"ieee80211_ampdu_age_bss.isra.0",
+"ieee80211_ampdu_stop_age_timer.part.0"
+],
+"ampdu_process_multicast_address_qos_frame": [
+"hal_ba_session_restore_by_hw_index"
+],
+"ieee80211_process_bar_info": [
+"ampdu_dispatch_upto"
+],
+"ieee80211_recv_bar": [
+"wifi_log"
+],
+"ieee80211_ht_node_cleanup": [
+"ampdu_rx_stop.constprop.0",
+"ampdu_tx_stop"
+],
+"ieee80211_ht_node_init": [
+"ieee80211_ht_node_cleanup",
+"wifi_log"
+],
+"ieee80211_parse_htcap": [
+"memcpy",
+"wifi_log"
+],
+"ieee80211_update_channel": [
+"chm_get_home_channel",
+"chm_set_current_channel",
+"chm_set_home_channel",
+"chm_set_snd_chan",
+"hal_init_tx_pwr",
+"ieee80211_has_ht40_bss",
+"ieee80211_he_attach",
+"ieee80211_he_deattach",
+"ieee80211_ht_attach",
+"ieee80211_ht_deattach",
+"ieee80211_is_40mhz_valid_bw",
+"ieee80211_phy_init",
+"ieee80211_set_phy_bw",
+"wifi_log"
+],
+"public_recv_action_ht2040_coex": [
+"chm_get_current_band",
+"chm_get_home_channel",
+"cnx_node_search",
+"ieee80211_update_channel",
+"wifi_log"
+],
+"ieee80211_ht_updatehtcap": [
+"chm_get_current_band",
+"ieee80211_parse_htcap",
+"ieee80211_set_phy_bw",
+"wifi_log"
+],
+"ieee80211_ht_updateparams": [
+"chm_get_home_channel",
+"ic_set_sta",
+"ieee80211_parse_htcap",
+"ieee80211_update_channel",
+"wifi_log"
+],
+"ieee80211_setup_htrates": [
+"memset",
+"wifi_log"
+],
+"ieee80211_setup_basic_htrates": [
+"wifi_log"
+],
+"ieee80211_add_htcap": [
+"ieee80211_add_htcap_body",
+"wifi_log"
+],
+"ieee80211_add_htcap_vendor": [
+"ieee80211_add_htcap_body"
+],
+"ieee80211_add_htinfo_body": [
+"chm_get_home_channel",
+"memset",
+"wifi_log"
+],
+"ieee80211_add_htinfo": [
+"wifi_log"
+],
+"ieee80211_add_htinfo_vendor": [
+"wifi_log"
+],
+"ht_action_output": [
+"ieee80211_mgmt_output",
+"ieee80211_set_tx_desc"
+],
+"ht_send_action_ba_delba": [
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"wifi_log"
+],
+"ht_send_action_ba_addba": [
+"ampdu_rx_stop.constprop.0",
+"ht_action_output",
+"ieee80211_get_robustmgtframe",
+"wifi_log"
+],
+"ieee80211_decap1": [
+"memmove"
+],
+"ieee80211_decap_amsdu": [
+"ic_ebuf_alloc",
+"ic_ebuf_recycle_rx",
+"ieee80211_decap1",
+"ieee80211_output",
+"memcmp",
+"memcpy"
+],
+"hostap_ht_operation_update": [
+"wifi_log"
+],
+"wifi_nvs_cfg_item_init": [
+"memcpy",
+"wifi_log"
+],
+"wifi_nvs_cfg_init": [
+"memset",
+"wifi_log",
+"wifi_nvs_cfg_init",
+"wifi_nvs_cfg_item_init"
+],
+"wifi_nvs_sta_restore": [
+"wifi_log"
+],
+"wifi_nvs_ap_restore": [
+"wifi_log"
+],
+"ieee80211_nvs_set_default_ssid": [
+"memset",
+"sprintf"
+],
+"wifi_nvs_set": [
+"memcpy",
+"strncpy",
+"wifi_log"
+],
+"ieee80211_adjust_2nd_chan": [
+"chm_get_snd_chan_mode"
+],
+"wifi_nvs_compare_cfg_diff": [
+"memcmp",
+"memcpy"
+],
+"wifi_set_default_ssid": [
+"memset",
+"sprintf"
+],
+"wifi_nvs_validate_ap_ssid": [
+"wifi_set_default_ssid"
+],
+"wifi_nvs_validate_ap_password": [
+"memcmp",
+"memset"
+],
+"wifi_nvs_validate_sta_password": [
+"memcmp",
+"memset"
+],
+"wifi_nvs_validate_sta_sae_identifier": [
+"memcmp",
+"memset"
+],
+"wifi_nvs_validate_ap_chan": [
+"ieee80211_regdomain_ap_min_chan",
+"ieee80211_regdomain_check_ap_channel",
+"wifi_nvs_set"
+],
+"wifi_nvs_reset_current_ap_info": [
+"memset",
+"wifi_nvs_set"
+],
+"wifi_nvs_load": [
+"ieee80211_adjust_2nd_chan",
+"memcpy",
+"memset",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_validate_ap_chan",
+"wifi_nvs_validate_ap_num",
+"wifi_nvs_validate_ap_password",
+"wifi_nvs_validate_ap_ssid",
+"wifi_nvs_validate_country",
+"wifi_nvs_validate_lr_info",
+"wifi_nvs_validate_sta_listen_interval",
+"wifi_nvs_validate_sta_password",
+"wifi_nvs_validate_sta_sae_identifier"
+],
+"wifi_nvs_restore": [
+"wifi_nvs_load"
+],
+"wifi_nvs_init": [
+"wifi_log",
+"wifi_nvs_cfg_init",
+"wifi_nvs_deinit",
+"wifi_nvs_load"
+],
+"wifi_sta_connect_internal_process": [
+"cnx_do_handoff_internal"
+],
+"esp_wifi_sta_update_ap_info_internal": [
+"wifi_nvs_commit",
+"wifi_nvs_set"
+],
+"esp_wifi_get_config_sae_pwe_h2e_internal": [
+"wifi_log"
+],
+"esp_wifi_sta_get_rsnxe": [
+"cnx_rc_search"
+],
+"esp_wifi_sta_disable_wpa2_authmode_internal": [
+"wifi_log"
+],
+"esp_wifi_enable_sae_pk_only_mode_internal": [
+"wifi_log"
+],
+"esp_wifi_sta_disable_owe_trans_internal": [
+"wifi_log"
+],
+"esp_wifi_ap_notify_node_sae_auth_done": [
+"ieee80211_ioctl"
+],
+"esp_wifi_ap_is_sta_sae_reauth_node": [
+"cnx_node_search"
+],
+"ieee80211_set_gtk": [
+"cnx_node_search",
+"wifi_log"
+],
+"ieee80211_get_ptk": [
+"cnx_node_search"
+],
+"ieee80211_get_spp": [
+"cnx_node_search"
+],
+"esp_wifi_wpa_ptk_init_done_internal": [
+"cnx_node_search",
+"memcpy",
+"wifi_event_post",
+"wifi_log"
+],
+"esp_wifi_auth_done_internal": [
+"cnx_auth_done"
+],
+"esp_wifi_register_wpa2_cb_internal": [
+"esp_wifi_unregister_wpa2_cb_internal"
+],
+"ieee80211_register_wapi_cb": [
+"ieee80211_unregister_wapi_cb"
+],
+"esp_wifi_register_wpa_cb_internal": [
+"esp_wifi_unregister_wpa_cb_internal"
+],
+"esp_wifi_get_assoc_bssid_internal": [
+"memcpy"
+],
+"esp_wifi_deauthenticate_internal": [
+"ieee80211_sta_new_state"
+],
+"wifi_set_rx_policy": [
+"ic_set_bssid",
+"ic_set_mac",
+"ic_set_rx_policy",
+"ic_set_rx_policy_ubssid_check",
+"ic_set_sta_auth_flag"
+],
+"esp_wifi_del_key_internal": [
+"ic_del_key"
+],
+"esp_wifi_set_key_internal": [
+"ic_set_key",
+"ieee80211_get_spp"
+],
+"esp_wifi_get_key_internal": [
+"ic_get_key"
+],
+"esp_wifi_register_tx_cb_internal": [
+"ic_register_tx_cb"
+],
+"esp_wifi_register_eapol_txdonecb_internal": [
+"wifi_sta_reg_eapol_txdone_cb"
+],
+"esp_wifi_get_macaddr_internal": [
+"wifi_get_macaddr"
+],
+"esp_wifi_ap_deauth_internal": [
+"esp_mesh_map_deauth",
+"ieee80211_ioctl"
+],
+"wifi_init_key": [
+"memset"
+],
+"esp_wifi_set_ap_key_internal": [
+"ic_del_key",
+"ic_del_ptk_and_gtk_alg",
+"ic_set_key",
+"ieee80211_get_ptk",
+"ieee80211_get_spp",
+"ieee80211_set_gtk",
+"ieee80211_set_key",
+"memcpy",
+"ppClearRxFragment",
+"wifi_init_key"
+],
+"ppInstallKey": [
+"ic_del_key",
+"ic_set_key",
+"ieee80211_get_spp",
+"ieee80211_set_key",
+"ieee80211_set_sta_gtk_index",
+"memcpy",
+"ppClearRxFragment",
+"wifi_init_key"
+],
+"esp_wifi_set_sta_key_internal": [
+"esp_wifi_get_sta_hw_key_idx_internal"
+],
+"esp_wifi_get_sta_key_internal": [
+"esp_wifi_get_sta_hw_key_idx_internal",
+"ic_get_key"
+],
+"esp_wifi_set_appie_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_wpa2_ent_enable_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_wpa2_ent_disable_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_wps_type_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_wps_status_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_wps_cb_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_supplicant_header_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"esp_wifi_set_wps_start_flag_internal": [
+"wifi_set_wps_start_flag"
+],
+"esp_wifi_set_igtk_internal": [
+"memcpy",
+"wifi_log"
+],
+"esp_wifi_set_rssi_threshold": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_register_mgmt_frame_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_send_mgmt_frm_internal": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_action_tx_req": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_remain_on_channel": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_connect_internal": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_ap_set_group_mgmt_cipher_internal": [
+"cipher_type_map_public_to_internal"
+],
+"esp_wifi_op_class_supported_internal": [
+"chm_get_band_from_chan",
+"esp_wifi_get_band_mode",
+"esp_wifi_get_country_code",
+"get_channel_max_bandwidth",
+"ieee80211_get_regdomain",
+"ieee80211_regdomain_chan_in_range"
+],
+"wifi_pmk_is_valid": [
+"memcmp",
+"memset"
+],
+"wifi_phy_bw_is_modified": [
+"wifi_nvs_compare_cfg_diff"
+],
+"ieee80211_ioctl_process": [
+"pm_wake_done",
+"pm_wake_up",
+"wifi_log"
+],
+"offchan_action_tx_sess_handler": [
+"chm_start_op",
+"offchan_txop_end",
+"wifi_log"
+],
+"wifi_phy_bw_is_valid": [
+"ieee80211_is_40mhz_valid_bw",
+"wifi_log"
+],
+"wifi_ioctl_ht2040_set": [
+"cnx_start_obss_scan",
+"cnx_stop_obss_scan",
+"wifi_log"
+],
+"_do_wifi_stop": [
+"wifi_log",
+"wifi_station_stop"
+],
+"wifi_stop_old_mode": [
+"_do_wifi_stop"
+],
+"_do_wifi_start": [
+"wifi_log",
+"wifi_nvs_get",
+"wifi_pmk_is_valid",
+"wifi_station_start"
+],
+"ieee80211_phy_2nd_chan_is_valid": [
+"wifi_check_chan_param"
+],
+"ieee80211_set_phy_bw": [
+"chm_get_current_band",
+"chm_set_snd_chan",
+"ieee80211_protocol_attach",
+"wifi_nvs_commit",
+"wifi_nvs_set"
+],
+"ieee80211_protocol_attach": [
+"ieee80211_he_attach",
+"ieee80211_he_deattach",
+"ieee80211_ht_attach",
+"ieee80211_ht_deattach",
+"ieee80211_phy_init"
+],
+"ieee80211_set_phy_mode": [
+"chm_get_current_band",
+"ieee80211_protocol_attach",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_compare_cfg_diff",
+"wifi_nvs_get",
+"wifi_nvs_set"
+],
+"wifi_set_phy_2nd_chan_process": [
+"_do_wifi_start",
+"_do_wifi_stop",
+"ieee80211_phy_2nd_chan_is_valid",
+"ieee80211_set_phy_2nd_chan"
+],
+"wifi_station_save_ap_channel": [
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set"
+],
+"wifi_station_set_config_local_2.constprop.0": [
+"memcpy",
+"memset",
+"strnlen",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set",
+"wifi_station_save_ap_channel"
+],
+"print_sta_pmk": [
+"memcmp",
+"wifi_log",
+"wifi_nvs_get"
+],
+"ieee80211_sta_connect": [
+"cnx_sta_connect_cmd",
+"pm_wake_done",
+"pm_wake_up",
+"wifi_log"
+],
+"ieee80211_sta_disconnect": [
+"ieee80211_sta_new_state",
+"itwt_stop_process",
+"pm_wake_done",
+"pm_wake_up",
+"scan_cancel"
+],
+"_do_wifi_disconnect": [
+"ieee80211_empty_txq",
+"ieee80211_sta_disconnect",
+"memcpy",
+"memset",
+"wifi_event_post",
+"wifi_log",
+"wifi_set_rx_policy"
+],
+"ieee80211_sta_scan": [
+"cnx_sta_scan_cmd"
+],
+"wifi_set_mac_process": [
+"_do_wifi_start",
+"_do_wifi_stop",
+"memcmp",
+"memcpy"
+],
+"wifi_set_promis_filter_process": [
+"ic_set_promis_filter"
+],
+"wifi_set_promis_ctrl_filter_process": [
+"ic_set_promis_ctrl_filter"
+],
+"wifi_set_auto_connect_process": [
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set"
+],
+"wifi_softap_set_config": [
+"band2str",
+"chm_get_band_from_chan",
+"hexstr2bin",
+"ieee80211_adjust_2nd_chan",
+"ieee80211_regdomain_ap_max_chan",
+"ieee80211_regdomain_ap_min_chan",
+"ieee80211_regdomain_check_ap_channel",
+"memcmp",
+"memcpy",
+"strnlen",
+"wDev_Set_Beacon_Int",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_compare_cfg_diff",
+"wifi_nvs_get",
+"wifi_nvs_set",
+"wifi_pmk_is_valid",
+"wifi_set_default_ssid",
+"wifi_softap_max_support_num",
+"wifi_station_save_ap_channel"
+],
+"wifi_get_macaddr": [
+"memcpy"
+],
+"chip_post_deinit": [
+"ic_deinit",
+"ieee80211_ifdetach"
+],
+"chip_enable": [
+"ic_enable_rx",
+"wifi_log",
+"wifi_set_rx_policy"
+],
+"chip_disable": [
+"ic_disable_rx",
+"wifi_log",
+"wifi_set_rx_policy"
+],
+"wifi_reset_mac": [
+"hal_mac_rx_disable"
+],
+"wifi_hw_start": [
+"chip_enable",
+"chm_init",
+"ic_mac_init",
+"ic_set_interrupt_handler",
+"ieee80211_set_hmac_stop",
+"pm_disconnected_start",
+"pm_mac_wakeup",
+"pm_noise_check_enable",
+"wifi_log",
+"wifi_reset_mac"
+],
+"wifi_txq_empty": [
+"ic_txq_empty"
+],
+"wifi_stop_sw_txq": [
+"ic_stop_sw_txq",
+"ieee80211_empty_txq",
+"scan_flush_all_tx_buf",
+"wifi_log"
+],
+"wifi_hw_stop": [
+"chip_disable",
+"chm_deinit",
+"ic_clear_interrupt_handler",
+"ic_mac_deinit",
+"ic_stop_hw_txq",
+"ieee80211_set_hmac_stop",
+"pm_disconnected_stop",
+"pm_is_sleeping",
+"pm_mac_sleep",
+"pm_noise_check_disable",
+"wifi_log",
+"wifi_stop_sw_txq"
+],
+"wifi_set_promis_process": [
+"ic_set_vif",
+"wifi_hw_start",
+"wifi_hw_stop"
+],
+"wifi_hw_mode_switch": [
+"wifi_hw_start",
+"wifi_hw_stop"
+],
+"wifi_set_mode_process": [
+"_do_wifi_start",
+"wifi_hw_mode_switch",
+"wifi_log",
+"wifi_mode_set",
+"wifi_nvs_commit",
+"wifi_nvs_compare_cfg_diff",
+"wifi_nvs_set",
+"wifi_stop_old_mode"
+],
+"esp_wifi_internal_set_baw": [
+"wifi_log"
+],
+"wifi_menuconfig_init": [
+"memset",
+"wifi_log"
+],
+"wpa_crypto_funcs_init": [
+"memcpy",
+"wifi_log"
+],
+"wifi_hmac_deinit": [
+"ieee80211_ifdetach"
+],
+"wifi_hmac_init": [
+"ic_register_pm_tx_null_cb",
+"ic_register_timer_cb",
+"ieee80211_cnx_attach",
+"ieee80211_ifattach",
+"ieee80211_output_init"
+],
+"wifi_lmac_deinit": [
+"ic_deinit"
+],
+"wifi_lmac_init": [
+"ic_deinit",
+"ic_init",
+"ic_set_beacon_int",
+"wifi_log"
+],
+"wifi_deinit": [
+"ic_deinit",
+"ieee80211_ifdetach",
+"wifi_nvs_deinit"
+],
+"wifi_init_process": [
+"memset",
+"wifi_crypto_init",
+"wifi_deinit",
+"wifi_hmac_init",
+"wifi_lmac_init",
+"wifi_log",
+"wifi_nvs_init"
+],
+"wifi_start_process": [
+"_do_wifi_start",
+"current_task_is_wifi_task",
+"ieee80211_set_hmac_stop",
+"ieee80211_update_phy_country",
+"wifi_hw_start",
+"wifi_mode_set"
+],
+"wifi_stop_process": [
+"_do_wifi_stop",
+"current_task_is_wifi_task",
+"ic_set_vif",
+"ieee80211_set_hmac_stop",
+"pm_wake_up",
+"wifi_destroy_sta",
+"wifi_hw_stop",
+"wifi_log",
+"wifi_txq_empty"
+],
+"wifi_connect_process": [
+"ieee80211_sta_connect",
+"wifi_log"
+],
+"wifi_disconnect_process": [
+"_do_wifi_disconnect",
+"wifi_log"
+],
+"wifi_scan_start_process": [
+"ieee80211_sta_scan",
+"reset_cs_thres",
+"wifi_log"
+],
+"wifi_scan_stop_process": [
+"scan_cancel",
+"wifi_log"
+],
+"wifi_set_scan_params_process": [
+"scan_reset_default_app_params",
+"wifi_log",
+"wifi_sta_set_scan_default_params"
+],
+"wifi_get_scan_params_process": [
+"memcpy",
+"wifi_log"
+],
+"wifi_clear_ap_list_process": [
+"clear_bss_queue",
+"wifi_log"
+],
+"wifi_copy_ap_record": [
+"memcpy",
+"memset",
+"wifi_ant_to_ant_type"
+],
+"wifi_get_ap_list_process": [
+"free_bss_info",
+"memmove",
+"memset",
+"scan_get_apnum",
+"wifi_copy_ap_record",
+"wifi_log"
+],
+"wifi_get_ap_record_process": [
+"free_bss_info",
+"wifi_copy_ap_record"
+],
+"wifi_get_ap_info_process": [
+"cipher_map_net80211_to_public_cipher",
+"memcpy",
+"memset",
+"wifi_ant_to_ant_type",
+"wifi_log"
+],
+"wifi_get_sta_list_process": [
+"memcpy",
+"memset"
+],
+"wifi_set_config_process": [
+"cnx_clear_blacklist",
+"cnx_get_authtype_strength",
+"cnx_remove_all_rc",
+"memcmp",
+"strlen",
+"strnlen",
+"wifi_log",
+"wifi_nvs_get",
+"wifi_pmk_is_valid",
+"wifi_station_save_ap_channel",
+"wifi_station_set_config_local_2.constprop.0"
+],
+"wifi_set_protocol_process": [
+"_do_wifi_start",
+"_do_wifi_stop",
+"ieee80211_set_phy_mode",
+"wifi_nvs_compare_cfg_diff"
+],
+"wifi_set_bw_nvs": [
+"wifi_nvs_commit",
+"wifi_nvs_compare_cfg_diff",
+"wifi_nvs_set"
+],
+"wifi_set_bw_process": [
+"_do_wifi_start",
+"_do_wifi_stop",
+"ieee80211_set_phy_bw",
+"wifi_phy_bw_is_modified",
+"wifi_phy_bw_is_valid",
+"wifi_set_bw_nvs"
+],
+"wifi_set_channel_process": [
+"chm_set_current_channel",
+"chm_set_home_channel",
+"ieee80211_regdomain_check_ap_channel",
+"wifi_check_chan_param",
+"wifi_log"
+],
+"wifi_set_home_channel_process": [
+"chm_set_home_channel",
+"wifi_check_chan_param"
+],
+"wifi_get_channel_process": [
+"chm_get_current_channel"
+],
+"wifi_check_home_channel": [
+"_do_wifi_start",
+"_do_wifi_stop",
+"chm_get_band_from_chan",
+"chm_get_home_channel",
+"ieee80211_adjust_2nd_chan",
+"ieee80211_regdomain_ap_min_chan",
+"ieee80211_regdomain_check_ap_channel",
+"ieee80211_regdomain_check_channel",
+"wifi_nvs_commit",
+"wifi_nvs_set"
+],
+"wifi_set_ps_process": [
+"pm_set_sleep_type"
+],
+"wifi_set_country": [
+"ieee80211_regdomain_get_country_info",
+"ieee80211_update_phy_country",
+"memcpy",
+"wifi_check_home_channel",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_set"
+],
+"wifi_get_country": [
+"ieee80211_regdomain_get_country",
+"memcpy"
+],
+"wifi_set_band_process": [
+"chm_get_current_band",
+"chm_set_current_channel",
+"chm_set_home_channel",
+"wifi_log"
+],
+"wifi_set_band_mode_process": [
+"_do_wifi_start",
+"_do_wifi_stop",
+"chm_get_band_from_chan",
+"chm_get_current_channel",
+"chm_get_home_channel",
+"chm_init",
+"ieee80211_scan_attach",
+"ieee80211_scan_deattach",
+"is_off_channel",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_compare_cfg_diff",
+"wifi_nvs_set"
+],
+"wifi_restart_process": [
+"wifi_station_stop"
+],
+"wifi_set_rxcb_process": [
+"wifi_ap_reg_rxcb",
+"wifi_sta_reg_rxcb"
+],
+"wifi_restore_process": [
+"misc_nvs_restore",
+"wifi_nvs_restore"
+],
+"wifi_set_vnd_ie_process": [
+"memcpy",
+"wifi_log"
+],
+"wifi_set_max_tpw": [
+"hal_init_tx_pwr",
+"phy_set_most_tpw"
+],
+"wifi_set_csi": [
+"ic_set_csi"
+],
+"wifi_csi_set_config": [
+"ic_csi_set_config"
+],
+"wifi_ant_config_check": [
+"wifi_log"
+],
+"wifi_set_ant": [
+"memcmp",
+"memcpy",
+"wifi_ant_config_check",
+"wifi_ant_update"
+],
+"wifi_set_ant_gpio": [
+"memcmp",
+"memcpy",
+"wifi_log"
+],
+"wifi_set_fix_rate_process": [
+"ic_set_fix_rate",
+"wifi_log"
+],
+"wifi_deauth_sta_process": [
+"cnx_sta_associated",
+"ieee80211_send_mgmt"
+],
+"wifi_set_wps_start_flag": [
+"esp_wifi_ipc_internal"
+],
+"wifi_wpa2_ent_enable_process": [
+"wifi_log"
+],
+"wifi_wpa2_ent_disable_process": [
+"wifi_log"
+],
+"wifi_set_wps_type_process": [
+"wifi_log"
+],
+"wifi_set_wps_status_process": [
+"wifi_log"
+],
+"wifi_ipc_process": [
+"wifi_log"
+],
+"ieee80211_set_appie": [
+"memcpy",
+"wifi_log"
+],
+"wifi_set_appie_process": [
+"ieee80211_set_appie"
+],
+"wifi_internal_ioctl_process": [
+"wifi_log"
+],
+"wifi_get_tsf_time_process": [
+"esp_wifi_get_mode",
+"hal_get_tsf_time"
+],
+"wifi_cert_set_power_save_process": [
+"ieee80211_pm_tx_null_process"
+],
+"wifi_csi_get_config": [
+"hal_mac_get_csi_filter"
+],
+"wifi_softap_add_color_change_announcement_process": [
+"wifi_set_bss_color"
+],
+"wifi_sta_reset_muedca_timer_process": [
+"hal_he_reset_muedca_timer"
+],
+"wifi_sta_set_bss_color_collision_detection_process": [
+"bss_color_set_collision_detection"
+],
+"wifi_enable_bss_color_collision_detection_process": [
+"bss_color_clear_collision_detection",
+"hal_mac_color_clr_bitmap"
+],
+"wifi_sta_itwt_setup_process": [
+"ieee80211_itwt_setup"
+],
+"wifi_sta_itwt_teardown_process": [
+"ieee80211_itwt_teardown"
+],
+"wifi_sta_itwt_get_flow_id_status_process": [
+"ieee80211_itwt_get_flow_id_status"
+],
+"wifi_sta_itwt_send_probe_req_process": [
+"ieee80211_send_probereq",
+"pm_wake_done",
+"pm_wake_up",
+"wifi_event_post",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"wifi_sta_itwt_suspend_process": [
+"he_twt_information_event_post",
+"ieee80211_itwt_information",
+"is_fid_resumed",
+"is_fid_setup",
+"is_fid_suspended",
+"wifi_log"
+],
+"wifi_sta_twt_config_process": [
+"pm_twt_set_config"
+],
+"wifi_sta_btwt_setup_process": [
+"ieee80211_btwt_setup",
+"wifi_log"
+],
+"wifi_sta_btwt_teardown_process": [
+"ieee80211_btwt_teardown"
+],
+"wifi_sta_btwt_get_info_process": [
+"ieee80211_get_btwt_info"
+],
+"wifi_set_htc_omc_process": [
+"wifi_set_htc_omc"
+],
+"wifi_set_rx_statistics_process": [
+"hal_enable_rx_statistics"
+],
+"wifi_get_rx_statistics_process": [
+"esp_test_get_rx_statistics"
+],
+"wifi_clr_rx_statistics_process": [
+"esp_test_clr_rx_statistics"
+],
+"wifi_get_rx_mu_statistics_process": [
+"esp_test_get_rx_mu_statistics"
+],
+"wifi_clr_rx_mu_statistics_process": [
+"esp_test_clr_rx_mu_statistics"
+],
+"wifi_set_tx_statistics_process": [
+"hal_enable_tx_statistics"
+],
+"wifi_get_tx_tb_statistics_process": [
+"esp_test_get_tx_tb_statistics"
+],
+"wifi_clr_tx_tb_statistics_process": [
+"esp_test_clr_tx_tb_statistics"
+],
+"wifi_get_tx_statistics_process": [
+"esp_test_get_tx_statistics"
+],
+"wifi_clr_tx_statistics_process": [
+"esp_test_clr_tx_statistics"
+],
+"wifi_ftm_start_initiator_process": [
+"ftm_start_initiator_local"
+],
+"wifi_send_mgmt_frame": [
+"cnx_node_search",
+"ieee80211_get_robustmgtframe",
+"ieee80211_getmgtframe",
+"ieee80211_is_robust_mgmt_frm",
+"ieee80211_mgmt_output",
+"ieee80211_send_mgmt",
+"ieee80211_set_tx_desc",
+"memcpy",
+"wifi_log"
+],
+"roc_done_cb": [
+"chm_release_lock",
+"pm_on_channel",
+"pm_wake_done",
+"wifi_event_post",
+"wifi_log"
+],
+"roc_sess_handler": [
+"chm_start_op",
+"roc_done_cb",
+"wifi_log"
+],
+"wifi_roc_process": [
+"chm_acquire_lock",
+"chm_cancel_op",
+"chm_get_current_channel",
+"chm_release_lock",
+"memset",
+"offchan_progress_is_matched",
+"pm_offchan_ready_or_defer",
+"pm_wake_done",
+"pm_wake_up",
+"roc_sess_handler",
+"wifi_check_chan_param",
+"wifi_log"
+],
+"wifi_action_tx_process": [
+"chm_acquire_lock",
+"chm_cancel_op",
+"chm_get_current_channel",
+"chm_release_lock",
+"memcpy",
+"memset",
+"offchan_action_tx_sess_handler",
+"offchan_progress_is_matched",
+"pm_offchan_ready_or_defer",
+"wifi_check_chan_param",
+"wifi_log"
+],
+"wifi_configure_wake_window_process": [
+"pm_register_connectionless_wake_window",
+"pm_unregister_connectionless_wake_window"
+],
+"wifi_configure_wake_interval_process": [
+"pm_connectionless_module_set_wake_interval"
+],
+"wifi_disable_pmf_config_process": [
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set"
+],
+"wifi_ap_remove_sta_node_process": [
+"cnx_node_search",
+"cnx_sta_associated",
+"ieee80211_send_mgmt",
+"wifi_log"
+],
+"wifi_ap_sta_sae_auth_done_process": [
+"cnx_node_search",
+"ieee80211_psq_init",
+"memcpy",
+"wifi_event_post",
+"wifi_log"
+],
+"wifi_force_wakeup_process": [
+"pm_wake_done",
+"pm_wake_up"
+],
+"wifi_update_listen_interval_process": [
+"ic_update_listen_interval"
+],
+"wifi_coex_pwr_process": [
+"pm_coex_pwr_configure"
+],
+"wifi_on_coex_start_process": [
+"pm_on_coex_start"
+],
+"wifi_on_coex_schm_phase_process": [
+"pm_coex_schm_process"
+],
+"wifi_update_tsf_tick_interval_process": [
+"ic_update_tsf_tick_interval"
+],
+"wifi_sample_beacon_process": [
+"pm_on_sample_beacon"
+],
+"wifi_tbtt_quick_wake_configure_process": [
+"pm_tbtt_quick_wake_configure"
+],
+"wifi_mesh_ie_init_progress": [
+"esf_buf_setup_for_mesh",
+"ieee80211_mesh_quick_init"
+],
+"wifi_mesh_ie_deinit_progress": [
+"ieee80211_mesh_quick_deinit"
+],
+"wifi_mesh_sta_disassoc": [
+"esp_wifi_get_config",
+"ieee80211_send_mgmt",
+"memcpy",
+"memset"
+],
+"wifi_mesh_set_beacon_interval_progress": [
+"ic_set_beacon_int",
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set"
+],
+"wifi_mesh_router_bssid_set_progress": [
+"memcpy"
+],
+"wifi_mesh_router_bssid_get_progress": [
+"memcpy"
+],
+"wifi_mesh_ie_crypto_funcs_set_progress": [
+"memset",
+"mesh_set_ie_crypto_config"
+],
+"wifi_mesh_ie_crypto_key_set_progress": [
+"memcpy",
+"memset",
+"mesh_set_ie_crypto_config"
+],
+"wifi_mesh_parent_monitor_set_progress": [
+"mesh_set_parent_monitor_config"
+],
+"wifi_mesh_parent_monitor_get_progress": [
+"mesh_get_parent_monitor_config"
+],
+"wifi_mesh_parent_candidate_set_progress": [
+"mesh_set_parent_candidate"
+],
+"wifi_mesh_parent_candidate_clear_progress": [
+"mesh_clear_parent_candidate"
+],
+"wifi_mesh_parent_candidate_get_progress": [
+"mesh_get_parent_candidate"
+],
+"wifi_mesh_rssi_threshold_set_progress": [
+"mesh_set_rssi_threshold"
+],
+"wifi_mesh_rssi_threshold_get_progress": [
+"mesh_get_rssi_threshold"
+],
+"wifi_mesh_switch_channel_progress": [
+"sta_rx_csa"
+],
+"wifi_mesh_act_duty_signaling_process": [
+"ieee80211_public_action_send_mesh_awake"
+],
+"ieee80211_ioctl_init": [
+"ic_get_pp_hdl",
+"ic_register_config_cb",
+"ic_register_timer_post_cb"
+],
+"ieee80211_ioctl": [
+"current_task_is_wifi_task",
+"ieee80211_ioctl_process",
+"pp_post",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_get_init_state",
+"wifi_is_stop_in_progress",
+"wifi_log"
+],
+"wifi_set_dynamic_cs_process": [
+"reset_cs_thres",
+"wifi_log"
+],
+"wifi_softap_set_obss_overlap_process": [
+"hostap_ht_operation_update"
+],
+"ieee80211_ampdu_age_handle": [
+"ieee80211_ampdu_age_all"
+],
+"ieee80211_addba": [
+"addba_timeout_process"
+],
+"ieee80211_ftm_sess_timeout": [
+"ieee80211_ftm_sess_timeout_process"
+],
+"ieee80211_ftm_req_timeout": [
+"ieee80211_ftm_req_timeout_process"
+],
+"ieee80211_tx_ftm_msmt": [
+"ieee80211_tx_ftm_msmt_process"
+],
+"ieee80211_send_ftmr": [
+"ap_sa_query_timeout_process",
+"ap_try_sa_query_process",
+"ieee80211_send_ftmr_process",
+"wifi_log"
+],
+"ieee80211_send_wake_null": [
+"send_wake_null_timeout_process",
+"wifi_log"
+],
+"ieee80211_cnx_connect_next_ap": [
+"cnx_connect_next_ap_timeout_process",
+"wifi_log"
+],
+"ieee80211_btwt_setup_dwell": [
+"btwt_setup_dwell_timeout_fn_process",
+"wifi_log"
+],
+"ieee80211_btwt_setup_timeout": [
+"btwt_setup_timeout_fn_process",
+"wifi_log"
+],
+"ieee80211_itwt_information_timeout": [
+"itwt_information_timeout_fn_process",
+"wifi_log"
+],
+"ieee80211_itwt_probe": [
+"itwt_probe_timeout_fn_process",
+"wifi_log"
+],
+"ieee80211_itwt_setup_dwell": [
+"itwt_setup_dwell_timeout_fn_process",
+"wifi_log"
+],
+"ieee80211_itwt_setup_timeout": [
+"itwt_setup_timeout_fn_process",
+"wifi_log"
+],
+"ieee80211_color_change": [
+"cnx_sta_color_change_fn_process",
+"wifi_log"
+],
+"ieee80211_sta_retry_assoc": [
+"sta_retry_assoc",
+"wifi_log"
+],
+"ieee80211_sta_sa_query_timeout": [
+"sta_sa_query_process_timeout",
+"wifi_log"
+],
+"ieee80211_sta_try_sa_query": [
+"sta_try_sa_query_process",
+"wifi_log"
+],
+"ieee80211_assoc": [
+"cnx_assoc_timeout_process",
+"wifi_log"
+],
+"ieee80211_auth": [
+"cnx_auth_timeout_process",
+"wifi_log"
+],
+"ieee80211_chm_dwell": [
+"chm_end_op_timeout_process",
+"wifi_log"
+],
+"ieee80211_handshake": [
+"cnx_handshake_timeout_process",
+"wifi_log"
+],
+"ieee80211_beacon": [
+"cnx_beacon_timeout_process",
+"wifi_log"
+],
+"ieee80211_probe_send": [
+"mgd_probe_send_timeout_process",
+"wifi_log"
+],
+"ieee80211_csa": [
+"cnx_csa_fn_process",
+"wifi_log"
+],
+"ieee80211_scan_enter_op_chan": [
+"scan_enter_oper_channel_process",
+"wifi_log"
+],
+"ieee80211_scan_inter_chan": [
+"scan_inter_channel_timeout_process",
+"wifi_log"
+],
+"ieee80211_timer_connect": [
+"cnx_connect_timeout_process",
+"wifi_log"
+],
+"ieee80211_hostap_handle": [
+"hostap_handle_timer_process",
+"wifi_log"
+],
+"ieee80211_send_beacon": [
+"ieee80211_hostap_send_beacon_process",
+"wifi_log"
+],
+"ieee80211_timer_do_process": [
+"wifi_log"
+],
+"ieee80211_timer_process": [
+"pp_post",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_get_init_state",
+"wifi_log"
+],
+"gcmp_decap": [
+"ieee80211_gettid"
+],
+"ftm_get_phy_comp": [
+"ieee80211_sta_is_connected"
+],
+"ftm_offchan_end": [
+"chm_get_home_channel",
+"chm_release_lock",
+"chm_return_home_channel",
+"ic_ebuf_recycle_tx",
+"pm_on_channel"
+],
+"public_send_action_ftm_req": [
+"hal_now",
+"ic_get_default_sched",
+"ieee80211_getmgtframe",
+"ieee80211_post_hmac_tx",
+"memcpy",
+"memset",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ftm_get_resp_session_for_peer": [
+"memcmp"
+],
+"ftm_add_resp_session": [
+"ftm_get_resp_session_by_cookie",
+"ic_get_random"
+],
+"ftm_record_t1t4_cb": [
+"ftm_get_resp_session_for_peer"
+],
+"ftm_set_t1t4_cb": [
+"ftm_free_resp_session",
+"ftm_get_resp_session_for_peer",
+"hal_now"
+],
+"ftm_resp_get_burst_inst_delay": [
+"__umoddi3"
+],
+"public_send_action_ftm_resp": [
+"__udivdi3",
+"ftm_resp_get_burst_inst_delay",
+"hal_get_tsf_time",
+"hal_now",
+"ic_get_default_sched",
+"ieee80211_getmgtframe",
+"ieee80211_post_hmac_tx",
+"memcpy",
+"memset",
+"wifi_get_macaddr",
+"wifi_log"
+],
+"ieee80211_ftm_sess_timeout_process": [
+"ftm_get_resp_session_by_cookie"
+],
+"ieee80211_tx_ftm_msmt_process": [
+"ftm_get_resp_session_by_cookie",
+"ieee80211_send_action"
+],
+"ftm_resp_allocate_para": [
+"chm_get_home_channel",
+"ftm_resp_get_burst_slot"
+],
+"ftm_create_responder_session": [
+"chm_get_home_channel",
+"ftm_add_resp_session",
+"ftm_get_phy_comp",
+"ftm_resp_allocate_para",
+"memcpy"
+],
+"ftm_send_initial_resp": [
+"cnx_is_any_node_connecting",
+"ftm_create_responder_session",
+"ieee80211_send_action",
+"memcpy"
+],
+"public_recv_action_ftm_req": [
+"ftm_free_resp_session",
+"ftm_get_resp_session_for_peer",
+"ftm_is_responder_supported",
+"ftm_send_initial_resp",
+"wifi_log"
+],
+"ftm_initiator_post_event": [
+"memcpy",
+"memset",
+"wifi_event_post"
+],
+"ftm_parse_data": [
+"__divdi3",
+"__moddi3",
+"wifi_log"
+],
+"ftm_initiator_session_end": [
+"chm_cancel_op",
+"cnx_sta_pm",
+"ftm_initiator_post_event",
+"ftm_parse_data",
+"ic_rx_enable_bssid_check",
+"pm_wake_done"
+],
+"ftm_initiator_session_abort": [
+"chm_cancel_op",
+"cnx_sta_pm",
+"ftm_initiator_post_event",
+"ic_rx_enable_bssid_check",
+"pm_wake_done"
+],
+"ieee80211_send_ftmr_process": [
+"ieee80211_send_action"
+],
+"ftm_initiator_process_resp": [
+"chm_get_current_channel",
+"ftm_get_phy_comp",
+"memcpy",
+"wifi_log"
+],
+"public_recv_action_ftm_resp": [
+"ftm_initiator_process_resp",
+"ftm_initiator_session_abort",
+"ftm_initiator_session_end",
+"wifi_log"
+],
+"ftm_initiator_negotiate_session": [
+"ieee80211_send_action",
+"pm_wake_up"
+],
+"ftm_offchan_tx_req": [
+"ftm_initiator_negotiate_session",
+"ftm_initiator_session_abort",
+"ftm_offchan_end"
+],
+"ftm_initiator_start_session": [
+"chm_acquire_lock",
+"chm_get_current_channel",
+"chm_start_op",
+"ftm_get_phy_comp",
+"pm_off_channel",
+"pm_on_channel",
+"pm_wake_done",
+"wifi_log"
+],
+"ieee80211_ftm_req_timeout_process": [
+"ftm_initiator_session_abort",
+"ftm_initiator_session_end",
+"ftm_initiator_start_session"
+],
+"ftm_start_initiator_local": [
+"chm_get_band_from_chan",
+"chm_get_home_channel",
+"chm_set_current_channel",
+"chm_set_home_channel",
+"chm_set_snd_chan",
+"ftm_initiator_session_abort",
+"ftm_initiator_start_session",
+"ic_rx_disable_bssid_check",
+"ieee80211_sta_is_connected",
+"memcmp",
+"memcpy",
+"wifi_log"
+],
+"ftm_initiator_end_session_local": [
+"ftm_initiator_post_event",
+"ftm_initiator_session_abort",
+"ieee80211_send_action"
+],
+"ftm_initiator_get_report_local": [
+"memcpy"
+],
+"ftm_validate_initiator_config": [
+"ic_register_ftm_callbacks",
+"ic_register_tx_cb",
+"ieee80211_recv_action_register",
+"ieee80211_regdomain_chan_in_range",
+"ieee80211_register_ftm_timer",
+"ieee80211_send_action_register",
+"ieee80211_sta_is_connected",
+"memcmp",
+"wifi_log"
+],
+"esp_wifi_ftm_resp_set_offset_local": [
+"ftm_responder_set_offset"
+],
+"esp_wifi_internal_reg_netstack_buf_cb_local": [
+"ieee80211_reg_netstack_buf_cb"
+],
+"esp_wifi_send_deauth_local": [
+"esp_wifi_deauthenticate_internal"
+],
+"esp_wifi_ap_get_sta_aid_local": [
+"memcmp"
+],
+"esp_wifi_set_inactive_time_local": [
+"wifi_nvs_set"
+],
+"wifi_api_lock": [
+"current_task_is_wifi_task"
+],
+"wifi_api_unlock": [
+"current_task_is_wifi_task"
+],
+"wifi_init_completed": [
+"wifi_api_lock",
+"wifi_api_unlock"
+],
+"esp_wifi_get_inactive_time_local": [
+"wifi_init_completed"
+],
+"wifi_station_get_config_local": [
+"memcpy",
+"memset",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_nvs_get"
+],
+"wifi_softap_get_config": [
+"ieee80211_regdomain_ap_min_chan",
+"ieee80211_regdomain_check_ap_channel",
+"memcpy",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_nvs_get",
+"wifi_set_default_ssid",
+"wifi_softap_max_support_num"
+],
+"esp_wifi_get_mode": [
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_init_completed"
+],
+"esp_wifi_get_mac": [
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_get_macaddr",
+"wifi_init_completed"
+],
+"wifi_station_ap_check": [
+"wifi_nvs_get"
+],
+"wifi_softap_cacl_mac": [
+"memcpy"
+],
+"esp_wifi_sta_get_rssi": [
+"wifi_api_lock",
+"wifi_api_unlock"
+],
+"wifi_set_user_ie": [
+"memcpy"
+],
+"wifi_check_chan_param": [
+"chm_get_snd_chan_mode",
+"ieee80211_regdomain_check_channel"
+],
+"wifi_deinit_in_caller_task": [
+"ic_delete_wifi_task",
+"ieee80211_ioctl_deinit",
+"misc_nvs_deinit"
+],
+"wifi_init_in_caller_task": [
+"ic_create_wifi_task",
+"ieee80211_ioctl_init",
+"misc_nvs_init",
+"wifi_deinit_in_caller_task",
+"wifi_log",
+"wifi_menuconfig_init"
+],
+"wifi_osi_funcs_register": [
+"net80211_printf",
+"puts"
+],
+"esp_wifi_internal_osi_funcs_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"esp_wifi_internal_crypto_funcs_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"esp_wifi_internal_wifi_type_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"esp_wifi_internal_esp_wifi_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"esp_wifi_internal_esp_wifi_he_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"esp_wifi_internal_wifi_he_type_md5_check": [
+"net80211_printf",
+"strlen",
+"strncmp"
+],
+"net80211_data_ptr_init": [
+"ieee80211_register_hostap_timer"
+],
+"net80211_funcs_init": [
+"esp_net80211_rom_version_get",
+"net80211_data_ptr_init",
+"net80211_printf",
+"wifi_log"
+],
+"esp_wifi_init_internal": [
+"ieee80211_ioctl",
+"net80211_funcs_deinit",
+"net80211_funcs_init",
+"pm_funcs_deinit",
+"pm_funcs_init",
+"puts",
+"wdev_funcs_deinit",
+"wdev_funcs_init",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_deinit_in_caller_task",
+"wifi_init_in_caller_task",
+"wifi_log",
+"wifi_osi_funcs_register"
+],
+"esp_wifi_deinit_internal": [
+"ieee80211_ioctl",
+"net80211_funcs_deinit",
+"pm_funcs_deinit",
+"wdev_funcs_deinit",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_deinit_in_caller_task",
+"wifi_log"
+],
+"esp_wifi_set_mode": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_ftm_initiate_session": [
+"ftm_is_initiator_supported",
+"ftm_validate_initiator_config",
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_restart": [
+"ieee80211_ioctl"
+],
+"esp_wifi_start": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_stop": [
+"ieee80211_ioctl",
+"reset_cs_thres",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_log"
+],
+"esp_wifi_connect_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_disconnect_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_clear_fast_connect": [
+"wifi_init_completed"
+],
+"esp_wifi_deauth_sta": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_promiscuous_scan_start": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"get_total_scan_time": [
+"ieee80211_regdomain_chan_num",
+"ieee80211_regdomain_policy"
+],
+"esp_wifi_scan_start": [
+"get_total_scan_time",
+"ieee80211_ioctl",
+"ieee80211_regdomain_check_channel",
+"memcpy",
+"scan_get_scan_id",
+"scan_set_scan_id",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_scan_stop": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_scan_parameters": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_get_scan_parameters": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_scan_get_ap_num": [
+"scan_get_apnum",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_scan_get_ap_records": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_scan_get_ap_record": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_clear_ap_list": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_config": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_get_config": [
+"wifi_init_completed",
+"wifi_station_get_config_local"
+],
+"esp_wifi_ap_get_sta_list": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_connectionless_module_set_wake_interval": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_ps": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_ps": [
+"pm_get_sleep_type",
+"wifi_init_completed"
+],
+"esp_wifi_set_protocol": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_get_protocol": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_set_protocols": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_get_protocols": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_config_11b_rate": [
+"ic_set_bar_rate",
+"ic_trc_update_def_rate",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_config_espnow_rate": [
+"ic_set_espnow_rate",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_config_80211_tx_rate": [
+"ic_set_80211_tx_rate",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_config_80211_tx": [
+"chm_get_current_band",
+"ic_set_80211_tx_rate_config",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_set_bandwidth": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_get_bandwidth": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_set_bandwidths": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_get_bandwidths": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_channel": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_home_channel": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_channel": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_country": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_country_code": [
+"ieee80211_ioctl",
+"ieee80211_regdomain_get_country_info",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_get_country": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_country_code": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_set_mac": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_softap_set_obss_overlap": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_get_ap_info": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_promiscuous_filter": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_promiscuous_filter": [
+"ic_get_promis_filter",
+"wifi_init_completed"
+],
+"esp_wifi_set_promiscuous_ctrl_filter": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_promiscuous_ctrl_filter": [
+"ic_get_promis_ctrl_filter",
+"wifi_init_completed"
+],
+"esp_wifi_set_promiscuous": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_promiscuous_rx_cb": [
+"ic_register_promis_rx_cb",
+"wifi_init_completed"
+],
+"esp_wifi_get_promiscuous": [
+"wifi_init_completed"
+],
+"esp_wifi_set_storage": [
+"wifi_init_completed"
+],
+"esp_wifi_internal_reg_rxcb": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_set_sta_ip": [
+"wifi_init_completed"
+],
+"esp_wifi_set_auto_connect": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_auto_connect": [
+"wifi_init_completed"
+],
+"esp_wifi_restore": [
+"esp_wifi_stop",
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_vendor_ie": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_vendor_ie_cb": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"wifi_event_post": [
+"wifi_log"
+],
+"wifi_mesh_event_post": [
+"wifi_log"
+],
+"esp_wifi_vnd_lora_enable": [
+"ieee80211_add_ie_vendor_esp_head"
+],
+"esp_wifi_set_max_tx_power": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_max_tx_power": [
+"phy_get_most_tpw",
+"wifi_init_completed"
+],
+"esp_wifi_set_event_mask": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_event_mask": [
+"wifi_init_completed"
+],
+"esp_wifi_set_csi": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_set_csi_config": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_set_csi_rx_cb": [
+"ic_register_csi_rx_cb",
+"wifi_init_completed"
+],
+"esp_wifi_set_ant_gpio": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_ant_gpio": [
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_set_ant": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_ant": [
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_internal_set_fix_rate": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_get_fix_rate": [
+"ic_get_fix_rate",
+"wifi_init_completed"
+],
+"esp_wifi_ipc_internal": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_ftm_end_session": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_ftm_get_report": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_ftm_resp_set_offset": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_internal_set_mac_sleep": [
+"pm_mac_sleep_deinit",
+"pm_mac_sleep_init"
+],
+"esp_wifi_internal_modem_state_configure": [
+"ic_modem_state_configure"
+],
+"esp_wifi_internal_light_sleep_configure": [
+"ic_light_sleep_configure"
+],
+"esp_wifi_internal_mac_retention_context_get": [
+"ic_mac_retention_context_get"
+],
+"esp_wifi_internal_set_log_mod": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_get_log": [
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_internal_ioctl": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_configure_wake_window": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_force_wakeup_acquire": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_force_wakeup_release": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_on_coex_start": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_internal_on_coex_schm_phase": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_coex_pwr_configure": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_beacon_offset_sample_beacon": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_tbtt_quick_wake_configure": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_is_tsf_active": [
+"ic_is_sta_tsf_active"
+],
+"esp_wifi_update_tsf_tick_interval": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_update_listen_interval": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_internal_update_modem_sleep_default_params": [
+"ic_update_modem_sleep_default_params"
+],
+"esp_wifi_internal_update_light_sleep_default_params": [
+"ic_update_light_sleep_default_params"
+],
+"esp_wifi_set_sleep_min_active_time": [
+"ic_set_sleep_min_active_time"
+],
+"esp_wifi_set_keep_alive_time": [
+"ic_set_keep_alive_time"
+],
+"esp_wifi_beacon_monitor_configure": [
+"ic_beacon_monitor_configure"
+],
+"esp_wifi_set_sleep_wait_broadcast_data_time": [
+"ic_set_sleep_wait_broadcast_data_time"
+],
+"esp_wifi_beacon_offset_configure": [
+"ic_beacon_offset_configure",
+"wifi_init_completed"
+],
+"esp_wifi_beacon_offset_set_rx_beacon_standard": [
+"ic_beacon_offset_set_rx_beacon_standard",
+"wifi_init_completed"
+],
+"esp_wifi_internal_reg_netstack_buf_cb": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_internal_get_config_channel": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_internal_band_get_config_channel": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_internal_issue_disconnect": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_internal_get_negotiated_channel": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_internal_get_negotiated_bandwidth": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_ap_get_sta_aid": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_sta_get_aid": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_sta_get_negotiated_phymode": [
+"esp_wifi_ipc_internal"
+],
+"esp_wifi_get_tsf_time": [
+"ieee80211_ioctl",
+"wifi_get_tsf_time_process"
+],
+"esp_wifi_set_tx_done_cb": [
+"ic_register_pp_tx_done_cb",
+"wifi_init_completed"
+],
+"esp_wifi_set_inactive_time": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_get_inactive_time": [
+"esp_wifi_ipc_internal",
+"wifi_init_completed"
+],
+"esp_wifi_statis_dump": [
+"dbg_hmac_statis_dump",
+"dbg_lmac_statis_dump",
+"wifi_init_completed"
+],
+"esp_wifi_internal_set_spp_amsdu": [
+"wifi_init_completed"
+],
+"esp_wifi_disable_pmf_config": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_phy_apply_phy_init_data": [
+"chip_v7_set_chan_misc",
+"chm_get_current_channel",
+"register_chipv7_phy_init_param"
+],
+"esp_mesh_set_ap_assoc_expire": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_router_bssid": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_get_router_bssid": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_beacon_interval": [
+"wifi_init_completed",
+"wifi_nvs_get"
+],
+"esp_wifi_set_beacon_interval": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_nvs_get"
+],
+"esp_mesh_map_deauth": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_mesh_sta_disassoc": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_scan_get_cur_ap_info": [
+"wifi_init_completed"
+],
+"esp_wifi_scan_get_cur_ap_record": [
+"free_bss_info",
+"memcpy",
+"memset",
+"wifi_init_completed"
+],
+"esp_wifi_vnd_mesh_init": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_vnd_mesh_deinit": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_vnd_mesh_set": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_vnd_mesh_get": [
+"ieee80211_ioctl",
+"memset",
+"wifi_init_completed"
+],
+"esp_wifi_vnd_roots_set": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_vnd_roots_get": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_allow_root_conflicts": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_parent_monitor_config": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_get_parent_monitor_config": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_ie_crypto_funcs_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_ie_crypto_key_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_scan_sort_ap_records": [
+"memmove",
+"scan_get_apnum",
+"wifi_log"
+],
+"esp_wifi_scan_sort_get_cur_ap_info": [
+"wifi_init_completed"
+],
+"esp_wifi_scan_sort_get_cur_ap_record": [
+"free_bss_info",
+"memcpy",
+"memset",
+"wifi_init_completed"
+],
+"esp_mesh_set_parent_candidate": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_clear_parent_candidate": [
+"ieee80211_ioctl"
+],
+"esp_mesh_get_parent_candidate": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_rssi_threshold_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_get_rssi_threshold_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_is_roots_found": [
+"ieee80211_ioctl"
+],
+"esp_mesh_switch_channel_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_active_duty_cycle": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_mesh_get_active_duty_cycle": [
+"ieee80211_ioctl"
+],
+"esp_mesh_set_network_duty_internal": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_set_network_duty_cycle": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_mesh_get_network_duty_cycle": [
+"ieee80211_ioctl"
+],
+"esp_mesh_get_running_active_duty_cycle": [
+"ieee80211_ioctl"
+],
+"esp_mesh_ps_get_ext_duty": [
+"ieee80211_ioctl"
+],
+"esp_mesh_ps_duty_signaling": [
+"ieee80211_ioctl"
+],
+"esp_wifi_set_band": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_band": [
+"chm_get_current_band",
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_init_completed"
+],
+"esp_wifi_set_band_mode": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_get_band_mode": [
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_init_completed"
+],
+"esp_wifi_enable_bsscolor_collision_detection": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_csi_config": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_cert_set_mcs": [
+"ieee80211_ioctl"
+],
+"esp_wifi_cert_set_bcc": [
+"ieee80211_ioctl"
+],
+"esp_wifi_cert_set_ltf": [
+"__divdf3",
+"__extendsfdf2",
+"__fixdfsi",
+"__fixunssfsi",
+"__mulsf3",
+"ieee80211_ioctl"
+],
+"esp_wifi_cert_set_gi": [
+"__divdf3",
+"__extendsfdf2",
+"__fixdfsi",
+"__fixunssfsi",
+"__mulsf3",
+"ieee80211_ioctl"
+],
+"esp_wifi_cert_set_nss": [
+"ieee80211_ioctl"
+],
+"esp_wifi_cert_set_ersu": [
+"ieee80211_ioctl"
+],
+"esp_wifi_internal_set_cmw500_stbc_rx_test": [
+"wifi_log"
+],
+"esp_wifi_cert_powersave": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_itwt_setup": [
+"__ashldi3",
+"ieee80211_ioctl",
+"is_twt_fid_setup_full",
+"is_twt_id_exist",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_sta_itwt_teardown": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_sta_itwt_get_flow_id_status": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_itwt_send_probe_req": [
+"hal_now",
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_sta_itwt_set_target_wake_time_offset": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"wifi_sta_itwt_suspend": [
+"ieee80211_ioctl",
+"wifi_log"
+],
+"esp_wifi_sta_itwt_suspend": [
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_sta_btwt_setup": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_btwt_teardown": [
+"ieee80211_ioctl",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_wifi_sta_get_btwt_num": [
+"wifi_api_lock",
+"wifi_api_unlock",
+"wifi_init_completed",
+"wifi_sta_get_btwt_num"
+],
+"esp_wifi_sta_btwt_get_info": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_set_htc_omc": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed"
+],
+"esp_wifi_enable_rx_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_rx_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_clr_rx_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_rx_mu_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_clr_rx_mu_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_enable_tx_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_tx_tb_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_clr_tx_tb_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_get_tx_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_clr_tx_statistics": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_softap_add_color_change_announcement": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_reset_muedca_timer": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_set_bss_color_collision_detection": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_sta_twt_config": [
+"ieee80211_ioctl"
+],
+"esp_wifi_set_dynamic_cs": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"esp_wifi_eb_tx_status_success_internal": [
+"wifi_init_completed"
+],
+"esp_wifi_register_80211_tx_cb": [
+"wifi_init_completed"
+],
+"cnx_get_next_rc": [
+"chm_get_chan_info"
+],
+"cnx_traverse_rc_lis_done": [
+"chm_release_lock",
+"chm_return_home_channel"
+],
+"cnx_connect_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_connect_next_ap_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_handshake_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_csa_fn": [
+"ieee80211_timer_process"
+],
+"mgd_probe_send_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_beacon_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_connect_op": [
+"chm_release_lock",
+"ic_del_key",
+"ic_del_ptk_and_gtk_alg",
+"ieee80211_mlme_connect_bss",
+"ppInstallKey",
+"scan_get_type",
+"wifi_log"
+],
+"cnx_connect_to_bss": [
+"chm_acquire_lock",
+"chm_get_band_from_chan",
+"chm_get_current_channel",
+"chm_start_op",
+"cnx_connect_op",
+"hal_he_bssid_deinit",
+"hal_he_bssid_init",
+"hal_he_set_bss_color",
+"hal_mac_color_clr_bitmap",
+"hal_now",
+"ic_set_bssid",
+"ieee80211_is_he_cipher",
+"ieee80211_update_channel",
+"pm_wake_done",
+"wifi_log",
+"wifi_mesh_event_post",
+"wifi_set_rx_policy"
+],
+"cnx_probe_rc": [
+"chm_get_current_channel",
+"chm_start_op",
+"ieee80211_send_probereq",
+"wifi_get_macaddr"
+],
+"cnx_sta_pm.part.0": [
+"pm_set_bss_max_idle",
+"pm_start"
+],
+"ieee80211_cnx_attach": [
+"ic_register_tx_cb",
+"memset"
+],
+"_cnx_start_connect_without_scan": [
+"scan_hidden_ssid",
+"wifi_log"
+],
+"cnx_can_do_obss_scan": [
+"wifi_log"
+],
+"cnx_obss_scan": [
+"cnx_can_do_obss_scan",
+"scan_add_probe_ssid",
+"scan_cancel",
+"scan_hidden_ssid",
+"scan_remove_bssid",
+"scan_remove_probe_ssid",
+"scan_set_act_duration",
+"scan_start",
+"wifi_log"
+],
+"cnx_obss_scan_timeout": [
+"wifi_log"
+],
+"cnx_sta_scan_cmd": [
+"chm_check_channel_is_valid",
+"ieee80211_regdomain_chan_in_range",
+"ieee80211_regdomain_min_chan",
+"memcpy",
+"scan_add_bssid",
+"scan_add_probe_ssid",
+"scan_bitmap_to_channel_list",
+"scan_build_chan_list",
+"scan_cancel",
+"scan_hidden_ssid",
+"scan_prefer_chan",
+"scan_remove_bssid",
+"scan_remove_probe_ssid",
+"scan_set_current_scan_times",
+"scan_set_desChan",
+"scan_start",
+"strlen",
+"wifi_log"
+],
+"cnx_connect_next_ap": [
+"wifi_log"
+],
+"cnx_auth_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_assoc_timeout": [
+"ieee80211_timer_process"
+],
+"cnx_csa_fn_process": [
+"cnx_connect_to_bss",
+"ieee80211_adjust_2nd_chan",
+"ieee80211_update_channel",
+"wifi_log",
+"wifi_nvs_commit",
+"wifi_nvs_get",
+"wifi_nvs_set",
+"wifi_station_save_ap_channel"
+],
+"cnx_validate_owe_bss": [
+"check_bss_queue",
+"memcmp",
+"scan_get_owe_channel_info",
+"sta_get_owe_data"
+],
+"cnx_bss_init": [
+"memset",
+"wifi_log"
+],
+"cnx_check_bssid_in_blacklist": [
+"memcmp"
+],
+"cnx_remove_from_blacklist": [
+"memcmp",
+"wifi_log"
+],
+"cnx_add_to_blacklist": [
+"cnx_check_bssid_in_blacklist",
+"memcpy",
+"wifi_log"
+],
+"cnx_clear_blacklist": [
+"memset",
+"wifi_log"
+],
+"cnx_choose_rc": [
+"cnx_cal_rc_util",
+"cnx_clear_blacklist",
+"cnx_get_authtype_strength",
+"cnx_validate_owe_bss",
+"memcmp",
+"wifi_log",
+"wifi_sta_get_prof_password",
+"wifi_wpa2_is_started",
+"wifi_wps_is_started"
+],
+"cnx_rc_search": [
+"memcmp"
+],
+"cnx_do_handoff_internal": [
+"cnx_connect_to_bss",
+"cnx_rc_search",
+"wifi_log"
+],
+"cnx_remove_all_rc": [
+"memset",
+"wifi_log"
+],
+"cnx_remove_rc": [
+"memset",
+"wifi_log"
+],
+"cnx_do_handoff": [
+"cnx_add_to_blacklist",
+"cnx_choose_rc",
+"cnx_clear_blacklist",
+"cnx_remove_all_rc",
+"cnx_remove_rc",
+"memcpy",
+"memset",
+"pm_coex_set_reconnect_policy",
+"pm_on_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"pm_wake_done",
+"update_ic_params_using_bss.part.0",
+"wifi_event_post",
+"wifi_log",
+"wifi_sta_get_prof_password",
+"wifi_station_get_reconnect_policy"
+],
+"cnx_connect_next_ap_timeout_process": [
+"wifi_log"
+],
+"cnx_start_handoff_cb": [
+"cnx_do_handoff",
+"pm_wake_done",
+"wifi_event_post",
+"wifi_log"
+],
+"cnx_sta_connect_cmd": [
+"_cnx_start_connect_without_scan",
+"cnx_choose_rc",
+"cnx_remove_rc",
+"ieee80211_regdomain_chan_in_range",
+"ieee80211_regdomain_min_chan",
+"memcmp",
+"scan_add_probe_ssid",
+"scan_build_chan_list",
+"scan_cancel",
+"scan_hidden_ssid",
+"scan_prefer_chan",
+"scan_remove_bssid",
+"scan_remove_probe_ssid",
+"scan_set_act_duration",
+"scan_set_desChan",
+"scan_set_pas_duration",
+"scan_start",
+"wifi_log"
+],
+"cnx_connect_timeout_process": [
+"ieee80211_sta_new_state",
+"wifi_log"
+],
+"cnx_auth_timeout_process": [
+"ieee80211_sta_new_state",
+"wifi_log",
+"wifi_station_get_reconnect_policy"
+],
+"cnx_assoc_timeout_process": [
+"ieee80211_sta_new_state",
+"wifi_log",
+"wifi_station_get_reconnect_policy"
+],
+"cnx_handshake_timeout_process": [
+"hal_now",
+"ieee80211_sta_new_state",
+"wifi_log",
+"wifi_station_get_reconnect_policy"
+],
+"cnx_bss_alloc": [
+"cnx_cal_rc_util",
+"cnx_get_authtype_strength",
+"cnx_remove_rc",
+"hal_now",
+"memcmp",
+"sta_get_owe_data",
+"wifi_log"
+],
+"cnx_remove_rc_except": [
+"memset",
+"wifi_log"
+],
+"cnx_rc_update_state_metric": [
+"cnx_remove_rc"
+],
+"cnx_probe_rc_tx_cb": [
+"cnx_get_next_rc",
+"cnx_probe_rc",
+"cnx_rc_search",
+"cnx_rc_update_state_metric",
+"cnx_traverse_rc_lis_done",
+"itwt_probe_rc_tx_cb"
+],
+"cnx_update_bss": [
+"ieee80211_setup_rateset",
+"memcpy"
+],
+"esp_mesh_get_tsf_time": [
+"hal_get_tsf_time"
+],
+"cnx_update_bss_more": [
+"cnx_sta_pm.part.0",
+"hal_now",
+"ieee80211_he_updateparams",
+"ieee80211_ht_updateparams",
+"ieee80211_is_he_cipher",
+"ieee80211_is_ht_cipher",
+"ieee80211_parse_obss_scan_param",
+"ieee80211_parse_wmeparams",
+"ieee80211_regdomain_update_in_connect",
+"ieee80211_set_max_rate",
+"ieee80211_set_shortslottime",
+"ieee80211_setup_phy_mode",
+"ieee80211_setup_rates",
+"ieee80211_sta_is_connected",
+"ieee80211_update_channel",
+"ieee80211_wme_updateparams",
+"memcpy",
+"memset"
+],
+"send_ap_probe": [
+"ieee80211_send_probereq",
+"pm_send_probe_start",
+"pm_send_probe_stop",
+"wifi_get_macaddr"
+],
+"cnx_beacon_timeout_process": [
+"ieee80211_close_all_twt_sessions",
+"pm_is_open",
+"pm_stop",
+"wifi_event_post",
+"wifi_log"
+],
+"mgd_probe_send_timeout_process": [
+"cnx_sta_connect_cmd",
+"ieee80211_sta_new_state",
+"pm_send_probe_stop",
+"wifi_log",
+"wifi_station_get_reconnect_policy"
+],
+"cnx_node_alloc": [
+"chm_get_current_band",
+"cnx_bss_init",
+"hostap_ht_operation_update",
+"ic_del_key",
+"ieee80211_ht_node_cleanup",
+"ieee80211_pwrsave_node_cleanup",
+"ieee80211_set_phy_bw",
+"ieee80211_update_channel",
+"memcpy"
+],
+"cnx_sta_pm": [
+"cnx_sta_pm.part.0",
+"ieee80211_close_all_twt_sessions",
+"pm_stop"
+],
+"ic_set_sta": [
+"hal_he_bsr_init",
+"hal_he_disable_rts_threshold",
+"hal_he_set_mmss_and_aid",
+"hal_he_set_packet_padding_us",
+"ic_set_he_min_subframe_len_tab",
+"ic_set_he_rts_threshold_bytes_tab",
+"ic_set_trc",
+"ieee80211_phy_type_get",
+"memset",
+"phymode2str",
+"phytype2str",
+"spacing2str",
+"wifi_log"
+],
+"cnx_sta_leave": [
+"cnx_rc_update_state_metric",
+"cnx_remove_from_blacklist",
+"cnx_remove_rc",
+"hal_he_set_bss_color",
+"ic_del_key_all",
+"ic_set_sta",
+"ieee80211_close_all_twt_sessions",
+"ieee80211_ht_node_cleanup",
+"ieee80211_update_channel",
+"ieee80211_update_phy_country",
+"memcmp",
+"pm_stop",
+"wifi_log",
+"wifi_set_rx_policy"
+],
+"cnx_sta_associated": [
+"cnx_node_alloc",
+"ic_set_sta",
+"ieee80211_psq_find_max_bss",
+"ieee80211_update_channel",
+"memcpy",
+"wifi_event_post",
+"wifi_log"
+],
+"cnx_node_join": [
+"cnx_sta_associated",
+"ic_set_sta",
+"ieee80211_amsdu_negotiate",
+"ieee80211_phy_mode_show",
+"ieee80211_send_mgmt",
+"memcmp",
+"memcpy",
+"wifi_event_post",
+"wifi_log",
+"wifi_mesh_event_post"
+],
+"cnx_start_obss_scan": [
+"cnx_can_do_obss_scan",
+"wifi_log"
+],
+"cnx_obss_scan_done_cb": [
+"clear_bss_queue",
+"cnx_can_do_obss_scan",
+"ieee80211_getmgtframe",
+"ieee80211_mgmt_output",
+"ieee80211_set_tx_desc",
+"wifi_log"
+],
+"cnx_auth_done": [
+"cnx_clear_blacklist",
+"cnx_remove_rc_except",
+"cnx_sta_pm.part.0",
+"cnx_start_obss_scan",
+"ieee80211_ampdu_request",
+"ieee80211_is_ht_cipher",
+"ieee80211_phy_mode_show",
+"memcmp",
+"memcpy",
+"pm_on_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"pm_wake_done",
+"sta_get_owe_data",
+"wifi_event_post",
+"wifi_log",
+"wifi_set_rx_policy",
+"wifi_station_save_ap_channel"
+],
+"sta_twt_null_data_max_retry_times_reached": [
+"ieee80211_sta_new_state",
+"wifi_log"
+],
+"ieee80211_add_action_vendor_spec_esp": [
+"ic_get_random",
+"memcpy"
+],
+"ieee80211_alloc_action_vendor_spec": [
+"ieee80211_add_action_vendor_spec_esp",
+"ieee80211_add_ie_vendor_esp_now",
+"ieee80211_alloc_tx_buf",
+"roundup2"
+],
+"ieee80211_construct_action_vendor_spec": [
+"chm_get_current_band",
+"cnx_node_search",
+"get_iav_key",
+"hal_now",
+"ic_get_default_sched",
+"ic_get_espnow_rate",
+"ieee80211_alloc_action_vendor_spec",
+"ieee80211_set_tx_pti",
+"memcmp",
+"memcpy",
+"wifi_get_macaddr"
+],
+"ieee80211_send_action_vendor_spec": [
+"ieee80211_construct_action_vendor_spec",
+"ieee80211_post_hmac_tx"
+],
+"ieee80211_recv_action_vendor_esp_now": [
+"memcmp",
+"memcpy"
+],
+"ieee80211_recv_action_vendor_spec": [
+"get_iav_key",
+"ieee80211_recv_action_vendor_esp_now",
+"memcpy"
+],
+"ieee80211_action_vendor_spec_attach": [
+"ieee80211_recv_action_register"
+],
+"send_wake_null_timeout": [
+"ieee80211_timer_process"
+],
+"sta_assoc_comeback": [
+"ieee80211_timer_process"
+],
+"sta_try_sa_query": [
+"ieee80211_timer_process"
+],
+"sta_sa_query_timeout": [
+"ieee80211_timer_process"
+],
+"sta_eapol_txdone_cb": [
+"ieee80211_get_key"
+],
+"send_wake_null_timeout_process": [
+"is_off_channel",
+"pm_enable_send_wake_null_on_channel",
+"pm_send_nullfunc"
+],
+"wifi_sta_reg_eapol_txdone_cb": [
+"ic_register_tx_cb"
+],
+"sta_michael_mic_failure": [
+"wifi_log"
+],
+"ieee80211_wme_standard_ac_to_esp_ac": [
+"wifi_log"
+],
+"ieee80211_parse_wmeparams": [
+"ieee80211_wme_standard_ac_to_esp_ac"
+],
+"sta_rx_csa": [
+"chm_get_band_from_chan",
+"wifi_log",
+"wifi_mesh_event_post"
+],
+"update_cs_thres": [
+"hal_now",
+"set_rx_sense"
+],
+"reset_cs_thres": [
+"set_rx_sense"
+],
+"ieee80211_set_bss_max_idle_period": [
+"wifi_log"
+],
+"wifi_station_stop": [
+"clear_bss_queue",
+"ftm_initiator_end_session_local",
+"hal_disable_sta_tsf",
+"ic_set_vif",
+"wifi_disconnect_process",
+"wifi_event_post",
+"wifi_log"
+],
+"sta_bip_check": [
+"ieee80211_crypto_aes_128_cmac_decrypt",
+"ieee80211_crypto_gmac_decrypt",
+"ieee80211_is_action_category_robust",
+"ieee80211w_get_active_igtk_key_id"
+],
+"wifi_station_start": [
+"hal_enable_sta_tsf",
+"ic_get_keep_alive_time",
+"ic_set_vif",
+"ieee80211_update_bandwidth",
+"sta_is_bss_max_idle_enabled",
+"wifi_event_post",
+"wifi_log"
+],
+"sta_update_power_off_reset_flag": [
+"wifi_nvs_commit",
+"wifi_nvs_compare_cfg_diff",
+"wifi_nvs_get",
+"wifi_nvs_set"
+],
+"ieee80211_sta_new_state": [
+"cnx_add_to_blacklist",
+"cnx_auth_done",
+"cnx_connect_next_ap",
+"cnx_sta_associated",
+"cnx_sta_leave",
+"hal_crypto_enable",
+"ic_del_ptk_and_gtk_alg",
+"ic_get_ptk_alg",
+"ieee80211_send_mgmt",
+"ieee80211_sta_new_state",
+"memcpy",
+"mesh_sta_auth_expire_time",
+"pm_coex_set_reconnect_policy",
+"pm_on_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"pm_wake_done",
+"pm_wake_up",
+"sta_update_power_off_reset_flag",
+"wifi_event_post",
+"wifi_log",
+"wifi_nvs_get",
+"wifi_nvs_reset_current_ap_info",
+"wifi_sta_get_prof_password",
+"wifi_station_get_reconnect_policy",
+"wl_clear_ap_no_lr"
+],
+"sta_auth_ft": [
+"ieee80211_sta_new_state",
+"wifi_log",
+"wifi_station_get_reconnect_policy"
+],
+"sta_auth_open": [
+"ieee80211_send_mgmt",
+"ieee80211_sta_new_state",
+"wifi_log",
+"wifi_station_get_reconnect_policy"
+],
+"sta_auth_shared": [
+"ieee80211_alloc_challenge",
+"ieee80211_send_mgmt",
+"ieee80211_sta_new_state",
+"memcpy",
+"wifi_log"
+],
+"sta_auth_sae": [
+"ieee80211_send_mgmt",
+"ieee80211_sta_new_state",
+"pm_on_coex_schm_process_restart",
+"pm_on_coex_schm_status_config",
+"sta_is_wpa3_enabled"
+],
+"sta_retry_assoc": [
+"ieee80211_sta_new_state",
+"sta_is_wpa3_enabled"
+],
+"sta_recv_assoc": [
+"hal_now",
+"ic_update_sta_tsf",
+"ieee80211_find_ie",
+"ieee80211_he_node_init",
+"ieee80211_he_updateparams",
+"ieee80211_ht_node_init",
+"ieee80211_ht_updateparams",
+"ieee80211_is_he_cipher",
+"ieee80211_is_lr_only",
+"ieee80211_parse_extcap",
+"ieee80211_parse_obss_scan_param",
+"ieee80211_parse_wmeparams",
+"ieee80211_set_bss_max_idle_period",
+"ieee80211_set_shortslottime",
+"ieee80211_setup_basic_htrates",
+"ieee80211_setup_htrates",
+"ieee80211_setup_lr_rates",
+"ieee80211_setup_phy_mode",
+"ieee80211_setup_rates",
+"ieee80211_sta_new_state",
+"ieee80211_update_twt",
+"ieee80211_wme_updateparams",
+"sta_is_bss_max_idle_enabled",
+"wifi_log",
+"wifi_set_rx_policy",
+"wifi_station_get_reconnect_policy"
+],
+"sta_sa_query_process_timeout": [
+"ieee80211_sta_new_state",
+"wifi_log"
+],
+"sta_try_sa_query_process": [
+"ieee80211_send_action",
+"wifi_log"
+],
+"sta_recv_mgmt": [
+"cnx_beacon_timeout_process",
+"get_iav_key",
+"ic_update_sta_tsf",
+"ieee80211_ccmp_decrypt",
+"ieee80211_decrypt_espnow_pkt",
+"ieee80211_is_action_category_robust",
+"ieee80211_parse_action",
+"ieee80211_parse_beacon",
+"ieee80211_parse_mbssid",
+"ieee80211_recv_action",
+"ieee80211_sta_is_connected",
+"ieee80211_sta_new_state",
+"memcmp",
+"memset",
+"offchan_in_progress",
+"offchan_recv_action",
+"pm_is_twt_start",
+"pm_on_probe_resp_rx",
+"pm_send_probe_stop",
+"pm_wake_done",
+"scan_parse_beacon",
+"sta_auth_ft",
+"sta_auth_open",
+"sta_auth_sae",
+"sta_auth_shared",
+"sta_recv_assoc",
+"sta_recv_mgmt",
+"sta_rx_csa",
+"sta_try_sa_query_process",
+"update_cs_thres",
+"wifi_disconnect_process",
+"wifi_event_post",
+"wifi_get_macaddr",
+"wifi_log",
+"wifi_mesh_event_post"
+],
+"ieee80211_proto_attach": [
+"ic_register_tx_cb"
+],
+"ieee80211_wme_updateparams": [
+"ic_set_ac_param"
+],
+"ieee80211_muedca_updateparams": [
+"ic_set_ac_muedca_param"
+],
+"ieee80211_mlme_connect_bss": [
+"ieee80211_sta_new_state",
+"memcpy",
+"wifi_log"
+],
+"esp_test_sta_create_addba": [
+"ieee80211_ampdu_request",
+"wifi_log"
+],
+"esp_test_ap_create_addba": [
+"cnx_node_search",
+"ieee80211_ampdu_request",
+"wifi_log"
+],
+"rfpll_cap_track": [
+"abs_temp",
+"phy_dis_hw_set_freq_1",
+"phy_en_hw_set_freq",
+"phy_printf",
+"rfpll_cap_correct_new"
+],
+"txpwr_correct": [
+"bt_set_tx_gain",
+"ram_temp_to_power",
+"wifi_set_tx_gain"
+],
+"txpwr_cal_track": [
+"abs_temp",
+"bt_set_tx_gain",
+"get_data_sat",
+"phy_bbpll_cal",
+"phy_printf",
+"ram_temp_to_power",
+"wifi_set_tx_gain"
+],
+"bt_track_pll_cap": [
+"bt_track_tx_power",
+"rfpll_cap_track",
+"tsens_temp_read_new"
+],
+"phy_param_track": [
+"bt_track_tx_power",
+"rfpll_cap_track",
+"tsens_temp_read_new",
+"wifi_track_tx_power"
+],
+"phy_cal_param_track": [
+"abs_temp",
+"chip_v7_set_chan",
+"force_txrx_off",
+"pbus_clear_reg",
+"phy_dis_hw_set_freq_1",
+"phy_en_hw_set_freq",
+"phy_printf",
+"set_rx_gain_table",
+"txdc_cal_pwdet_init",
+"txiq_cal_init_new",
+"wifi_set_tx_gain"
+],
+"tx_pwctrl_background_": [
+"phy_cal_param_track",
+"rfpll_cap_track",
+"tsens_temp_read_new",
+"tx_i2c_track",
+"wifi_track_tx_power"
+],
+"phy_param_track_tot": [
+"bt_track_tx_power",
+"phy_cal_param_track",
+"rfpll_cap_track",
+"tsens_temp_read_new",
+"wifi_track_tx_power"
+],
+"RFChannelSel": [
+"chip_v7_set_chan"
+],
+"phy_change_channel": [
+"set_chanfreq"
+],
+"phy_xpd_tsens": [
+"rfpll_chgp_cal"
+],
+"phy_wakeup_init": [
+"phy_wakeup_init_"
+],
+"ant_tx_cfg": [
+"ant_wifitx_cfg_rom"
+],
+"ant_rx_cfg": [
+"ant_wifirx_cfg_rom"
+],
+"phy_dig_reg_backup": [
+"phy_dig_reg_backup_new"
+],
+"phy_get_romfunc_addr": [
+"phy_get_romfuncs",
+"phy_param_addr"
+],
+"rc_cal_init": [
+"rc_cal_new"
+],
+"rf_init": [
+"bias_reg_set",
+"fe_reg_init",
+"filter_dcap_set",
+"i2c_bbpll_set",
+"i2c_clk_sel",
+"i2c_rc_cal_set",
+"i2c_sar2_init_code",
+"i2cmst_reg_init",
+"open_i2c_xpd_new",
+"pbus_clear_reg",
+"phy_bbpll_cal",
+"phy_i2c_init1",
+"phy_i2c_master_cmd_mem_init",
+"pwdet_reg_init_new",
+"rc_cal_init",
+"reg_set_new",
+"rfpll_chgp_cal",
+"set_chan_freq_hw_init",
+"tsens_read_init_new",
+"tx_pwctrl_bg_init"
+],
+"bb_init": [
+"bt_tx_gain_init",
+"chip_v7_set_chan",
+"phy_check_rx_sat",
+"phy_reg_init",
+"phy_rx_table_init",
+"phy_wifi_enable_set",
+"pwdet_code_cal",
+"rfrx_sat_rst",
+"rxiq_cal_init",
+"set_pbus_mem",
+"set_rx_gain_table",
+"tsens_temp_read_new",
+"tx_cap_init_loop",
+"tx_pwctrl_init_new",
+"txdc_cal_init_new",
+"txdc_cal_pwdet_init",
+"txiq_cal_init_new"
+],
+"phy_xpd_rf": [
+"disable_agc",
+"ets_delay_us"
+],
+"phy_close_rf_": [
+"bias_reg_reset",
+"force_txrx_off",
+"phy_bbpll_cal",
+"phy_dis_hw_set_freq_1",
+"phy_xpd_rf",
+"tsens_temp_read_new"
+],
+"phy_get_mac_addr": [
+"phy_close_rf_"
+],
+"phy_set_mac_data": [
+"phy_get_mac_addr"
+],
+"phy_rfcal_data_sub": [
+"phy_byte_to_word"
+],
+"rf_cal_data_recovery": [
+"memcpy"
+],
+"phy_rfcal_data_check_value": [
+"abs_temp",
+"get_iq_value",
+"rf_cal_data_recovery"
+],
+"rf_cal_data_backup": [
+"phy_rfcal_data_sub"
+],
+"phy_rfcal_data_check": [
+"phy_byte_to_word",
+"phy_set_mac_data"
+],
+"register_chipv7_phy": [
+"bb_init",
+"chip_v7_set_chan_offset",
+"force_txrx_off",
+"freq_module_resetn",
+"get_temp_init_new",
+"i2c_master_reset",
+"memset",
+"phy_bbpll_cal",
+"phy_dis_hw_set_freq_1",
+"phy_en_hw_set_freq",
+"phy_get_rf_cal_version",
+"phy_get_romfunc_addr",
+"phy_get_xtal_freq",
+"phy_rfcal_data_check",
+"phy_rfcal_data_check_value",
+"phy_set_23dbm",
+"register_chipv7_phy_init_param",
+"rf_cal_data_backup",
+"rf_cal_data_recovery",
+"rf_init"
+],
+"ram_pbus_force_mode": [
+"ets_delay_us"
+],
+"ram_pbus_xpd_tx_on": [
+"ets_delay_us",
+"pbus_set_dco"
+],
+"ram_txcal_debuge_mode": [
+"pbus_debugmode",
+"pbus_set_dco",
+"set_txclk_en",
+"txbbgain_to_index"
+],
+"set_pbus_mem": [
+"memcpy",
+"save_pbus_reg",
+"write_pbus_mem"
+],
+"rate_to_index": [
+"wifi_11g_rate_chg_new"
+],
+"get_target_pwr": [
+"rate_to_index",
+"wifi_get_target_power_new"
+],
+"phy_get_max_pwr": [
+"get_target_pwr"
+],
+"phy_get_pwr_index": [
+"get_target_pwr"
+],
+"bt_txpwr_freq": [
+"bt_chan_pwr_interp",
+"freq_i2c_mem_write_new",
+"get_freq_mem_addr",
+"get_freq_mem_param"
+],
+"wr_rf_freq_mem_new": [
+"freq_i2c_mem_write_new",
+"get_freq_mem_addr",
+"get_freq_mem_param"
+],
+"pll_dac_mem_update_new": [
+"chan_to_freq",
+"freq_i2c_mem_write_new",
+"get_freq_mem_addr",
+"get_freq_mem_param"
+],
+"pll_cap_mem_update_new": [
+"chan_to_freq",
+"freq_i2c_mem_write_new",
+"get_freq_mem_addr",
+"get_freq_mem_param",
+"read_rf_freq_mem_new"
+],
+"get_rf_freq_init_new": [
+"read_pll_cap",
+"set_rfpll_freq",
+"wr_rf_freq_mem_new",
+"write_pll_cap"
+],
+"set_chan_freq_hw_init": [
+"freq_i2c_data_write_new",
+"freq_reg_init",
+"get_rf_freq_init_new"
+],
+"ram_set_chan_freq_sw_start": [
+"ets_delay_us",
+"freq_chan_en_sw"
+],
+"phy_set_most_tpw": [
+"wifi_set_tx_gain"
+],
+"phy_get_most_tpw": [
+"get_chan_target_power_new"
+],
+"phy_get_adc_rand": [
+"pbus_debugmode",
+"pbus_set_dco",
+"pbus_workmode",
+"phy_get_romfuncs",
+"phy_param_addr",
+"set_rxclk_en"
+],
+"phy_get_rssi": [
+"phy_get_noise_floor"
+],
+"phy_force_freq_set": [
+"phy_dis_hw_set_freq",
+"phy_en_hw_set_freq",
+"phy_rfpll_set_freq_offset",
+"restart_cal",
+"wait_rfpll_cal_end",
+"write_rfpll_sdm"
+],
+"rfpll_cap_correct_new": [
+"phy_printf",
+"pll_cap_mem_update_new",
+"read_pll_cap",
+"write_pll_cap"
+],
+"chip_v7_set_chan_misc": [
+"set_chan_reg",
+"wifi_set_tx_gain",
+"wr_rx_gain_mem"
+],
+"chip_v7_set_chan": [
+"chan14_mic_cfg",
+"chan_to_freq",
+"chip_v7_set_chan_misc",
+"disable_agc",
+"enable_agc",
+"force_txrx_off",
+"mhz2ieee",
+"phy_11p_set",
+"phy_bbpll_cal",
+"phy_i2c_master_mem_txcap",
+"set_channel_rfpll_freq",
+"set_rx_comp_new"
+],
+"chip_v7_set_chan_offset": [
+"disable_agc",
+"enable_agc",
+"phy_freq_correct",
+"set_channel_rfpll_freq"
+],
+"set_chanfreq": [
+"chip_v7_set_chan",
+"mhz2ieee"
+],
+"rfpll_chgp_cal": [
+"ets_delay_us",
+"phy_printf"
+],
+"ram_tsens_temp_read_new": [
+"tsens_code_read",
+"tsens_dac_cal_new",
+"tsens_dac_to_index"
+],
+"tsens_temp_read_new": [
+"ram_tsens_temp_read_new"
+],
+"get_temp_init_new": [
+"tsens_temp_read_new"
+],
+"ram_bb_bss_cbw40": [
+"bb_bss_cbw40_dig",
+"cbw2040_cfg",
+"mac_tx_chan_offset_new",
+"wifi_fbw_sel"
+],
+"chan14_mic_cfg": [
+"phy_set_most_tpw"
+],
+"rc_cal_new": [
+"get_rc_dout"
+],
+"ram_pwdet_tone_start": [
+"ets_delay_us"
+],
+"get_sar2_vol_new": [
+"read_sar2_code"
+],
+"gen_rx_gain_table_new": [
+"memcpy"
+],
+"wr_rx_gain_mem": [
+"memcpy",
+"pbus_debugmode",
+"rfrx_gain_index_new",
+"set_rxclk_en",
+"set_txclk_en",
+"write_gain_mem_new"
+],
+"rxiq_cal_init": [
+"chip_v7_set_chan_ana",
+"pbus_debugmode",
+"pbus_workmode",
+"set_rx_gain_cal_iq_new"
+],
+"phy_rx_table_init": [
+"phy_reg_init",
+"write_gain_mem_new"
+],
+"set_rx_gain_table": [
+"bt_gain_offset",
+"gen_rx_gain_table_new",
+"iq_corr_enable",
+"memcpy",
+"set_rx_gain_cal_dc_new",
+"wr_rx_gain_mem"
+],
+"rx_table_track": [
+"abs_temp",
+"chip_v7_set_chan",
+"force_txrx_off",
+"mac_enable_bb",
+"phy_printf",
+"set_rx_gain_table"
+],
+"get_phy_version_str": [
+"phy_get_rf_cal_version",
+"sprintf"
+],
+"phy_version_print": [
+"phy_get_rf_cal_version"
+],
+"phy_reg_check": [
+"phy_printf"
+],
+"phy_i2c_check": [
+"phy_printf"
+],
+"phy_tx_gain_print": [
+"bt_get_tx_tab",
+"phy_printf",
+"wifi_get_tx_tab"
+],
+"phy_get_vdd33": [
+"get_sar2_vol_new",
+"pbus_debugmode",
+"pbus_workmode"
+],
+"rfpll_cap_check": [
+"chip_v7_set_chan",
+"phy_printf",
+"read_pll_cap"
+],
+"phy_cal_print": [
+"ets_delay_us",
+"get_iq_value",
+"phy_get_vdd33",
+"phy_printf",
+"phy_tx_gain_print",
+"phy_version_print",
+"read_hw_noisefloor",
+"tsens_temp_read_new",
+"wifi_set_tx_gain"
+],
+"pbus_print": [
+"phy_printf"
+],
+"set_tx_gain_mem": [
+"bt_bb_to_index",
+"force_txrx_off",
+"txbbgain_to_index",
+"write_gain_mem_new"
+],
+"get_chan_target_power_new": [
+"get_rate_fcc_index"
+],
+"bt_get_tx_gain_new": [
+"get_data_sat",
+"get_tx_gain_value_new",
+"phy_printf"
+],
+"wifi_get_tx_gain_new": [
+"get_tx_gain_value_new",
+"phy_printf"
+],
+"wifi_get_tx_tab": [
+"memcpy",
+"memset",
+"wifi_get_tx_gain_new"
+],
+"wifi_set_tx_gain": [
+"set_tx_gain_mem",
+"wifi_get_tx_tab"
+],
+"bt_get_tx_tab": [
+"bt_get_tx_gain_new",
+"memcpy",
+"memset"
+],
+"bt_set_tx_gain": [
+"bt_get_tx_tab",
+"set_tx_gain_mem"
+],
+"bt_tx_gain_init": [
+"bt_tx_pwctrl_init_new",
+"bt_txdc_cal_new",
+"set_channel_rfpll_freq"
+],
+"force_txon": [
+"ets_delay_us"
+],
+"force_txon_mode": [
+"ets_delay_us",
+"force_txon",
+"phy_dis_hw_set_freq",
+"phy_en_hw_set_freq",
+"phy_force_pwr_index"
+],
+"phy_tx_tone": [
+"bt_get_tx_tab",
+"force_txon_mode",
+"get_data_sat",
+"wifi_get_tx_tab"
+],
+"phy_bbpll_recal": [
+"phy_bbpll_cal"
+],
+"phy_force_rx_gain_trig": [
+"ets_delay_us"
+],
+"ram_iq_est_enable": [
+"ets_delay_us",
+"phy_force_rx_gain_trig"
+],
+"dc_iq_est_new": [
+"ram_iq_est_enable"
+],
+"rxiq_cover_mg_mp_new": [
+"get_data_sat",
+"rxiq_get_mis_new",
+"rxiq_set_reg"
+],
+"rfcal_rxiq_new": [
+"rxiq_cover_mg_mp_new"
+],
+"get_rfcal_rxiq_data_new": [
+"abs_temp",
+"get_data_sat",
+"phy_printf",
+"rfcal_rxiq_new"
+],
+"rxdc_est_min_new": [
+"dc_iq_est_new"
+],
+"pbus_rx_dco_cal_1step_new": [
+"abs_temp",
+"ets_delay_us",
+"get_data_sat",
+"phy_printf",
+"rxdc_est_min_new"
+],
+"set_lb_txiq_new": [
+"get_iq_value",
+"txiq_set_reg"
+],
+"set_rx_gain_cal_iq_new": [
+"get_rfcal_rxiq_data_new",
+"pbus_rx_dco_cal",
+"phy_printf",
+"set_lb_txiq_new"
+],
+"rx_chan_dc_sort": [
+"abs_temp"
+],
+"set_rx_gain_cal_dc_new": [
+"chip_v7_set_chan_ana",
+"memcpy",
+"pbus_debugmode",
+"pbus_rx_dco_cal_1step_new",
+"pbus_workmode",
+"rx_pbus_reset",
+"set_rxclk_en",
+"set_txclk_en"
+],
+"ram_bb_gain_index": [
+"memcpy"
+],
+"rfrx_gain_index_new": [
+"memcpy"
+],
+"phy_check_rx_sat": [
+"ets_delay_us",
+"pbus_debugmode",
+"pbus_set_dco",
+"pbus_workmode",
+"phy_force_rx_gain_trig"
+],
+"txdc_cal_pwdet": [
+"abs_temp",
+"ets_delay_us",
+"get_tone_sar_dout",
+"pbus_set_dco",
+"phy_printf"
+],
+"txdc_cal_pwdet_init": [
+"ets_delay_us",
+"index_to_txbbgain",
+"pbus_debugmode",
+"pbus_set_dco",
+"pbus_workmode",
+"set_txclk_en",
+"txdc_cal_pwdet"
+],
+"txdc_cal_new": [
+"ets_delay_us",
+"set_txclk_en"
+],
+"bt_txdc_cal_new": [
+"pbus_debugmode",
+"pbus_workmode",
+"txdc_cal_new"
+],
+"txdc_cal_init_new": [
+"index_to_txbbgain",
+"pbus_debugmode",
+"pbus_workmode",
+"phy_printf",
+"txdc_cal_new"
+],
+"txiq_cover_new": [
+"txiq_get_mis_pwr",
+"txiq_set_reg"
+],
+"rfcal_txiq_new": [
+"get_data_sat",
+"get_power_atten",
+"pbus_set_dco",
+"txcal_work_mode",
+"txdc_cal_new",
+"txiq_cover_new"
+],
+"txiq_cal_init_new": [
+"get_data_sat",
+"rfcal_txiq_new"
+],
+"rfcal_pwrctrl_new": [
+"get_power_db",
+"phy_printf"
+],
+"rfcal_txcap_loop": [
+"dc_iq_est_high",
+"phy_printf"
+],
+"tx_cap_init_loop": [
+"dc_iq_est",
+"pbus_debugmode",
+"pbus_rx_dco_cal",
+"pbus_workmode",
+"rfcal_txcap_loop",
+"set_channel_rfpll_freq"
+],
+"tx_pwctrl_init_cal_new": [
+"get_data_sat",
+"rfcal_pwrctrl_new",
+"set_channel_rfpll_freq"
+],
+"tx_pwctrl_init_new": [
+"pwdet_ref_code",
+"set_channel_rfpll_freq",
+"tx_pwctrl_init_cal_new",
+"txcal_work_mode"
+],
+"bt_tx_pwctrl_init_new": [
+"bt_bb_to_index",
+"pbus_set_dco",
+"tx_pwctrl_init_cal_new",
+"txcal_work_mode"
+],
+"esp_coex_adapter_funcs_md5_check": [
+"coexist_printf",
+"strlen",
+"strncmp"
+],
+"esp_coex_i154_funcs_md5_check": [
+"coexist_printf",
+"strlen",
+"strncmp"
+],
+"esp_coex_adapter_register": [
+"coexist_printf",
+"puts"
+],
+"esp_coex_status_bit_set": [
+"coex_schm_status_bit_set",
+"coexist_printf"
+],
+"esp_coex_status_bit_clear": [
+"coex_schm_status_bit_clear",
+"coexist_printf"
+],
+"coex_pti_get": [
+"coex_core_pti_get"
+],
+"coex_ieee802154_pti_get": [
+"coex_pti_get",
+"coexist_printf"
+],
+"coex_wifi_request": [
+"coex_core_request"
+],
+"coex_pre_init": [
+"coexist_printf"
+],
+"esp_coex_ieee802154_txrx_pti_set": [
+"coex_ieee802154_pti_get"
+],
+"esp_coex_ieee802154_ack_pti_set": [
+"coex_ieee802154_pti_get"
+],
+"esp_coex_ieee802154_extcoex_tx_stage": [
+"hal_get_IEEE802154_pti_offset"
+],
+"esp_coex_ieee802154_status_enable": [
+"coex_schm_status_bit_set"
+],
+"esp_coex_ieee802154_status_disable": [
+"coex_schm_status_bit_clear"
+],
+"ic_set_extern_coex": [
+"coex_core_enable",
+"coex_schm_status_bit_set",
+"hal_enable_extern_coex",
+"hal_set_extern_pti"
+],
+"ic_stop_extern_coex": [
+"coex_core_disable",
+"coex_schm_status_bit_clear",
+"hal_clr_extern_pti",
+"hal_disable_extern_coex"
+],
+"ic_set_extern_coex_params": [
+"hal_set_extern_coex_delay",
+"hal_set_extern_coex_validity",
+"hal_set_extern_pti_mode"
+],
+"coex_core_pre_init": [
+"coex_core_lock",
+"coex_core_unlock.isra.0",
+"coex_hw_clear_reg",
+"coex_hw_timer_freq_set",
+"coex_rom_osi_funcs_init",
+"coex_schm_init",
+"coexist_printf"
+],
+"coex_core_enable": [
+"coex_core_lock",
+"coex_core_unlock.isra.0"
+],
+"coex_core_disable": [
+"coex_core_lock",
+"coex_core_unlock.isra.0"
+],
+"coex_core_register_start_cb": [
+"coex_core_lock",
+"coex_core_unlock.isra.0"
+],
+"coex_hw_timer_tick_get": [
+"__udivdi3"
+],
+"coex_hw_clear_reg": [
+"memcpy"
+],
+"coex_hw_debug_matrix_config": [
+"coexist_printf"
+],
+"coex_hw_debug_matrix_init": [
+"coex_hw_debug_matrix_config"
+],
+"coex_rom_osi_funcs_init": [
+"coex_rom_data_init",
+"coexist_printf",
+"esp_coex_rom_version_get"
+],
+"coex_schm_change_phase": [
+"coex_dbg_output",
+"coex_schm_is_loop_allowed",
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_status_bit_set": [
+"coex_schm_is_loop_allowed",
+"coex_schm_lock",
+"coex_schm_status_change",
+"coex_schm_unlock"
+],
+"coex_schm_status_bit_clear": [
+"coex_schm_lock",
+"coex_schm_status_change",
+"coex_schm_unlock"
+],
+"coex_schm_status_get": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_curr_phase_idx_set": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_interval_get": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_curr_period_get": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_curr_phase_get": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_get_phase_by_idx": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_register_callback": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_wifi_channel_set": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_wifi_channel_get": [
+"coex_schm_lock",
+"coex_schm_unlock",
+"coexist_printf"
+],
+"coex_register_wifi_channel_change_callback": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_flexible_period_set": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_init": [
+"coexist_printf"
+],
+"hal_coex_external_ieee802154_force_rx_enable": [
+"hal_set_IEEE802154_coex_delay",
+"hal_set_IEEE802154_force_rx_enable"
+],
+"hal_enable_extern_coex": [
+"hal_coex_external_ieee802154_force_rx_enable"
+],
+"hal_disable_extern_coex": [
+"hal_coex_external_ieee802154_force_rx_enable"
+],
+"hal_set_extern_pti": [
+"esp_coex_external_get_wire_type"
+],
+"hal_set_extern_pti_mode": [
+"esp_coex_external_get_wire_type",
+"hal_set_extern_coex_mode",
+"hal_set_extern_coex_sync"
+],
+"esp_now_init": [
+"ieee80211_espnow_get_init_flag",
+"ieee80211_espnow_set_init_flag",
+"mt_init"
+],
+"esp_now_deinit": [
+"ieee80211_espnow_get_init_flag",
+"ieee80211_espnow_set_init_flag",
+"mt_deinit"
+],
+"esp_now_register_recv_cb": [
+"ieee80211_espnow_get_init_flag",
+"mt_register_recv_cb"
+],
+"esp_now_unregister_recv_cb": [
+"ieee80211_espnow_get_init_flag",
+"mt_unregister_recv_cb"
+],
+"esp_now_register_send_cb": [
+"ieee80211_espnow_get_init_flag",
+"mt_register_send_cb"
+],
+"esp_now_unregister_send_cb": [
+"ieee80211_espnow_get_init_flag",
+"mt_unregister_send_cb"
+],
+"esp_now_send": [
+"ieee80211_espnow_get_init_flag",
+"mt_fetch_peer",
+"mt_send"
+],
+"esp_now_add_peer": [
+"ieee80211_espnow_get_init_flag",
+"mt_add_peer"
+],
+"esp_now_del_peer": [
+"ieee80211_espnow_get_init_flag",
+"mt_del_peer"
+],
+"esp_now_mod_peer": [
+"ieee80211_espnow_get_init_flag",
+"mt_mod_peer"
+],
+"esp_now_get_peer": [
+"ieee80211_espnow_get_init_flag",
+"mt_get_peer"
+],
+"esp_now_fetch_peer": [
+"ieee80211_espnow_get_init_flag",
+"mt_fetch_peer"
+],
+"esp_now_is_peer_exist": [
+"ieee80211_espnow_get_init_flag",
+"mt_is_peer_exist"
+],
+"esp_now_get_peer_num": [
+"ieee80211_espnow_get_init_flag",
+"mt_get_peer_num"
+],
+"esp_now_get_version": [
+"mt_get_version"
+],
+"esp_now_set_pmk": [
+"ieee80211_espnow_get_init_flag",
+"mt_set_pmk"
+],
+"esp_now_set_wake_window": [
+"ieee80211_espnow_get_init_flag",
+"mt_set_wake_window"
+],
+"esp_now_set_peer_rate_config": [
+"ieee80211_espnow_get_init_flag",
+"mt_get_peer",
+"mt_set_peer_rate_config"
+],
+"esp_now_set_user_oui": [
+"mt_set_user_oui"
+],
+"esp_now_get_user_oui": [
+"mt_get_user_oui"
+],
+"esp_now_switch_channel_tx": [
+"ieee80211_ioctl",
+"memcpy",
+"wifi_init_completed",
+"wifi_log"
+],
+"esp_now_remain_on_channel": [
+"ieee80211_ioctl",
+"wifi_init_completed"
+],
+"mt_send_cb": [
+"ieee80211_get_tx_info_from_eb",
+"memset"
+],
+"mt_clear_lmk": [
+"ic_del_key",
+"ieee80211_mt_key_clear_mask"
+],
+"mt_get_lmk": [
+"memcmp"
+],
+"mt_get_key_idx.constprop.0": [
+"ieee80211_mt_key_is_mask"
+],
+"mt_set_lmk": [
+"esp_wifi_sta_pmf_enabled",
+"ic_set_key",
+"ieee80211_mt_key_set_mask",
+"memcpy",
+"memset",
+"mt_get_key_idx.constprop.0",
+"wifi_ap_pmf_enabled"
+],
+"mt_copy_peer": [
+"memcpy",
+"memset"
+],
+"mt_init": [
+"esp_wifi_internal_configure_wake_window",
+"memset",
+"pp_register_tx_cb",
+"register_ieee80211_action_vendor_get_key_cb",
+"register_ieee80211_action_vendor_spec_cb"
+],
+"mt_deinit": [
+"esp_wifi_internal_configure_wake_window",
+"ieee80211_mt_key_is_mask_zero",
+"mt_clear_lmk",
+"pp_unregister_tx_cb",
+"unregister_ieee80211_action_vendor_get_key_cb",
+"unregister_ieee80211_action_vendor_spec_cb"
+],
+"mt_send": [
+"ieee80211_send_action_vendor_spec",
+"memcmp"
+],
+"mt_del_peer": [
+"memcmp",
+"mt_clear_lmk"
+],
+"mt_mod_peer": [
+"memcmp",
+"memset",
+"mt_clear_lmk",
+"mt_get_key_idx.constprop.0",
+"mt_set_lmk"
+],
+"mt_get_peer": [
+"memcmp",
+"mt_copy_peer"
+],
+"mt_get_peer_info": [
+"memcmp"
+],
+"mt_fetch_peer": [
+"mt_copy_peer"
+],
+"mt_is_peer_exist": [
+"memcmp"
+],
+"mt_add_peer": [
+"ieee80211_regdomain_check_channel",
+"memcpy",
+"memset",
+"mt_is_peer_exist",
+"mt_set_lmk"
+],
+"mt_set_pmk": [
+"memcpy"
+],
+"mt_set_wake_window": [
+"esp_wifi_internal_configure_wake_window"
+],
+"mt_set_peer_rate_config": [
+"chm_get_band_from_chan",
+"chm_get_current_channel",
+"memcmp",
+"memcpy"
+],
+"mt_set_user_oui": [
+"memcpy"
+],
+"mt_get_user_oui": [
+"memcpy"
+],
+"wifi_he_get_hetb_tid_bitmap": [
+"wifi_log"
+],
+"lmacProcessLongFrameSuccess": [
+"is_use_muedca"
+],
+"hal_he_get_mplen_addr_start": [
+"wifi_he_get_hetb_tid_bitmap"
+],
+"mac_tx_set_plcp0": [
+"hal_he_set_tx_protection",
+"wifi_log"
+],
+"pm_twt_set_target_tsf": [
+"__ctzsi2",
+"hal_enable_tsf_timer",
+"hal_get_tsf_time",
+"hal_tsf_timer_set_target",
+"pm_twt_choose_target_time"
+],
+"ppCalSubFrameLength": [
+"roundup2"
+],
+"dbg_hal_check_clr_mplen_bitmap": [
+"__popcountsi2",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"esp_test_tx_process_complete": [
+"test_tx_fail_statistics",
+"test_tx_succ_statistics"
+],
+"pp_timer_tbtt": [
+"pm_tbtt_process"
+],
+"pm_beacon_offset_get_average": [
+"__adddf3",
+"__addsf3",
+"__divsf3",
+"__extendsfdf2",
+"__floatsidf",
+"__floatsisf",
+"__floatunsisf",
+"__ltsf2",
+"__muldf3",
+"__mulsf3",
+"__subdf3",
+"__truncdfsf2"
+],
+"pp_timer_do_process": [
+"wifi_log"
+],
+"pm_beacon_offset_get_expect": [
+"__adddf3",
+"__addsf3",
+"__divsf3",
+"__extendsfdf2",
+"__floatsisf",
+"__floatunsisf",
+"__gtsf2",
+"__ltsf2",
+"__muldf3",
+"__mulsf3",
+"__subsf3",
+"__truncdfsf2",
+"pm_beacon_offset_get_average"
+],
+"pm_sleep_for": [
+"memcmp"
+],
+"pm_beacon_offset_get_params": [
+"__addsf3",
+"__divsf3",
+"__eqsf2",
+"__fixunssfsi",
+"__floatunsidf",
+"__floatunsisf",
+"__lesf2",
+"__muldf3",
+"__mulsf3",
+"__nesf2",
+"__subsf3",
+"__truncdfsf2",
+"memcpy",
+"memset",
+"pm_beacon_offset_get_average",
+"pm_beacon_offset_get_expect",
+"wifi_log"
+],
+"pm_enable_active_timer": [
+"pm_is_twt_start"
+],
+"tsf_hal_set_time": [
+"tsf_hal_set_counter_value"
+],
+"pm_get_tbtt_count": [
+"__udivdi3",
+"__umoddi3",
+"hal_get_sta_tsf",
+"hal_tsf_get_tbttstart",
+"tsf_hal_get_tbtt_interval"
+],
+"pm_save_tbtt_info": [
+"pm_get_tbtt_count"
+],
+"ppRxPkt": [
+"is_fragmented_pkt",
+"memcmp",
+"ppDequeueRxq_Locked",
+"ppRecycleRxPkt",
+"ppRxFragmentProc",
+"ppRxProtoProc",
+"wDevCheckBlockError",
+"wifi_log"
+],
+"pm_beacon_monitor_tbtt_allowed": [
+"pm_beacon_miss_exceeded_wakeup_disabled",
+"pm_is_twt_start"
+],
+"wdevProcessRxSucDataAll": [
+"hal_mac_rx_get_last_dscr",
+"wDev_ProcessRxSucData",
+"wifi_log"
+],
+"pm_mac_modem_tsf_tbtt_auto_period_enable_update": [
+"pm_beacon_monitor_tbtt_allowed",
+"sta_get_beacon_timeout"
+],
+"wDev_AppendRxBlocks": [
+"hal_mac_rx_get_last_dscr",
+"hal_mac_rx_is_dscr_reload",
+"hal_mac_rx_read_rxdscrnext",
+"hal_mac_rx_set_base",
+"hal_mac_rx_set_dscr_reload",
+"wdev_dump_rx_linked_list",
+"wdev_record_rx_linked_list",
+"wifi_log"
+],
+"pm_beacon_monitor_tbtt_start": [
+"__umoddi3",
+"tsf_hal_get_time"
+],
+"pm_enable_beacon_monitor_timer": [
+"pm_mac_modem_tsf_tbtt_auto_period_enable_update",
+"pwr_hal_set_mac_modem_tbtt_auto_period_disable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_enable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_interval"
+],
+"wDev_IndicateBeaconMemoryFrame": [
+"esf_buf_alloc",
+"lmacRxDone",
+"memcpy",
+"wifi_log"
+],
+"pm_dream": [
+"esp_wifi_get_mode",
+"pm_set_state",
+"wifi_rf_phy_enable"
+],
+"wDev_ProcessBeaconMemoryRxSuc": [
+"wDev_SnifferRxData",
+"wifi_log"
+],
+"pm_sleep": [
+"esp_wifi_get_mode",
+"hal_clear_rx_beacon_pti",
+"pm_is_twt_start",
+"pm_set_state",
+"ppCheckTxIdle",
+"ppCheckTxQIdle",
+"pwr_hal_clear_mac_modem_beacon_miss_intr_filter",
+"wifi_rf_phy_disable"
+],
+"pm_check_state": [
+"pm_dream",
+"pm_set_state"
+],
+"pm_local_tsf_process": [
+"hal_get_sta_tsf"
+],
+"pm_handle_tbtt_interval": [
+"pm_update_at_next_beacon",
+"wifi_log"
+],
+"pm_update_next_tbtt": [
+"__umoddi3",
+"hal_disable_sta_tbtt",
+"hal_enable_sta_tbtt",
+"hal_get_sta_tsf",
+"hal_set_sta_tbtt",
+"hal_tsf_clear_soc_wakeup_request",
+"pm_coex_schm_overall_period_get",
+"pm_handle_tbtt_interval",
+"pm_is_twt_start",
+"pm_update_at_next_beacon"
+],
+"pm_keep_alive": [
+"pm_is_twt_start"
+],
+"pm_mac_modem_clear_rf_power_state": [
+"tsf_hal_clear_mac_modem_rf_power_state",
+"tsf_hal_get_mac_modem_rf_power_state"
+],
+"pm_mac_enable_tsf_tbtt_soc_wakeup": [
+"pwr_hal_set_beacon_filter_abort_enable",
+"pwr_hal_set_beacon_filter_abort_length",
+"pwr_hal_set_beacon_filter_broadcast_wakeup_disable",
+"pwr_hal_set_beacon_filter_broadcast_wakeup_enable",
+"pwr_hal_set_beacon_filter_force_sync_enable",
+"pwr_hal_set_beacon_filter_force_sync_limit",
+"pwr_hal_set_beacon_filter_frame_crc_state",
+"pwr_hal_set_beacon_filter_unicast_wakeup_enable",
+"pwr_hal_set_mac_modem_beacon_miss_intr_enable",
+"pwr_hal_set_mac_modem_beacon_miss_limit",
+"pwr_hal_set_mac_modem_beacon_miss_limit_exceeded_wakeup_enable",
+"pwr_hal_set_mac_modem_beacon_miss_timeout",
+"pwr_hal_set_mac_modem_tbtt_auto_period_disable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_enable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_interval",
+"tsf_hal_set_rx_beacon_abort_tsf_time_deviation_sync_enable",
+"tsf_hal_set_tbtt_intr_enable",
+"tsf_hal_set_tbtt_soc_wakeup_enable",
+"tsf_hal_set_tsf_time_deviation",
+"tsf_hal_set_tsf_time_deviation_sync_enable"
+],
+"pm_mac_disable_tsf_tbtt_soc_wakeup": [
+"pwr_hal_set_mac_modem_beacon_miss_intr_disable",
+"pwr_hal_set_mac_modem_beacon_miss_limit_exceeded_wakeup_disable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_disable",
+"tsf_hal_set_tbtt_intr_disable",
+"tsf_hal_set_tbtt_soc_wakeup_disable"
+],
+"pm_mac_enable_tsf_tbtt_modem_wakeup": [
+"pwr_hal_set_beacon_filter_abort_enable",
+"pwr_hal_set_beacon_filter_abort_length",
+"pwr_hal_set_beacon_filter_broadcast_wakeup_disable",
+"pwr_hal_set_beacon_filter_broadcast_wakeup_enable",
+"pwr_hal_set_beacon_filter_enable",
+"pwr_hal_set_beacon_filter_force_dump_enable",
+"pwr_hal_set_beacon_filter_force_dump_limit",
+"pwr_hal_set_beacon_filter_force_sync_enable",
+"pwr_hal_set_beacon_filter_force_sync_limit",
+"pwr_hal_set_beacon_filter_frame_crc_state",
+"pwr_hal_set_beacon_filter_unicast_wakeup_enable",
+"pwr_hal_set_mac_modem_beacon_miss_intr_enable",
+"pwr_hal_set_mac_modem_beacon_miss_limit",
+"pwr_hal_set_mac_modem_beacon_miss_limit_exceeded_wakeup_enable",
+"pwr_hal_set_mac_modem_beacon_miss_timeout",
+"pwr_hal_set_mac_modem_state_sleep_limit",
+"pwr_hal_set_mac_modem_state_sleep_limit_exceeded_wakeup_enable",
+"pwr_hal_set_mac_modem_state_wakeup_protect_early_time",
+"pwr_hal_set_mac_modem_state_wakeup_protect_enable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_disable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_enable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_interval",
+"tsf_hal_set_modem_close_rf_delay_cycles",
+"tsf_hal_set_rx_beacon_abort_tsf_time_deviation_sync_enable",
+"tsf_hal_set_tbtt_intr_enable",
+"tsf_hal_set_tbtt_modem_wakeup_enable",
+"tsf_hal_set_tbtt_rf_ctrl_enable",
+"tsf_hal_set_tbtt_rf_ctrl_wait_cycles",
+"tsf_hal_set_tsf_time_deviation",
+"tsf_hal_set_tsf_time_deviation_sync_enable"
+],
+"pm_mac_disable_tsf_tbtt_modem_wakeup": [
+"pwr_hal_clear_mac_modem_state_wakeup_protect_signal",
+"pwr_hal_set_mac_modem_beacon_miss_intr_disable",
+"pwr_hal_set_mac_modem_beacon_miss_limit_exceeded_wakeup_disable",
+"pwr_hal_set_mac_modem_state_sleep_limit_exceeded_wakeup_disable",
+"pwr_hal_set_mac_modem_state_wakeup_protect_disable",
+"pwr_hal_set_mac_modem_tbtt_auto_period_disable",
+"tsf_hal_set_tbtt_intr_disable",
+"tsf_hal_set_tbtt_modem_wakeup_disable",
+"tsf_hal_set_tbtt_rf_ctrl_disable"
+],
+"pm_mac_modem_params_rt_update": [
+"pm_allow_to_enable_bcn_filter",
+"pm_mac_modem_tsf_tbtt_auto_period_enable_update"
+],
+"pm_mac_try_enable_modem_state": [
+"pm_is_twt_start",
+"pm_mac_disable_tsf_tbtt_modem_wakeup",
+"pm_mac_disable_tsf_tbtt_soc_wakeup",
+"pm_mac_enable_tsf_tbtt_modem_wakeup",
+"pm_mac_enable_tsf_tbtt_soc_wakeup",
+"pm_mac_modem_params_rt_update",
+"tsf_hal_set_tbtt_intr_enable",
+"tsf_hal_set_tbtt_soc_wakeup_enable",
+"wifi_log"
+],
+"pm_update_by_connectionless_status": [
+"pm_coex_recalculate_wifi_time_slice",
+"pm_coex_separate_connectionless_window",
+"pm_get_connectionless_status",
+"pm_wake_done",
+"pm_wake_up",
+"wifi_event_post",
+"wifi_gpio_debug"
+],
+"pm_connectionless_wake_window_timeout_process": [
+"pm_coex_separate_connectionless_window",
+"pm_get_connectionless_status",
+"pm_wake_done",
+"wifi_gpio_debug"
+],
+"pm_connectionless_wake_interval_timeout_process": [
+"hal_get_time_to_sta_next_tbtt",
+"pm_force_soc_wakeup"
+],
+"pm_twt_process": [
+"__ctzsi2",
+"pm_dream",
+"pm_is_twt_awake",
+"pm_set_state",
+"pm_sleep",
+"ppCheckTxQIdle",
+"ppProcessWaitingQueue",
+"wifi_event_post"
+],
+"lmacTxFrame": [
+"hal_mac_tx_config_edca",
+"hal_mac_txq_enable",
+"hal_random",
+"lmacDiscardAgedMSDU",
+"lmacIsLongFrame",
+"lmacSetTxFrame",
+"offchan_in_progress",
+"ppRecycleAmpdu",
+"pp_post",
+"wDev_ftm_set_t1t4",
+"wifi_gpio_debug",
+"wifi_log"
+],
+"pm_rx_data_process": [
+"pm_check_state",
+"pm_disable_dream_timer",
+"pm_enable_active_timer",
+"pm_enable_dream_timer",
+"pm_enable_sleep_delay_timer",
+"pm_incr_coex_active_cnt",
+"pm_incr_twt_active_cnt",
+"pm_is_twt_start"
+],
+"pm_process_tim": [
+"pm_active_timeout_process",
+"pm_disable_active_timer",
+"pm_disable_sleep_delay_timer",
+"pm_enable_dream_timer",
+"pm_go_to_wake",
+"pm_is_in_wifi_slice_threshold",
+"pm_is_twt_start",
+"pm_keep_alive",
+"pm_send_nullfunc",
+"pm_sleep"
+],
+"wifi_rf_phy_disable": [
+"ic_mac_deinit",
+"pm_mac_sleep",
+"wifi_log"
+],
+"pm_rx_beacon_process": [
+"hal_clear_rx_beacon_pti",
+"pm_incr_twt_active_cnt",
+"pm_process_tim",
+"sta_reset_beacon_timeout",
+"wifi_gpio_debug"
+],
+"pm_tx_data_process": [
+"pm_check_state",
+"pm_coex_schm_process_restart",
+"pm_disconnected_wake",
+"pm_dream",
+"pm_enable_active_timer",
+"pm_force_soc_wakeup",
+"pm_go_to_wake",
+"pm_incr_coex_active_cnt",
+"pm_is_in_wifi_slice_threshold",
+"pm_is_twt_start"
+],
+"pm_on_data_rx": [
+"pm_sleep_for"
+],
+"pm_scale_listen_interval": [
+"pm_coex_pwr_update",
+"pm_on_sample_beacon",
+"wifi_log",
+"wifi_nvs_get_sta_listen_interval"
+],
+"pm_coex_pwr_update": [
+"pm_coex_schm_overall_period_get",
+"pm_update_at_next_beacon"
+],
+"pm_parse_beacon": [
+"pm_get_tbtt_count",
+"pm_parse_mbssid_element",
+"pm_scale_listen_interval",
+"wifi_log"
+],
+"pm_on_beacon_rx": [
+"hal_disable_sta_beacon_filter",
+"pm_beacon_monitor_tbtt_stop",
+"pm_beacon_timestamp_statistic",
+"pm_coex_schm_overall_period_get",
+"pm_local_tsf_process",
+"pm_mac_try_enable_modem_state",
+"pm_parse_beacon",
+"pm_rx_beacon_process",
+"pm_set_beacon_filter",
+"pm_update_next_tbtt"
+],
+"pm_clear_wakeup_signal": [
+"hal_tsf_clear_soc_wakeup_request",
+"pwr_hal_clear_mac_modem_state_wakeup_protect_signal"
+],
+"pm_set_beacon_duration": [
+"pm_on_sample_beacon",
+"wifi_log"
+],
+"pm_tbtt_process": [
+"bss_color_check_collision_status",
+"hal_pm_unblock_txq",
+"pm_beacon_add_total_counter",
+"pm_beacon_miss_exceeded_wakeup_disabled",
+"pm_beacon_monitor_tbtt_start",
+"pm_check_state",
+"pm_clear_wakeup_signal",
+"pm_coex_schm_overall_period_get",
+"pm_coex_tbtt_process",
+"pm_dream",
+"pm_enable_beacon_monitor_timer",
+"pm_go_to_wake",
+"pm_is_twt_start",
+"pm_mesh_set_next_tbtt",
+"pm_noise_check",
+"pm_save_tbtt_info",
+"pm_set_next_tbtt",
+"pm_twt_process",
+"pm_update_by_connectionless_status",
+"pm_update_params",
+"pwr_hal_clear_mac_modem_beacon_miss_intr_filter",
+"pwr_hal_clear_mac_modem_rx_beacon_miss_counter",
+"pwr_hal_clear_mac_modem_rx_beacon_sleep_counter",
+"pwr_hal_get_mac_modem_beacon_miss_limit_exceeded_status",
+"pwr_hal_get_mac_modem_state_sleep_limit_exceeded_status",
+"wifi_gpio_debug"
+],
+"pm_on_tbtt": [
+"pm_is_twt_start"
+],
+"pm_on_tsf_timer": [
+"pm_is_twt_start",
+"pm_twt_on_tsf_timer"
+],
+"pm_beacon_monitor_timeout_process": [
+"hal_clear_rx_beacon_pti",
+"pm_beacon_add_loss_counter",
+"pm_sleep",
+"wifi_gpio_debug"
+],
+"ic_mac_init": [
+"hal_mac_init"
+],
+"pm_beacon_offset_reset": [
+"memset"
+],
+"ic_mac_deinit": [
+"hal_mac_deinit"
+],
+"ic_update_light_sleep_wake_ahead_time": [
+"hal_set_sta_light_sleep_wake_ahead_time",
+"pm_is_twt_start"
+],
+"pp_process_hmac_waiting_txq": [
+"config_is_cache_tx_buf_enabled"
+],
+"esp_test_tx_process_txq_state": [
+"GetAccess",
+"__ctzsi2",
+"esp_test_tx_process_complete",
+"hal_mac_get_txq_complete"
+],
+"ppCheckTxRTS": [
+"lmacIsLongFrame"
+],
+"dbg_hal_check_set_mplen_bitmap": [
+"__popcountsi2",
+"hal_he_get_mplen_addr_end",
+"hal_he_get_mplen_addr_start",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"mac_tx_set_htsig": [
+"mac_tx_set_len",
+"wifi_log"
+],
+"ppRecycleRxPkt": [
+"esf_buf_recycle"
+],
+"ppProcTxCallback": [
+"__ctzsi2"
+],
+"rcGetSched": [
+"rcUpdateRate",
+"wl_is_ap_no_lr"
+],
+"hal_mac_deinit": [
+"ets_delay_us",
+"hal_mac_deinit_twt_tx",
+"pm_is_twt_start"
+],
+"mac_tx_set_mplen": [
+"__ffssi2",
+"__popcountsi2",
+"dbg_hal_check_set_mplen_bitmap",
+"hal_he_get_mplen_addr_end",
+"hal_he_get_mplen_addr_start",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"pp_coex_tx_request": [
+"chm_get_current_band",
+"pm_coex_reconnect_policy"
+],
+"rcGetSMPDURate": [
+"rcGetDCMMaxRate"
+],
+"ppRxProtoProc": [
+"pm_on_beacon_rx",
+"pm_on_data_rx",
+"pm_set_beacon_duration",
+"pm_sleep_for",
+"pp_hdrsize",
+"rcUpdateRxDone",
+"rc_get_trc"
+],
+"ppRxFragmentProc": [
+"ic_get_ptk_alg",
+"ic_obtain_key",
+"memcmp",
+"memcpy",
+"ppCalTkipMic",
+"ppRecycleRxPkt",
+"pp_gettid",
+"pp_hdrsize",
+"wifi_log"
+],
+"hal_mac_tx_set_ppdu": [
+"mac_tx_get_rts_rate",
+"mac_tx_set_hesig",
+"mac_tx_set_htsig",
+"mac_tx_set_len",
+"mac_tx_set_plcp0",
+"mac_tx_set_plcp1",
+"mac_tx_set_pti",
+"mac_tx_set_txop_q",
+"wifi_log"
+],
+"hal_mac_tx_config_timeout": [
+"test_disable_edca_tx"
+],
+"ppAssembleAMPDU": [
+"wifi_log"
+],
+"ppAMPDU2Normal": [
+"ppHEAMPDU2Normal"
+],
+"ppCalTxAMPDULength": [
+"lmacAdjustTimestamp",
+"ppAssembleAMPDU",
+"ppCalSubFrameLength",
+"ppCalTxHEAMPDULength",
+"ppCheckTxAMPDUlength",
+"ppEmptyDelimiterLength",
+"ppPauseTxAMPDU",
+"rcGetAmpduSched",
+"wifi_log"
+],
+"lmacProcessTxComplete": [
+"__ctzsi2",
+"esp_test_tx_tb_complete",
+"hal_mac_clr_txq_state",
+"hal_mac_get_txq_complete",
+"hal_mac_get_txq_state",
+"lmacProcessAckTimeout",
+"lmacProcessCtsTimeout",
+"lmacProcessTxError",
+"lmacProcessTxRtsError",
+"lmacProcessTxSuccess",
+"wifi_gpio_debug",
+"wifi_log"
+],
+"ppEnqueueTxDone": [
+"wifi_log"
+],
+"ppProcTxDone": [
+"esf_buf_recycle",
+"pm_is_twt_awake",
+"pm_on_data_tx_done",
+"ppDequeueTxDone_Locked",
+"ppProcTxCallback",
+"pp_coex_tx_release",
+"pp_process_hmac_waiting_txq",
+"trc_onPPTxDone",
+"wifi_log"
+],
+"lmacProcessTxSuccess": [
+"lmacEndFrameExchangeSequence",
+"lmacIsLongFrame",
+"lmacProcessLongFrameSuccess",
+"lmacProcessShortFrameSuccess",
+"lmacProcessTxopQComplete",
+"wifi_log"
+],
+"ppGetTxframe": [
+"GetAccess",
+"lmacAdjustTimestamp"
+],
+"ppSearchTxQueue": [
+"__clzsi2",
+"__ctzsi2",
+"ppEnableQueue"
+],
+"pp_post": [
+"wifi_log"
+],
+"ppMapWaitTxq": [
+"ppSearchTxQueue",
+"pp_post"
+],
+"ppProcessWaitingQueue": [
+"pm_allow_tx",
+"ppMapWaitTxq"
+],
+"ppSelectNextQueue": [
+"__ctzsi2",
+"ppDisableQueue"
+],
+"ppSearchTxframe": [
+"__ctzsi2",
+"ppGetTxframe",
+"ppSelectNextQueue"
+],
+"ppProcessTxQ": [
+"lmacIsIdle",
+"lmacReleaseTxopQueue",
+"lmacRequestTxopQueue",
+"lmacTxFrame",
+"pm_is_twt_start",
+"pm_is_waked",
+"pm_twt_disallow_tx",
+"ppCalTxAMPDULength",
+"ppHEAMPDU2Normal",
+"ppSearchTxframe",
+"ppTxFragmentProc",
+"pp_coex_tx_request",
+"trc_isTxAmpduOperational",
+"trc_tid_isTxAmpduOperational"
+],
+"lmacDiscardAgedMSDU": [
+"lmacDiscardMSDU"
+],
+"ppSelectTxFormat": [
+"rcGetAmpduSched",
+"rcGetSMPDURate"
+],
+"mac_tx_set_tb": [
+"mac_tx_set_mplen",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"ieee80211_encap_esfbuf": [
+"ic_ebuf_recycle_tx",
+"ieee80211_align_eb",
+"ieee80211_ampdu_enable",
+"ieee80211_ampdu_request",
+"ieee80211_crypto_encap",
+"ieee80211_encap_esfbuf_htc",
+"ieee80211_set_tx_desc",
+"ieee80211_set_tx_pti",
+"memcmp",
+"memcpy",
+"wifi_get_macaddr",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"ppResortTxAMPDU": [
+"GetAccess",
+"esp_test_tx_count_retry",
+"lmacDiscardAgedMSDU",
+"lmacMSDUAged",
+"lmacRecycleMPDU",
+"memcpy",
+"ppFillAMPDUBar",
+"ppHEAMPDU2Normal",
+"ppProcessTxQ",
+"ppReSendBar",
+"ppResumeTxAMPDU",
+"ppSubFromAMPDU",
+"rcUpdateTxDoneAmpdu2",
+"roundup2",
+"trc_isTxAmpduOperational",
+"trc_tid_isTxAmpduOperational",
+"wifi_log"
+],
+"hal_mac_get_txq_state": [
+"esp_test_tx_process_txq_state",
+"wifi_log"
+],
+"ppTask": [
+"bss_color_clear_collision_detection",
+"lmacProcessCollisions_task",
+"lmacProcessTxComplete",
+"lmacProcessTxTimeout",
+"pm_beacon_monitor_timeout_process",
+"pm_on_beacon_rx",
+"pm_on_tbtt",
+"pm_on_tsf_timer",
+"ppProcTxDone",
+"ppProcessRxPktHdr",
+"ppProcessTxQ",
+"ppResortTxAMPDU",
+"ppRxPkt",
+"pp_default_event_handler",
+"pp_timer_do_process",
+"wDev_record_ftm_data",
+"wdevProcessRxSucDataAll",
+"wifi_gpio_debug",
+"wifi_log",
+"wifi_process_bsscolor_collision"
+],
+"ppRemoveHTC": [
+"memcpy",
+"ppRemoveHEAMPDUflags"
+],
+"wdev_mac_special_reg_load": [
+"hal_ba_session_restore",
+"hal_beacon_ie_crc_set"
+],
+"ppMapTxQueue": [
+"pm_on_data_tx",
+"pm_on_twt_force_tx",
+"ppProcessWaitingQueue",
+"ppSearchTxQueue"
+],
+"ppProcTxSecFrame": [
+"memset",
+"roundup2",
+"wifi_log"
+],
+"lmacTxDone": [
+"lmacIsIdle",
+"lmacReleaseTxopQueue",
+"lmac_record_txtime",
+"ppEnqueueTxDone",
+"ppProcTxCallback",
+"ppProcTxDone",
+"ppProcessTxQ",
+"pp_post",
+"rcUpdateTxDone",
+"wifi_log"
+],
+"ppTxPkt": [
+"esf_buf_recycle",
+"ic_interface_enabled",
+"lmacIsIdle",
+"ppMapTxQueue",
+"ppProcTxSecFrame",
+"ppTxProtoProc",
+"pp_post",
+"pp_process_hmac_waiting_txq",
+"rcGetSched",
+"wifi_log"
+],
+"ppCheckTxHEAMPDUlength": [
+"ppCalDeliNum",
+"ppCalSubFrameLength",
+"ppCheckTxRTS",
+"roundup2",
+"rx11AXRate2AMPDULimit",
+"wifi_log"
+],
+"ppDirectRecycleAmpdu": [
+"esf_buf_recycle",
+"ppResumeTxAMPDU"
+],
+"ppRecycleAmpdu": [
+"GetAccess",
+"lmacDiscardAgedMSDU",
+"ppResumeTxAMPDU"
+],
+"ppRegressAmpdu": [
+"ppHEAMPDU2Normal",
+"ppResumeTxAMPDU",
+"pp_post"
+],
+"ppProcessLifeTime": [
+"pm_get_null_max_tx_time",
+"wifi_log"
+],
+"esf_buf_alloc_dynamic": [
+"esf_buf_alloc_dynamic_default_handler",
+"memcpy",
+"memset"
+],
+"lmacSetTxFrame": [
+"hal_mac_tx_config_timeout",
+"hal_mac_tx_set_ppdu",
+"lmacReleaseTxopQueue",
+"lmacRequestTxopQueue",
+"ppCalTxopDur",
+"ppProcessLifeTime"
+],
+"ieee80211_output_do": [
+"config_is_cache_tx_buf_enabled",
+"ieee80211_alloc_tx_buf",
+"ieee80211_post_hmac_tx",
+"ieee80211_search_node",
+"ieee80211_wapi_alloc_tx_buf",
+"is_wapi_alloc_tx_buf",
+"wifi_log"
+],
+"esf_buf_alloc": [
+"esf_buf_alloc_default_handler",
+"memcpy"
+],
+"pm_beacon_offset_sample_start": [
+"memset",
+"pm_beacon_offset_reset",
+"wifi_log"
+],
+"esf_buf_recycle": [
+"esf_buf_recycle_default_handler",
+"memset"
+],
+"lmacProcessShortFrameSuccess": [
+"is_use_muedca"
+],
+"ppCalDeliNum": [
+"he_get_min_subframe_len_static",
+"ht_get_min_subframe_len"
+],
+"hal_he_get_mplen_addr_end": [
+"wifi_he_get_hetb_tid_bitmap"
+],
+"test_tx_succ_statistics": [
+"GetAccess",
+"hal_mac_tx_get_blockack"
+],
+"lmacProcessCollisions": [
+"pp_post"
+],
+"lmacProcessAllTxTimeout": [
+"pp_post"
+],
+"lmacPostTxComplete": [
+"pp_post"
+],
+"lmacProcessRxSucData": [
+"pp_post"
+],
+"lmacProcessModemStateRxBeacon": [
+"pp_post"
+],
+"lmacMSDUAged": [
+"hal_now",
+"ppProcessLifeTime"
+],
+"hal_mac_get_txq_complete": [
+"dbg_read_ax_diag",
+"dbg_read_axtb_diag",
+"dbg_read_muedca_timer",
+"dbg_read_tx_ppdu",
+"dbg_read_txq_conf1",
+"hal_mac_tx_clr_mplen",
+"is_use_muedca",
+"memset",
+"rate2str",
+"wifi_log"
+],
+"lmacDiscardFrameExchangeSequence": [
+"lmacDiscardMSDU",
+"ppRecordBarRRC",
+"ppRecycleAmpdu",
+"ppResortTxAMPDU",
+"wifi_log"
+],
+"lmacRecycleMPDU": [
+"lmacTxDone"
+],
+"ppCalTxHEAMPDULength": [
+"ic_get_he_rts_threshold_bytes",
+"lmacAdjustTimestamp",
+"memset",
+"ppAdd2AMPDUTail",
+"ppAssembleAMPDU",
+"ppCalSubFrameLength",
+"ppCalTxHESMPDULength",
+"ppCertSetRate",
+"ppCheckTxHEAMPDUlength",
+"ppEmptyDelimiterLength",
+"ppPauseTxAMPDU",
+"ppSelectTxFormat",
+"wifi_log"
+],
+"lmacEndFrameExchangeSequence": [
+"hal_mac_tx_get_blockack",
+"hal_mac_tx_is_cbw40",
+"lmacDiscardMSDU",
+"lmacEndRetryAMPDUFail",
+"lmacIsLongFrame",
+"lmacRetryTxFrame",
+"ppRecordBarRRC",
+"ppRecycleAmpdu",
+"ppResortTxAMPDU",
+"ppTxqUpdateBitmap",
+"wifi_log"
+],
+"lmacProcessTBSuccess": [
+"wifi_log"
+],
+"ppCertSetRate": [
+"wifi_log"
+],
+"rcUpdateTxDoneAmpdu2": [
+"TRC_AMPDU_PER_DOWN_THRESHOLD",
+"TRC_AMPDU_PER_UP_THRESHOLD",
+"rcAmpduLowerRate",
+"rcClearCurAMPDUSched",
+"rcSetTxAmpduLimit",
+"rcUpdateAckSnr",
+"rx11NRate2AMPDULimit",
+"trc_calc_duration"
+],
+"is_lmac_idle": [
+"lmacIsIdle"
+],
+"pm_twt_choose_target_time": [
+"hal_get_tsf_time"
+],
+"pm_get_null_max_tx_time": [
+"pm_coex_schm_overall_period_get"
+],
+"pm_twt_set_target_wdev_time": [
+"hal_get_tsf_time",
+"hal_wdev_timer_set_target",
+"hal_wdev_timer_target_enable",
+"pm_twt_choose_target_time"
+],
+"pm_on_isr_set_twt_target": [
+"pm_is_twt_start",
+"pm_twt_set_target_tsf",
+"pm_twt_set_target_wdev_time"
+],
+"rcUpdateTxDone": [
+"rcTxUpdatePer",
+"rcUpdateAckSnr"
+],
+"hal_mac_tx_clr_mplen": [
+"dbg_hal_check_clr_mplen_bitmap",
+"hal_he_get_mplen_addr_end",
+"hal_he_get_mplen_addr_start",
+"wifi_he_get_hetb_tid_bitmap",
+"wifi_log"
+],
+"pm_on_isr_twt_wake": [
+"hal_enable_tsf_timer",
+"hal_tsf_timer_set_target"
+],
+"pm_on_isr": [
+"pm_clear_wakeup_signal"
+],
+"pm_twt_on_tsf_timer": [
+"hal_get_tsf_time",
+"pm_enable_twt_keep_alive",
+"pm_on_isr_set_twt_target",
+"pm_show",
+"pm_tbtt_process",
+"pm_twt_process"
+],
+"ppRemoveHEAMPDUflags": [
+"ppResumeTxAMPDU"
+],
+"ppHEAMPDU2Normal": [
+"ppCalFrameTimes",
+"ppCalTxAMPDULength",
+"ppCalTxHEAMPDULength",
+"ppRemoveHTC",
+"rcGetSched"
+],
+"wdev_mac_special_reg_store": [
+"hal_ba_session_store",
+"hal_beacon_ie_crc_get"
+],
+"mac_tx_set_len": [
+"mac_tx_get_rts_rate"
+],
+"ieee80211_output_process": [
+"chm_is_at_home_channel",
+"config_is_cache_tx_buf_enabled",
+"ic_ebuf_alloc",
+"ic_ebuf_recycle_tx",
+"ieee80211_classify",
+"ieee80211_copy_eb_header",
+"ieee80211_encap_esfbuf",
+"ieee80211_output_pending_eb",
+"ieee80211_output_raw_process",
+"ieee80211_psq_is_buff_pkt",
+"ieee80211_recycle_cache_eb",
+"ieee80211_search_node",
+"ieee80211_wapi_alloc_tx_buf",
+"is_wapi_alloc_tx_buf",
+"ppTxPkt",
+"wifi_log"
+],
+"ieee80211_alloc_tx_buf": [
+"config_is_cache_tx_buf_enabled",
+"ic_ebuf_alloc"
+],
+"rcGetRate": [
+"rcGetSMPDURate",
+"wifi_log"
+],
+"trc_onPPTxDone": [
+"rcClearCurAMPDUSched",
+"trcAmpduSetState",
+"trc_onAmpduOp"
+],
+"rc_get_trc": [
+"__ctzsi2",
+"memcmp"
+],
+"wdev_is_data_in_rxlist": [
+"hal_mac_rx_get_last_dscr"
+],
+"coex_bt_request": [
+"coex_core_request"
+],
+"wdev_mac_sleep": [
+"wdev_is_data_in_rxlist"
+],
+"wDevCheckBlockError": [
+"wifi_log"
+],
+"wDev_GetNoiseFloor": [
+"read_hw_noisefloor"
+],
+"wDev_record_ftm_data": [
+"memcpy",
+"wDev_ProcessBeaconMemoryRxSuc",
+"wDev_record_ftm_data_local"
+],
+"wdev_process_tbtt": [
+"pp_post"
+],
+"wdev_process_tsf_timer": [
+"pp_post"
+],
+"wdev_process_mac_modem_beacon_miss": [
+"pp_post"
+],
+"wdev_process_beacon_filter": [
+"pp_post"
+],
+"wDev_ProcessFiq": [
+"hal_get_tsf_time",
+"hal_mac_interrupt_clr_bsscolor",
+"hal_mac_interrupt_clr_event",
+"hal_mac_interrupt_get_bsscolor",
+"hal_mac_interrupt_get_event",
+"hal_mac_is_dma_enable",
+"hal_pwr_interrupt_clr_event",
+"hal_pwr_interrupt_get_event",
+"lmacPostTxComplete",
+"lmacProcessAllTxTimeout",
+"lmacProcessCollisions",
+"lmacProcessModemStateRxBeacon",
+"lmacProcessRxSucData",
+"pm_on_isr",
+"pm_on_isr_sleep",
+"pp_post",
+"pwr_hal_get_intr_raw_signal",
+"wdev_process_beacon_filter",
+"wdev_process_mac_modem_beacon_miss",
+"wdev_process_tbtt",
+"wdev_process_tsf_timer"
+],
+"wdev_dump_rx_linked_list": [
+"wdev_record_rx_linked_list",
+"wifi_log"
+],
+"wDev_DiscardFrame": [
+"wDev_AppendRxBlocks"
+],
+"wDev_IndicateFrame": [
+"esf_buf_alloc",
+"esp_test_rx_process_complete",
+"get_sublen_offset",
+"lmacRxDone",
+"memcpy",
+"wDev_DiscardFrame",
+"wdev_csi_rx_process",
+"wifi_gpio_debug"
+],
+"wDev_IndicateAmpdu": [
+"esf_buf_alloc",
+"esf_buf_recycle",
+"lmacRxDone",
+"memcpy",
+"roundup2",
+"wDev_RxSecError",
+"wDev_SnifferRxAmpdu",
+"wdev_csi_rx_process"
+],
+"wDev_ProcessRxSucData": [
+"dbg_dump_rx_ppdu",
+"esp_test_rx_parse_mu",
+"esp_test_rx_process_complete",
+"hal_get_dump_ctrl_frame_cfg",
+"hal_ifc_get_bb_err_bitmap",
+"ic_interface_enabled",
+"is_ndpa_to_dut",
+"rxformat2str",
+"wDev_IndicateCtrlFrame",
+"wDev_IndicateFrame",
+"wDev_SnifferRxData",
+"wDev_record_ftm_data",
+"wifi_log"
+],
+"hal_get_time_to_sta_next_tbtt": [
+"hal_get_sta_tsf"
+],
+"pm_beacon_offset_sample": [
+"pm_beacon_offset_get_params"
+],
+"mac_tx_set_pti": [
+"hal_set_tx_pti"
+],
+"ieee80211_post_hmac_tx": [
+"ieee80211_recycle_cache_eb",
+"pp_post"
+],
+"hal_mac_init": [
+"pm_get_tx_blocks_retention_mask"
+],
+"hal_mac_deinit_twt_tx": [
+"hal_mac_is_txq_enabled",
+"lmacDisableTransmit",
+"pm_is_waked"
+],
+"mac_tx_set_hesig": [
+"hal_he_get_bss_color",
+"mac_tx_set_len",
+"mac_tx_set_tb",
+"wifi_log"
+],
+"hal_mac_txq_enable": [
+"GetAccess",
+"esp_test_tx_enab_statistics",
+"is_use_muedca",
+"wifi_he_get_hetb_tid_bitmap"
+],
+"mac_tx_set_txop_q": [
+"hal_mac_fill_hwtxop"
+],
+"coex_core_request": [
+"coex_core_timer_idx_get",
+"coex_hw_timer_enable",
+"coex_hw_timer_set"
+],
+"coex_core_release": [
+"coex_core_timer_idx_get",
+"coex_hw_timer_disable"
+],
+"tsf_hal_get_time": [
+"tsf_hal_get_counter_value"
+],
+"ieee80211_align_eb": [
+"memmove"
+],
+"esp_wifi_internal_tx": [
+"ieee80211_output_do",
+"wifi_gpio_debug"
+],
+"ieee80211_set_tx_desc": [
+"hal_he_get_bss_color",
+"hal_now",
+"ic_get_trc",
+"wifi_he_get_hetb_tid_bitmap"
+],
+"ampdu_dispatch": [
+"sta_input",
+"wifi_log"
+],
+"ampdu_dispatch_as_many_as_possible": [
+"ampdu_dispatch",
+"ampdu_dispatch_movement",
+"wifi_log"
+],
+"ampdu_dispatch_all": [
+"ampdu_dispatch",
+"wifi_log"
+],
+"ampdu_dispatch_upto": [
+"ampdu_dispatch",
+"ampdu_dispatch_movement",
+"wifi_log"
+],
+"ieee80211_ampdu_reorder": [
+"ampdu_dispatch",
+"ampdu_dispatch_all",
+"ampdu_dispatch_as_many_as_possible",
+"ampdu_dispatch_upto",
+"ampdu_process_multicast_address_qos_frame",
+"ic_ebuf_recycle_rx",
+"ic_reset_rx_ba",
+"ieee80211_ampdu_start_age_timer",
+"wifi_log"
+],
+"wifi_rf_phy_enable": [
+"ic_mac_init",
+"pm_mac_wakeup",
+"wifi_log"
+],
+"wifi_ant_update": [
+"ant_dft_cfg",
+"ant_wifirx_cfg",
+"ant_wifitx_cfg",
+"wifi_ant_config_check"
+],
+"esp_wifi_internal_update_light_sleep_wake_ahead_time": [
+"ic_update_light_sleep_wake_ahead_time"
+],
+"cnx_node_search": [
+"memcmp",
+"wifi_log"
+],
+"cnx_node_is_existing": [
+"wifi_log"
+],
+"sta_reset_beacon_timeout": [
+"pm_is_twt_start"
+],
+"sta_get_beacon_timeout": [
+"pm_is_twt_start"
+],
+"sta_rx_eapol": [
+"wifi_log"
+],
+"sta_input": [
+"check_bss_queue",
+"hal_he_set_ersu",
+"ic_ebuf_recycle_rx",
+"ieee80211_ampdu_reorder",
+"ieee80211_crypto_decap",
+"ieee80211_decap",
+"ieee80211_decap_amsdu",
+"ieee80211_gettid",
+"ieee80211_parse_htc",
+"memcmp",
+"pm_hmac_rx_data_process",
+"sta_bip_check",
+"sta_recv_ctl",
+"sta_recv_mgmt",
+"sta_rx_eapol",
+"wifi_log"
+],
+"phy_get_xtal_freq": [
+"rtc_clk_xtal_freq_get"
+],
+"phy_reg_init": [
+"agc_reg_init_new",
+"bb_reg_init_new",
+"bb_wdg_cfg",
+"bt_filter_reg_new",
+"iq_corr_enable",
+"noise_floor_auto_set_new",
+"phy_ant_init",
+"reg_set_new",
+"rx_11b_opt",
+"tx_paon_set_new",
+"tx_pwctrl_bg_init",
+"wifi_agc_sat_gain"
+],
+"phy_wakeup_init_": [
+"bias_reg_set",
+"enable_agc",
+"fe_reg_init",
+"fe_txrx_reset",
+"filter_dcap_set",
+"force_txrx_off",
+"freq_i2c_data_write_new",
+"freq_reg_init",
+"i2c_bbpll_set",
+"i2c_clk_sel",
+"i2c_master_reset",
+"i2cmst_reg_init",
+"open_i2c_xpd_new",
+"pbus_clear_reg",
+"phy_bbpll_cal",
+"phy_en_hw_set_freq",
+"phy_get_xtal_freq",
+"phy_i2c_init2",
+"phy_reg_init",
+"phy_wifi_enable_set",
+"pwdet_reg_init_new",
+"rfpll_chgp_cal",
+"set_chan_reg",
+"set_pbus_reg",
+"set_rx_comp_new",
+"wait_freq_set_busy",
+"write_chan_freq"
+],
+"pbus_clear_reg": [
+"pbus_debugmode"
+],
+"freq_i2c_write_set_new": [
+"freq_i2c_mem_write_new",
+"freq_i2c_num_addr",
+"get_freq_mem_param"
+],
+"freq_i2c_data_write_new": [
+"freq_get_i2c_data",
+"freq_i2c_write_set_new"
+],
+"open_i2c_xpd_new": [
+"ets_delay_us",
+"wait_i2c_sdm_stable"
+],
+"force_txrx_off": [
+"ets_delay_us"
+],
+"phy_i2c_init2": [
+"i2c_paral_write_num"
+],
+"coex_wifi_release": [
+"coex_core_release"
+],
+"coex_status_get": [
+"coex_schm_status_bitmap_get"
+],
+"coex_hw_timer_set": [
+"coex_hw_timer_tick_get"
+],
+"coex_schm_curr_phase_idx_get": [
+"coex_schm_lock",
+"coex_schm_unlock"
+],
+"coex_schm_interval_set": [
+"coex_schm_lock",
+"coex_schm_unlock"
+]
+}
