@@ -732,8 +732,16 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
-    let controller =
+    let mut controller =
         esp_radio::wifi::WifiController::new(peripherals.WIFI, Default::default()).unwrap();
+    // Disable modem sleep. A sniffer-only build never hits the STA-start path that applies
+    // PowerSaveMode::None, so the modem inherits IDF's WIFI_PS_MIN_MODEM default and the pp
+    // power-management path (ppCheckTxConnTrafficIdle) sleeps the radio after a while, making
+    // the beacon TX decay to zero. Forcing WIFI_PS_NONE keeps the modem awake so the radiate
+    // invariant stays reliable for de-blob validation.
+    controller
+        .set_power_saving(esp_radio::wifi::PowerSaveMode::None)
+        .unwrap();
     let mut sniffer = controller.sniffer();
 
     let mut beacon = [0u8; 300];
