@@ -97,7 +97,54 @@ interlock on the launch bits, not a software/register-value gap — it extends t
 ignores a set enable bit, it is that the enable bit itself will not LATCH outside the scheduler's
 live arming context.
 
+## Session 9b: lead 1 pursued — the interlock is WDEV_PM_TXBLOCK_RETENTION (hardware/PM-driven)
+
+Hunted for a "tx-requested" strobe that opens the PLCP0_ENABLE[31:30] write-enable. Result: there
+is NO CPU-writable strobe on our path; the gate is a hardware PM TX-block register we cannot write.
+
+STATIC (full submit->arm MMIO enumeration):
+- `ppTxPkt` and `ppProcessTxQ` write NO WDEV MMIO on the per-frame path — only SRAM queue
+  bookkeeping, ppMapTxQueue (AC bits in txinfo), pp_coex_tx_request, and pp_post. The only MMIO read
+  is `_WDEV_TSF0_TIMER_LO` into txinfo+0x18. So the ENTIRE submit->arm MMIO write set is exactly
+  `lmacSetTxFrame` + `lmacTxFrame` + hal callees — which our cleanroom already replicates. There is
+  no extra per-frame register write we omit.
+- `hal_mac_txq_enable`'s only hardware write (disasm) is `PLCP0_ENABLE |= 0xc0000000`; rest is
+  HE-TB/muedca software bookkeeping.
+
+DYNAMIC — the differentiator is WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8):
+- Reading it right before our (failing) arm: `txblock_before = 0x00ff1000` — TX is BLOCKED
+  (bit12 0x1000 + per-queue block 0xff0000). `hal_mac_init` clears `~(pm mask & 0xff0000 | 0x1000)`;
+  PM paths (pm_off_channel, pm_coex_slice_timeout) SET 0xe0000; so these bits are the TX-block gate.
+- Catching the blob's own in-context arm (tight poll of PLCP0_ENABLE right after send_raw_frame):
+  `arm_bit_caught=true plcp0=0xc067a5c8 txblock_at_arm=0x00002000` — when the blob launches, the
+  block bits are CLEARED and bit13 (0x2000 = "txing", per hal_mac_deinit's `>>0xd&1`) is set.
+- We CANNOT clear the block from our context. Writing `0` (or any pattern) to 0x600a4ca8 and reading
+  back: `0x00ff1000->0x00ff1000`. Per-bit probe in the same MAC state: set-b0, set-b10, clear-b12,
+  write-0 ALL read back `0x00ff1000` unchanged. The register is fully WRITE-LOCKED from our task —
+  exactly like the PLCP0_ENABLE launch bits. (Same RMW `hal_mac_init` uses, so calling it would be
+  identical and futile.)
+- The unblocked state is not a usable idle window: polling the block register for 60000 samples
+  right after a submit, `unblocked_samples=12172/60000 first_reblock@12172` — it is unblocked only
+  during the blob's own in-flight beacon (~the TX duration, slot 0 busy), then RE-BLOCKS and stays
+  `0x00ff1000`. The unblock is a CONSEQUENCE of the scheduled TX (HW/PM sets "txing"), not a
+  precondition we can assert or exploit on an idle slot.
+
+Verdict for lead 1: the PLCP0_ENABLE launch-enable interlock is gated by the MAC's PM TX-block FSM
+(WDEV_PM_TXBLOCK_RETENTION). Both the block bits and the launch bits reject CPU writes from our
+non-scheduler context, and the block is un-set only by the hardware/PM as part of the in-context
+submit->schedule->TX flow (coinciding with the scheduler owning the slot). No reproducible CPU-side
+strobe opens the interlock. This is concrete, register-level evidence for the lead-2 branch: a
+clean-room TX must reproduce the hardware "TX-allowed/txing" state the scheduler+PM chain sets (and
+the context in which these control-register writes are accepted), not merely issue the enable write.
+CR-RUST remains 0 on mon0; CR-CTRL steady (same firmware/RF).
+
 ## Next leads (for a future pass)
+- Find what makes the PM FSM accept control-register writes and clear the TX-block in-context:
+  trace the PM path from frame-submit/pp_post through the tbtt/wake hooks to the 0x600a4ca8 clear;
+  the clear is NOT a plain per-frame CPU write (none exists on the path), so it is either a HW
+  response to a scheduled-TX request or a PM-wake write accepted only in a specific MAC/PM state.
+- Test issuing the whole arm from ppTask/MAC-ISR context (lead 2) — whether the control-register
+  write-lock is keyed to execution context vs a pure MAC/PM state precondition.
 - Find what OPENS the launch-latch write window: diff the WDEV MMIO the blob touches between the
   submit (ppTxPkt/pp_post) and the arm, looking for a "tx request/ready" strobe (candidate regions
   0x600a4c00 datapath control, 0x600a4308) written on the ppProcessTxQ path but not on ours.

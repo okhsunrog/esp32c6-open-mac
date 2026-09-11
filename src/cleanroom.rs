@@ -819,6 +819,28 @@ mod cleanroom_tx {
     }
 
     #[inline(always)]
+    pub fn raw_txblock() -> u32 {
+        unsafe { rd(0x600a_4ca8) }
+    }
+
+    /// One-time per-bit writability probe of WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8), run in the
+    /// SAME (test-phase) MAC state as our failing arm. Distinguishes "CPU write dropped" from
+    /// "write stuck then HW re-blocks".
+    pub fn txblock_write_probe() {
+        unsafe {
+            let v0 = rd(0x600a_4ca8);
+            wr(0x600a_4ca8, v0 | 0x0000_0001); let set_b0 = rd(0x600a_4ca8);
+            wr(0x600a_4ca8, v0 | 0x0000_0400); let set_b10 = rd(0x600a_4ca8);
+            wr(0x600a_4ca8, v0 & !0x0000_1000); let clr_b12 = rd(0x600a_4ca8);
+            wr(0x600a_4ca8, 0); let wr_zero = rd(0x600a_4ca8);
+            wr(0x600a_4ca8, v0); // restore
+            super::println!(
+                "[CR.wp] txblock={v0:#010x} |b0->{set_b0:#010x} |b10->{set_b10:#010x} &~b12->{clr_b12:#010x} =0->{wr_zero:#010x}"
+            );
+        }
+    }
+
+    #[inline(always)]
     unsafe fn wr8(addr: u32, v: u8) { unsafe { core::ptr::write_volatile(addr as *mut u8, v) } }
     #[inline(always)]
     unsafe fn wr16(addr: u32, v: u16) { unsafe { core::ptr::write_volatile(addr as *mut u16, v) } }
@@ -891,12 +913,27 @@ mod cleanroom_tx {
             let backoff = (hal_now() as u16) & !(0xffffu16 << (*ctx.add(8) & 0x1f));
             core::ptr::write_unaligned(ctx.add(6) as *mut u16, backoff & 0x3ff);
             hal_mac_tx_config_edca(ctx);
+            // CANDIDATE STROBE (lead 1): unblock TX in WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8)
+            // exactly as hal_mac_init + hal_pm_unblock_txq do, right before the launch write.
+            let txblock_before = rd(0x600a_4ca8);
+            if UNBLOCK_TX {
+                wr(0x600a_4ca8, txblock_before & !(0x00ff_0000 | 0x1000 | 0x000e_0000));
+            }
+            let txblock_after = rd(0x600a_4ca8); // did the unblock write stick?
             hal_mac_txq_enable(slot);
             // Immediate readback of PLCP0_ENABLE (arm bits are 0xc0000000). Returns whether the
             // valid|enable latched at all, the very first bus cycle after the enable write.
-            rd(0x600a_4d6c - (slot as u32) * 0x10)
+            let rb = rd(0x600a_4d6c - (slot as u32) * 0x10);
+            LAST_TXBLOCK.store(txblock_before, core::sync::atomic::Ordering::Relaxed);
+            LAST_TXBLOCK_AFTER.store(txblock_after, core::sync::atomic::Ordering::Relaxed);
+            rb
         }
     }
+
+    /// Toggle for the candidate unblock strobe.
+    pub const UNBLOCK_TX: bool = true;
+    pub static LAST_TXBLOCK: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    pub static LAST_TXBLOCK_AFTER: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
 
     /// Disarm our slot and clear its completed-state bit, so the next arm starts clean and the
     /// blob's TX-complete scan sees no stale bit for our slot.
@@ -1038,14 +1075,23 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
             // On round 0, tight-poll PLCP0_ENABLE right after submit to CATCH the blob's own
             // in-context arm bit (0xc0000000) latching — proves the bits ARE settable in-context.
             if round == 0 && k == 0 {
-                let mut max_seen = 0u32;
+                // Track the block register (0x600a4ca8) trajectory right after submit: find if/when
+                // it leaves the blocked state 0x00ff1000 (a window our arm could exploit), and catch
+                // the launch bit + the block value at that instant.
                 let mut arm_caught = false;
-                for _ in 0..20000 {
+                let mut txblock_at_arm = 0xdead_beef_u32;
+                let mut n_unblocked = 0u32;    // samples with block != 0x00ff1000
+                let mut first_reblock: i32 = -1;
+                let mut seen_unblock = false;
+                const N: i32 = 60000;
+                for idx in 0..N {
+                    let b = cleanroom_tx::raw_txblock();
                     let v = cleanroom_tx::raw_plcp0(slot);
-                    if v > max_seen { max_seen = v; }
-                    if (v & 0xc000_0000) != 0 { arm_caught = true; }
+                    if b != 0x00ff_1000 { n_unblocked += 1; seen_unblock = true; }
+                    else if seen_unblock && first_reblock < 0 { first_reblock = idx; }
+                    if (v & 0xc000_0000) != 0 { arm_caught = true; txblock_at_arm = b; }
                 }
-                println!("[CR] in-context blob arm poll: arm_bit_caught={arm_caught} max_plcp0={max_seen:#010x}");
+                println!("[CR] blob poll: arm_caught={arm_caught} txblock_at_arm={txblock_at_arm:#010x} unblocked_samples={n_unblocked}/{N} first_reblock@{first_reblock}");
             }
             delay.delay(Duration::from_millis(100));
         }
@@ -1055,6 +1101,9 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
 
         // ===== TEST PHASE: 10 of OUR OWN Rust-driven arms on slot 0 (blob beacon quiesced) =====
         if eb != 0 {
+            if round == 0 {
+                cleanroom_tx::txblock_write_probe();
+            }
             for i in 0..10u32 {
                 cleanroom_tx::prep_eb(eb, 0, slot as u32, seq);
                 seq = seq.wrapping_add(1);
@@ -1062,8 +1111,10 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
                 let arm_rb = cleanroom_tx::arm(ctx_ptr, eb, slot);
                 if round == 0 && i < 4 {
                     let (arms, plcp0, edca, pmd) = cleanroom_tx::snapshot(slot);
+                    let txb = cleanroom_tx::LAST_TXBLOCK.load(core::sync::atomic::Ordering::Relaxed);
+                    let txa = cleanroom_tx::LAST_TXBLOCK_AFTER.load(core::sync::atomic::Ordering::Relaxed);
                     println!(
-                        "[CR] test#{i} enable_readback={arm_rb:#010x} | arms={arms:#04x} plcp0={plcp0:#010x} edca={edca:#010x} pmd={pmd:#010x}"
+                        "[CR] test#{i} txblock {txb:#010x}->{txa:#010x} enable_readback={arm_rb:#010x} | arms={arms:#04x} plcp0={plcp0:#010x} edca={edca:#010x} pmd={pmd:#010x}"
                     );
                 }
                 delay.delay(Duration::from_millis(60));
