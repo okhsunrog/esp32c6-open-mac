@@ -107,3 +107,145 @@ DSSS-beacon TX-SETUP path (set_ppdu incl. plcp0/plcp1/txop_q, BATCH4-7) and the 
 (hal_mac_get_txq_complete, BATCH8) are de-blobbed. Blob leaves still called on those paths:
 hal_he_set_tx_protection, mac_tx_get_rts_rate, mac_tx_set_len, mac_tx_set_pti, hal_mac_fill_hwtxop
 (all leaves, unrenamed).
+
+
+# =====================================================================
+# lmac.o Phase 2 (session continuation) -- de-blob of the lmac scheduler
+# =====================================================================
+
+Goal: replace the 46 lmac.o cross-boundary shims with real Rust, batch by batch, holding the
+"DEBLOB-HAL radiates" invariant. Outcome this session: the lmac CONTEXT MODEL is fully reversed
+and documented; ONE function is de-blobbed and validated; the rest are blocked by two hard,
+evidence-backed findings (ROM *ABS* interposition wall + a non-deterministic TX stall that hits the
+all-shim control too). Details below.
+
+## THE lmac CONTEXT MODEL (fully verified -- use this for all future lmac de-blob)
+
+### g_ic / our_instances base pointer
+The per-AC lmac TX control state is the `our_instances` array. Its base pointer lives in the fixed
+pp/ROM pointer-table slot `our_instances_ptr` at ABSOLUTE address 0x4004ffe0 (a *ABS* exported
+symbol). The blob materialises it as `lui a5,0x40050; lw a5,-0x20(a5)` == `*(u32*)0x4004ffe0`
+(verified in the LINKED blob_GetAccess @0x40805126 AND blob_lmacIsIdle @0x420256c2).
+  GetAccess(ac) == our_instances[ac] == (*(u32*)0x4004ffe0) + ac*0x34   (5 ACs, stride 0x34)
+CRITICAL: in the Ghidra ANALYSIS elf this symbol relocated to address 0, so the decompiler renders
+the base as `iRam00000000` (and a prior note guessed 0x4087f840). BOTH are wrong for the real
+firmware -- the runtime base is `*our_instances_ptr`. Reimplement by reading the `our_instances_ptr`
+symbol (link-stable), NOT address 0 and NOT a hardcoded RAM address. (A first attempt using
+`*(u32*)0` stalled instantly; fixed by using the symbol.)
+
+### lmac_txq_c6 block layout (our_instances + ac*0x34) -- verified from decompiles/disasm
+  +0x00 cur_eb (armed frame ptr)      +0x05 aifsn (SetAcParam p2)
+  +0x08 cw (clamped min/max)          +0x09 cwmin   +0x0a cwmax
+  +0x12 state {0 idle, 1 armed, 3 released?, 4, 5 success, 6 error}
+  +0x18 rate2ampdu (i16, SetAcParam p5)   +0x1d txop_depth / txop-token
+  +0x20 pending_head   +0x24 pending_tail (threaded via eb+0x30)
+  +0x2d success bool   +0x2e/2f/30/31 completion result (gi_ltf/rssi/...)
+
+### lmac config globals -- in the exported `lmacConfMib` .data object (0x40811b68 in this link)
+Verified from the LINKED disasm of blob_lmacIsLongFrame/blob_lmacReach{Short,Long}Limit:
+  lmacConfMib[0x14] = u8  long-retry-limit   (lmacReachLongLimit:  x >= this)
+  lmacConfMib[0x15] = u8  short-retry-limit  (lmacReachShortLimit: x >= this)
+  lmacConfMib[0x16] = u16 RTS / long-frame threshold (lmacIsLongFrame; read via `lhu`)
+Reference the `lmacConfMib` symbol + offset to read the same runtime value the blob's config wrote.
+The Ghidra analysis-elf DAT_ram_42080dd0/dd1/dd2 are the PRE-RELOCATION flash copies of these
+same fields (that .data section shows at VMA 0x420807f0 in the analysis elf, but relocates to DRAM
+0x408xxxxx in the real link -- do NOT read the 0x4208xxxx address at runtime).
+
+### TXOP-queue globals (lmacRequestTxopQueue/lmacReleaseTxopQueue)
+g_txop_queue_status[0..2] byte array + DAT_ram_42080db9/dba (the 3-slot free flags). Same .data
+relocation caveat as lmacConfMib -- resolve the runtime address via the linked-elf disasm before
+reimplementing.
+
+## THE ROM *ABS* INTERPOSITION WALL (major finding -- reshapes the whole lmac de-blob)
+Of the 46 lmac cross-boundary symbols, ~15 resolve in the final link to a ROM *ABS* symbol at
+0x40000xxx (the mask-ROM copy). For those, a strong Rust `#[no_mangle]` def gets --gc-sections'd in
+favour of the ROM symbol, AND dropping their shim binds callers to the ROM copy -- which uses
+different global state than libpp and STALLS TX. => they are NOT interposable and MUST stay shims.
+  ROM *ABS* (leave as shims): GetAccess, is_lmac_idle, lmacIsIdle, lmacIsLongFrame,
+    lmacReachShortLimit, lmacReachLongLimit, lmacDiscardAgedMSDU, lmacPostTxComplete,
+    lmacProcessAckTimeout, lmacProcessAllTxTimeout, lmacProcessCollisions,
+    lmacProcessShortFrameSuccess, lmacProcessLongFrameSuccess, lmacRecycleMPDU, lmacRxDone.
+  INTERPOSABLE (resolve to the shim/our Rust, ~30): lmacAdjustTimestamp, lmacDisableTransmit,
+    lmacDiscardMSDU, lmacEndFrameExchangeSequence, lmacEndRetryAMPDUFail, lmacGetTxFrame, lmacInit,
+    lmacProcessCollisions_task, lmacProcessCtsTimeout, lmacProcessLongRetryFail,
+    lmacProcessModemStateRxBeacon, lmacProcessRxSucData, lmacProcessShortRetryFail,
+    lmacProcessTxComplete, lmacProcessTxError, lmacProcessTxopQComplete, lmacProcessTxRtsError,
+    lmacProcessTxSuccess, lmacProcessTxTimeout, lmac_record_txtime, lmacReleaseTxopQueue,
+    lmacRequestTxopQueue, lmacRetryTxFrame, lmacSetAcParam, lmacSetMuEDCAParam, lmacSetTxFrame,
+    lmac_stop_hw_txq, lmacTxDone, lmacTxFrame, lmac_update_tx_statistic.
+Method to classify: `rust-objdump -t <linked deblob elf>`; a `40000xxx *ABS*` main symbol = ROM;
+a `.text` main (0x42068xxx shim block or our Rust addr) = interposable. NOTE many interposable hot
+functions live in `.rwtext.wifi` (IRAM) in the blob (lmacTxFrame, lmacProcessTxComplete, lmacTxDone,
+lmacSetTxFrame, lmacProcessTxSuccess) -- they run with flash cache disabled in MAC-ISR context, so a
+Rust reimplementation of those likely needs `#[esp_hal::ram]` (though IRAM placement of a leaf
+no-op did NOT by itself change behaviour in the tests below).
+
+## THE MEASUREMENT BLOCKER (why the radiate invariant is unreliable this session)
+The C6 beacon TX exhibits a NON-DETERMINISTIC stall: radiation runs at the full 100/10s beacon rate
+for 20-100s (sometimes the whole capture), then DECAYS TO ZERO and stays there. This is a decay-to-
+zero (arm-without-complete / PM sleeping the radio) signature. CRUCIALLY it hits the ALL-SHIM
+CONTROL identically (measured: control run A = 1205/120s perfect; control run B = full for 50s then
+0 for the rest = 553/120s). So it is a PRE-EXISTING environmental/firmware issue, NOT caused by the
+lmac de-blob. Leading hypothesis: pp power-management (pm_* -> ppCheckTxConnTrafficIdle -> lmacGet-
+TxFrame) eventually decides "traffic idle" and sleeps the modem. Because the control stalls too,
+single captures cannot attribute a stall to a specific function. The only usable signal is "does the
+build REACH the full 100/10s rate at all (matching the control's pre-stall behaviour)".
+RF itself is fine (mon0 up ch1, sees other traffic; the all-shim control reaches perfect 50/5s).
+
+## DONE -- 1 function de-blobbed + validated
+lmac_update_tx_statistic  -- blob body is empty (just `ret`, blob_ @0x42025b8c; its address is
+  installed in the wdev funcs pointer table by wdev_funcs_init and called indirectly). Reimplemented
+  as a Rust no-op (correct by inspection). VALIDATED: final build (all-shim + this Rust no-op) =
+  602/60s, steady 50/5s (every beacon) for the full 60s -- identical to the all-shim control's good
+  runs. This proves the lmac interposition works for at least one function and that adding Rust lmac
+  code is not inherently fatal.
+
+## ATTEMPTED but NOT kept (evidence-backed blockers)
+lmacGetTxFrame  -- interposable, logic reimplemented byte-identically to blob_lmacGetTxFrame
+  (0x420256de): `p = our_instances[ac]; state@+0x12 != 0 ? *p : 0`. Only caller is
+  ppCheckTxConnTrafficIdle (PM traffic-idle check). When added, the build NEVER reached full rate
+  (steady ~2-6/10s for a full 120s), a DIFFERENT signature from the control's full-then-zero. So it
+  appears to cause a real steady partial degradation (not the environmental decay). Hypotheses:
+  (a) the compiler inserts an alignment-check + panic branch around the `read_volatile(*u32)` of the
+  cur_eb (`andi a1,a1,3; bnez -> panic`) that the blob's plain `lw` does not have; (b) it perturbs
+  the PM sleep decision. NOT kept (reverted to shim). NEXT: replicate the blob's exact `lw` via
+  inline asm (no alignment guard) and re-test with the reach-full-rate criterion; and/or place it in
+  IRAM. Given it only feeds PM, its de-blob value is low -- defer.
+
+## Decompiled + modelled (ready to reimplement next session; NOT yet attempted on HW)
+- lmacSetAcParam (interposable): writes our_instances[ac] +5/+8/+9/+0xa/+0x18, calls
+  rx11AXRate2AMPDULimit_update (blob leaf). Init-time (ic_set_ac_param), not per-frame.
+- lmac_record_txtime (interposable): FTM/HE-TB airtime diag; guard reads eb header, only the
+  FTM-bit branch does work (wDev_ftm_record_t1t4). Gated by `menuconfig_feature_caps & 8` in
+  lmacTxDone -> NOT called for the plain beacon. Reimplement guard + delegate FTM branch to blob.
+- lmacRequestTxopQueue / lmacReleaseTxopQueue (interposable): g_txop_queue_status[] token alloc/free
+  + our_instances[ac]+0x1d. Need the runtime .data address of g_txop_queue_status.
+- lmacProcessTxopQComplete (interposable): PMD read (hal_mac_get_txq_pmd, already Rust), recycle
+  aggregated MPDU chain (eb+0x30), advance queue head. Only for TXOP bursts (depth>1) -- a single
+  beacon does not aggregate, so effectively not exercised.
+- ORCHESTRATORS (interposable, HOT / mostly IRAM -- do LAST, one at a time, IRAM-placed):
+  * lmacTxFrame (ARM): our_instances[ac].cur_eb=eb; discard-flag path; lmacIsLongFrame->RTS;
+    hal_random EDCA backoff into +6; hal_mac_tx_config_edca; state=1; hal_mac_txq_enable(slot).
+    Calls lmacSetTxFrame.
+  * lmacSetTxFrame (BUILD PPDU): lmacRequestTxopQueue/ppCalTxopDur; hal_mac_tx_config_timeout;
+    hal_mac_tx_set_ppdu (already Rust). All MAC-slot writes, no RF/modem write.
+  * lmacProcessTxComplete (COMPLETE dispatch): hal_mac_get_txq_state(2) bitmap; per armed queue
+    hal_mac_get_txq_complete (already Rust) -> fill +0x2d..0x31; status nibble (>>12 &0xf) dispatch
+    0=success/1=rts/2=cts/4=txerr/5=ack; hal_mac_clr_txq_state.
+  * lmacTxDone (DONE->NEXT): ppProcTxCallback/ppEnqueueTxDone recycle; rcUpdateTxDone; pp_post(0x10);
+    lmacReleaseTxopQueue; ppProcessTxQ(ac) launches next -> closes the loop.
+
+## NOT to be reimplemented (per task: never hit by a no-ACK broadcast beacon) -- keep as shims
+lmacProcessAckTimeout, lmacProcessCtsTimeout, lmacProcess{Short,Long}RetryFail, lmacProcessCollisions
+(_task), lmacRetryTxFrame, lmacEndRetryAMPDUFail, lmacProcessRxSucData, lmacProcessModemStateRxBeacon,
+lmacDiscard*, lmacMSDUAged, lmacSetMuEDCAParam, lmacProcessTxTimeout, lmacProcessAllTxTimeout,
+lmacRxDone, lmacProcessTxError, lmacProcessTxRtsError. (Several of these are ROM *ABS* anyway.)
+
+## RECOMMENDED next steps
+1. Resolve the environmental PM-sleep stall FIRST (disable modem/power-save in the beacon example, or
+   power-cycle the board -- the stall may be device-state/thermal; prior sessions saw sustained
+   287/30s). Without a stable control the radiate invariant cannot validate lmac changes.
+2. Then do the interposable NON-orchestrator leaves (SetAcParam, record_txtime, Request/ReleaseTxop-
+   Queue) using the model above, validating each by "reaches full 100/10s rate" over >=2 captures.
+3. Fix lmacGetTxFrame's alignment-guard (inline-asm `lw`) and re-test.
+4. Orchestrators LAST, IRAM-placed (`#[esp_hal::ram]`), one at a time with a capture after each.

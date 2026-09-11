@@ -48,17 +48,25 @@ core::arch::global_asm!(
     SHIM mac_tx_set_tb
 
     // ---- lmac.o cross-boundary shims (Phase 1: 46 functions -> tail blob_<fn>). ----
+    // NOTE: functions with a ROM *ABS* symbol at 0x40000xxx (GetAccess, is_lmac_idle, lmacIsIdle,
+    // lmacIsLongFrame, lmacReachShortLimit, lmacReachLongLimit, lmacDiscardAgedMSDU,
+    // lmacPostTxComplete, lmacProcessAckTimeout, lmacProcessAllTxTimeout, lmacProcessCollisions,
+    // lmacProcessShortFrameSuccess, lmacProcessLongFrameSuccess, lmacRecycleMPDU, lmacRxDone) are
+    // ROM-provided. Our
+    // strong Rust defs for those get --gc-sections'd in favour of the ROM copy, and dropping their
+    // shim binds callers to the ROM version -- which uses different global state than libpp and
+    // STALLS TX. So they MUST stay shims (-> blob_<fn> = libpp copy). Only NON-ABS lmac functions
+    // are interposable; the one de-blobbed here is lmac_update_tx_statistic (below).
     SHIM GetAccess
     SHIM is_lmac_idle
+    SHIM lmacIsIdle
     SHIM lmacAdjustTimestamp
     SHIM lmacDisableTransmit
     SHIM lmacDiscardAgedMSDU
     SHIM lmacDiscardMSDU
     SHIM lmacEndFrameExchangeSequence
     SHIM lmacEndRetryAMPDUFail
-    SHIM lmacGetTxFrame
     SHIM lmacInit
-    SHIM lmacIsIdle
     SHIM lmacIsLongFrame
     SHIM lmacMSDUAged
     SHIM lmacPostTxComplete
@@ -93,9 +101,45 @@ core::arch::global_asm!(
     SHIM lmac_stop_hw_txq
     SHIM lmacTxDone
     SHIM lmacTxFrame
-    SHIM lmac_update_tx_statistic
+    SHIM lmacGetTxFrame
 "#
 );
+
+// ============================================================================
+// lmac.o Phase 2: real Rust reimplementations of lmac.o cross-boundary functions.
+// ============================================================================
+// The lmac scheduler keeps its per-AC TX control state in the `our_instances` array, whose base
+// pointer lives in the fixed pp/ROM pointer-table slot `our_instances_ptr` (address 0x4004ffe0 in
+// the linked firmware). The blob materialises the base with `lui a5,0x40050; lw a5,-0x20(a5)`
+// (verified in the LINKED blob_GetAccess @0x40805126), i.e. base = `*(u32*)0x4004ffe0`, then
+// indexes `our_instances[ac] = base + ac*0x34` (5 ACs, stride 0x34). We reference the exported
+// `our_instances_ptr` symbol and read it the same way (in the Ghidra analysis elf this symbol
+// relocated to address 0, which is why the decompiler renders the base as `iRam00000000`).
+//
+// lmac_txq_c6 block layout (base + ac*0x34), from GetAccess/txsm_map + disasm:
+//   +0x00 cur_eb (armed frame ptr)      +0x05 aifsn        +0x08 cw (clamped)
+//   +0x09 cwmin  +0x0a cwmax            +0x12 state{0 idle,1 armed,5 success,6 error}
+//   +0x18 rate2ampdu (i16)             +0x1d txop_depth
+//   +0x20 pending_head  +0x24 pending_tail   +0x2d.. completion result
+//
+// lmac config globals live in the exported `lmacConfMib` .data object (0x40811b68 in this
+// link). Verified from the LINKED firmware disasm of blob_lmacIsLongFrame/Reach*Limit:
+//   lmacConfMib[0x14] = u8 long-retry-limit   lmacConfMib[0x15] = u8 short-retry-limit
+//   lmacConfMib[0x16] = u16 RTS / long-frame threshold (read via `lhu`)
+// We reference the symbol (+offset) so the read is link-stable and sees the same runtime
+// value the blob's lmacInit/config wrote. This model (also in docs/deblob_progress.md) is the
+// pre-relocation flash copies of these same fields).
+// De-blobbed lmac function (interposable, non-ABS). The full context model + the list of
+// blockers (ROM *ABS* symbols; the non-deterministic PM-sleep TX stall that also hits the
+// all-shim control and makes the radiate invariant unreliable) live in the research repo's
+// docs/deblob_progress.md.
+//
+/// blob `lmac_update_tx_statistic`: empty in the blob (just `ret`; blob_ at 0x42025b8c). Its
+/// address is installed into the wdev funcs pointer table by wdev_funcs_init and invoked
+/// indirectly. Reimplemented as a no-op (correct by inspection: the blob body is empty). Confirmed
+/// to reach full beacon rate (100/10s), matching the all-shim control's pre-stall behaviour.
+#[unsafe(no_mangle)]
+pub extern "C" fn lmac_update_tx_statistic() {}
 
 // ---- Phase 2: real Rust reimplementations of hal_mac_tx.o functions ----
 // Each replaces its global_asm shim above. Verified against the blob decompilation.
