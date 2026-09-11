@@ -1,0 +1,108 @@
+# ESP32-C6 clean-room Rust TX arm path — session 9 (2026-09-11)
+
+First pass at a SELF-CONTAINED Rust TX path: rather than interposing our code between the
+blob's ppProcessTxQ->lmacTxFrame call graph (session-8 finding: that regresses/stalls), we drive
+the full lmacTxFrame-equivalent ARM sequence from OUR OWN task, on top of the working esp-radio
+substrate (chip/PHY/clock init, OS adapter, WifiController::new + start — all radiate). Reuses the
+proven Rust `hal_mac_tx` functions (BATCH1-8, all validated radiating) as the HAL layer.
+
+Bin: `src/cleanroom.rs` (built in esp-hal examples/wifi/80211_tx as `src/bin/cleanroom.rs`).
+Build: `cargo build --release --bin cleanroom --target riscv32imac-unknown-none-elf --features esp32c6`.
+
+## What the clean-room path does (milestone 1 — BUILT)
+
+1. esp-radio brings everything up (same as deblob.rs); `set_power_saving(None)` keeps the modem awake.
+2. A CONTROL beacon (SSID `CR-CTRL`, blob path via `send_raw_frame`) runs as a same-RF positive
+   reference — it goes through esp_wifi_80211_tx -> ieee80211 -> ppTxPkt -> ppTask -> ppProcessTxQ
+   -> lmacTxFrame -> (our Rust hal) -> MAC, i.e. the proven radiating path.
+3. OUR OWN arm path (SSID `CR-RUST`), driven from the main task, NOT via the blob scheduler:
+   - `eb = esf_buf_alloc(payload, 1, len)` — a correctly DMA-placed eb from the LIVE libpp static-TX
+     pool. In the de-blob link `esf_buf_alloc` resolves to libpp `0x4080acf4` (NOT the ROM *ABS*
+     copy), so the eb is consistent with the running pools. CRITICAL: `set_plcp0` feeds the
+     dma_desc's low-20 bits into PLCP0_ENABLE, so the eb MUST live in the MAC-DMA region — hand-
+     rolling one in DRAM would mis-map; esf_buf_alloc places it correctly.
+   - Fill dma_desc + txinfo EXACTLY as `ieee80211_output_raw_process` does (owner|eof|length; cat=7;
+     iface bit19; AC bits20-23; tsf=hal_now; broadcast 0x402; rate idx 0 = 1 Mbit DSSS; seqno),
+     minus the ppTxPkt submit — so our eb is structurally identical to a blob-built beacon eb.
+   - A private 0x40-byte fake `txq` context (only the fields the hal fns read: [0]=eb, [4]=slot,
+     [5]=aifsn, [6]=backoff, [8]=cw, [0x1d]=depth). We NEVER touch `our_instances`, so the blob's
+     `lmacProcessTxComplete` (guarded on state==1) skips our slot and never recycles our eb.
+   - Arm = the lmacSetTxFrame + lmacTxFrame essentials, calling the proven Rust hal fns:
+     `hal_mac_tx_config_timeout` -> `hal_mac_tx_set_ppdu` (plcp0/plcp1/rate/dur/len/txop/pti) ->
+     `hal_mac_tx_config_edca` -> `hal_mac_txq_enable` (PLCP0_ENABLE |= 0xc0000000).
+   Control and test run in ALTERNATING phases (10 blob beacons, then 10 of our arms) so they never
+   contend for the slot and the pcap bins cleanly by SSID.
+
+## Hardware result (milestone 2 — CHARACTERISED, does NOT radiate; blocker localised)
+
+### The C6 MAC exposes exactly ONE writable TX slot bank
+Write/read probe of all 8 slot config banks (PLCP0_ENABLE 0x600a4d6c-slot*0x10, EDCA 0x600a4d68-
+slot*0x10):
+```
+slot0 plcp0=0x0067a4c8 edca=0x020023ff writable=true    <- the blob beacon's slot (AC 0)
+slot1..7 plcp0=0x00000000 edca=0x00000000 writable=false <- writes DROPPED, reads 0
+```
+So a "dedicated free slot" is not available: the C6 MAC only accepts register writes to the slot
+whose bank the scheduler has ACTIVATED. (`ppMapTxQueue` maps the raw beacon to AC 0 — confirmed.)
+=> we must drive slot 0 itself, time-multiplexed with a quiesced blob beacon.
+
+### On slot 0, our arm programs everything correctly EXCEPT the valid|enable latch
+Driving our arm on slot 0 (blob beacon quiesced), immediate readback after `hal_mac_txq_enable`:
+```
+enable_readback=0x0067a5c8 | arms=0x00 plcp0=0x0067a5c8 edca=0x020023ff pmd=0x00000000
+```
+- The CONFIG bits latch perfectly: plcp0 low = 0x0067a5c8 and edca = 0x020023ff are essentially
+  identical to the blob's own (0x0067a4c8 / 0x020023ff) — our PLCP0/PLCP1/EDCA/rate programming from
+  the eb matches the blob byte-for-byte (differences are just the seqno/length of our frame).
+- The ARM bits DO NOT LATCH: even the FIRST bus cycle after `PLCP0_ENABLE |= 0xc0000000` reads back
+  WITHOUT bits 30/31. No completion is ever recorded (pmd = 0). The MAC silently drops the write of
+  the transmit-enable bits (30/31) while accepting the config bits (0-29) of the SAME register.
+
+### Proof the enable bits ARE settable on this exact register — in the blob's context
+Tight-polling PLCP0_ENABLE right after `send_raw_frame` (the blob's own in-context arm) CATCHES it:
+```
+in-context blob arm poll: arm_bit_caught=true max_plcp0=0xc067a5c8
+```
+i.e. when the BLOB scheduler executes the identical single write (`PLCP0_ENABLE |= 0xc0000000`,
+verified as the ONLY hardware write in blob `hal_mac_txq_enable` @disasm — the rest is HE-TB/muedca
+software bookkeeping), bits 30/31 latch (0xc067a5c8) and the frame radiates. The low bits it latches
+(0x67a5c8) are the SAME value our arm writes.
+
+### Radiation ground truth (mon0 ch1, same firmware, same RF, same slot 0)
+`CR-CTRL` (blob path): radiates steadily. `CR-RUST` (our arm path): 0 frames — never radiates.
+120s alternating-phase binned capture (30s bins):
+```
+           0-30s  30-60s  60-90s  90-120s   total
+CR-CTRL      135     138     132      132      537   (steady, same-RF positive control)
+CR-RUST        0       0       0        0        0   (our Rust-driven arm, never radiates)
+```
+
+## What this rules in / out (the "timing/runtime coupling", localised)
+
+RULED OUT as the gate for the valid|enable latch:
+- Missing register writes — blob `hal_mac_txq_enable` does ONLY `|=0xc0000000`; our reimpl matches.
+- Config programming — our PLCP0/PLCP1/EDCA/rate/timeout all latch and match the blob's values.
+- The coex grant — calling `pp_coex_tx_request(eb)` (the request the blob issues from ppProcessTxQ
+  before lmacTxFrame) BEFORE our arm made NO difference (enable still drops). Confirms the annotation
+  that coex fns return 0 / never block on this WiFi-only build.
+- CCA / TSF / EDCA-config (session-7 negatives) — independently re-confirmed here.
+
+REMAINING HYPOTHESIS (the coupling): PLCP0_ENABLE[31:30] is a write-gated "transmit-launch" latch
+that the MAC only opens transiently as part of the scheduler's arming, driven from ppTask/MAC-ISR
+context after the submit path (ppTxPkt -> pp_post -> ppProcessTxQ) has put the MAC TX state machine
+into a "tx-requested" phase. A byte-identical CPU write of bits 30/31 from an independent task, with
+the config bank fully and correctly programmed, is silently dropped. This is a HARDWARE write-enable
+interlock on the launch bits, not a software/register-value gap — it extends the 7-session verdict
+("BB only keys up under the running scheduler") to the finest granularity: it is not that the BB
+ignores a set enable bit, it is that the enable bit itself will not LATCH outside the scheduler's
+live arming context.
+
+## Next leads (for a future pass)
+- Find what OPENS the launch-latch write window: diff the WDEV MMIO the blob touches between the
+  submit (ppTxPkt/pp_post) and the arm, looking for a "tx request/ready" strobe (candidate regions
+  0x600a4c00 datapath control, 0x600a4308) written on the ppProcessTxQ path but not on ours.
+- Try issuing the enable write from MAC-ISR/ppTask context (e.g. from a pp_post handler) to test the
+  "must originate in scheduler context" half of the hypothesis vs a pure MAC-state precondition.
+- The only mechanism proven to latch bits 30/31 remains the blob's full submit->schedule->arm chain;
+  a clean-room TX therefore needs to reproduce whatever hardware "tx-requested" state that chain sets
+  before the enable write, not just the enable write itself.
