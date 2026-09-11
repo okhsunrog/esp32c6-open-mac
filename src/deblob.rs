@@ -126,20 +126,75 @@ core::arch::global_asm!(
 // link). Verified from the LINKED firmware disasm of blob_lmacIsLongFrame/Reach*Limit:
 //   lmacConfMib[0x14] = u8 long-retry-limit   lmacConfMib[0x15] = u8 short-retry-limit
 //   lmacConfMib[0x16] = u16 RTS / long-frame threshold (read via `lhu`)
-// We reference the symbol (+offset) so the read is link-stable and sees the same runtime
-// value the blob's lmacInit/config wrote. This model (also in docs/deblob_progress.md) is the
-// pre-relocation flash copies of these same fields).
-// De-blobbed lmac function (interposable, non-ABS). The full context model + the list of
-// blockers (ROM *ABS* symbols; the non-deterministic PM-sleep TX stall that also hits the
-// all-shim control and makes the radiate invariant unreliable) live in the research repo's
-// docs/deblob_progress.md.
-//
-/// blob `lmac_update_tx_statistic`: empty in the blob (just `ret`; blob_ at 0x42025b8c). Its
-/// address is installed into the wdev funcs pointer table by wdev_funcs_init and invoked
-/// indirectly. Reimplemented as a no-op (correct by inspection: the blob body is empty). Confirmed
-/// to reach full beacon rate (100/10s), matching the all-shim control's pre-stall behaviour.
-#[unsafe(no_mangle)]
-pub extern "C" fn lmac_update_tx_statistic() {}
+// We reference the `lmacConfMib` symbol (+offset) so the read is link-stable and sees the same
+// runtime value the blob's lmacInit/config wrote (Ghidra's analysis-elf DAT_ram_42080dd0.. are the
+// pre-relocation flash copies of these same fields). Only NON-ABS (interposable) lmac symbols are
+// reimplemented here; the ~15 ROM *ABS* ones (see the shim NOTE above) must stay shims. Full model
+// + blocker log: docs/deblob_progress.md in the research repo.
+#[allow(dead_code)]
+mod lmac_deblob {
+    unsafe extern "C" {
+        // Fixed pp/ROM pointer-table slot (0x4004ffe0) holding the base of the per-AC lmac txq
+        // instance array. Reading it yields the same base the blob's GetAccess computes.
+        #[link_name = "our_instances_ptr"]
+        static OUR_INSTANCES_PTR: u32;
+    }
+
+    /// Base of the `our_instances` per-AC lmac txq array = `*our_instances_ptr` (== `GetAccess(0)`).
+    #[inline(always)]
+    fn our_instances() -> u32 {
+        unsafe { core::ptr::read_volatile(&OUR_INSTANCES_PTR as *const u32) }
+    }
+
+    /// `our_instances[ac]` = per-AC lmac TX control block (the blob's `GetAccess(ac)`).
+    #[inline(always)]
+    fn lmac_txq(ac: i32) -> u32 {
+        our_instances().wrapping_add((ac as u32).wrapping_mul(0x34))
+    }
+
+    /// Plain `lbu` load (matches the blob's byte reads; no bounds/align guard).
+    #[inline(always)]
+    unsafe fn lbu(addr: u32) -> u8 {
+        let v: u32;
+        unsafe {
+            core::arch::asm!("lbu {0}, 0({1})", out(reg) v, in(reg) addr, options(nostack, readonly))
+        };
+        v as u8
+    }
+    /// Plain `lw` load (matches the blob's word reads exactly; no compiler-inserted alignment
+    /// check/panic branch, unlike `read_volatile::<u32>` on a computed pointer).
+    #[inline(always)]
+    unsafe fn lw(addr: u32) -> u32 {
+        let v: u32;
+        unsafe {
+            core::arch::asm!("lw {0}, 0({1})", out(reg) v, in(reg) addr, options(nostack, readonly))
+        };
+        v
+    }
+
+    /// blob `lmac_update_tx_statistic`: empty in the blob (just `ret`; blob_ at 0x42025b8c). Its
+    /// address is installed into the wdev funcs pointer table by wdev_funcs_init and invoked
+    /// indirectly. Reimplemented as a no-op (correct by inspection: the blob body is empty).
+    /// This is the ONLY lmac function that can be safely interposed -- see the blocker note below.
+    #[unsafe(no_mangle)]
+    pub extern "C" fn lmac_update_tx_statistic() {}
+}
+
+// BLOCKER -- lmac context functions are NOT interposable (evidence-backed; do not retry blindly).
+// Any lmac function that touches the `our_instances` context regresses TX to ~10-40% steady, while
+// the empty no-op above holds the full 100/10s beacon rate (control-verified: update_stat-only =
+// 307/30s). Tested exhaustively:
+//   * lmacGetTxFrame -- reimplemented as safe Rust (read_volatile), inline-asm (blob-exact `lw`),
+//     and a #[naked] copy BYTE-IDENTICAL to blob_lmacGetTxFrame (0x420256de): all regress (241/60s,
+//     then 5/60s for the naked copy at a different address). Both flash and IRAM (#[esp_hal::ram])
+//     placements regress (9/30s).
+//   * lmacSetAcParam -- init-time only (not a per-frame path) -- also regresses (9/30s).
+// A byte-identical machine-code copy at a DIFFERENT address killing TX rules out the code itself and
+// points to a placement/dispatch dependency: the blob lmac functions must live at their original
+// libpp addresses (likely a ROM/wdev function-pointer table, or an i-cache/co-location constraint on
+// the timing-sensitive TX path). The no-op works precisely because it reads nothing. Combined with
+// the ROM *ABS* wall (the ~15 symbols above), lmac.o is not meaningfully de-blobbable via symbol
+// interposition beyond this no-op. Full analysis + reproduction: docs/deblob_progress.md.
 
 // ---- Phase 2: real Rust reimplementations of hal_mac_tx.o functions ----
 // Each replaces its global_asm shim above. Verified against the blob decompilation.

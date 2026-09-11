@@ -249,3 +249,57 @@ lmacRxDone, lmacProcessTxError, lmacProcessTxRtsError. (Several of these are ROM
    Queue) using the model above, validating each by "reaches full 100/10s rate" over >=2 captures.
 3. Fix lmacGetTxFrame's alignment-guard (inline-asm `lw`) and re-test.
 4. Orchestrators LAST, IRAM-placed (`#[esp_hal::ram]`), one at a time with a capture after each.
+
+
+# =====================================================================
+# lmac.o Phase 2 (continuation) -- PM stall FIXED; hard placement blocker found
+# =====================================================================
+
+The non-deterministic decay-to-zero was root-caused to IDF's default WIFI_PS_MIN_MODEM modem sleep:
+the sniffer-only build never runs the STA-start path that applies PowerSaveMode::None, so the modem
+slept. Fix (in deblob.rs, right after WifiController::new):
+  controller.set_power_saving(esp_radio::wifi::PowerSaveMode::None)
+With it the radiate invariant is RELIABLE: steady ~298-307 frames/30s (measured 606/60s = 100/10s
+every beacon, zero decay across 120s). A real regression now shows as a persistent drop below ~298.
+
+## HARD BLOCKER (confirmed with the reliable invariant): lmac context fns are NOT interposable
+Reimplementing ANY lmac cross-boundary function that touches the `our_instances` context regresses TX
+to ~3-40% steady, while the empty no-op (lmac_update_tx_statistic) holds the full 100/10s rate.
+Back-to-back, same RF, reliable invariant:
+  A = all-shim + update_tx_statistic(no-op only)      -> 307/30s (FULL)
+  B = A + lmacGetTxFrame (#[naked], BYTE-IDENTICAL to blob_lmacGetTxFrame 0x420256de) -> 8/30s
+Exhaustive variants of lmacGetTxFrame all regress: safe Rust (read_volatile), inline-asm blob-exact
+`lw`, and the #[naked] byte-identical copy; in FLASH (241/60s, 8/30s) and in IRAM #[esp_hal::ram]
+(9/30s). lmacSetAcParam (INIT-TIME only, not a per-frame path) also regresses (9/30s). update_stat
+(reads nothing) is the only one that holds full rate.
+
+### What this rules in/out (assembly + link analysis)
+- NOT the function code: a #[naked] copy is byte-for-byte identical to blob_lmacGetTxFrame, yet
+  regresses. Only difference is the function's ADDRESS (mine 0x42068300 vs blob 0x420256de).
+- NOT IRAM-vs-flash: hot blob lmac fns live in .rwtext.wifi (IRAM) but blob_lmacGetTxFrame itself is
+  flash; placing ours in IRAM does not help.
+- NOT hot-IRAM layout shift: adding our fn leaves blob_lmacTxFrame/ProcessTxComplete/TxDone/
+  SetTxFrame/ProcessTxSuccess at the exact same .rwtext.wifi addresses (verified by objdump diff).
+- NOT force-frame-pointers: the build sets -C force-frame-pointers so even the working no-op has a
+  frame prologue; frame vs leaf is uncorrelated with success.
+- getTxFrame has exactly ONE caller (ppCheckTxConnTrafficIdle, the pp power-management traffic-idle
+  check) and NO data/table reference; update_stat instead is stored in the wdev funcs pointer table
+  by wdev_funcs_init (a relocated DATA ref that rebinds to our symbol -> works).
+CONCLUSION: a byte-identical copy at a different address breaking TX points to a placement/dispatch
+dependency on the blob functions residing at their ORIGINAL libpp addresses -- most likely an
+i-cache/co-location constraint on the timing-sensitive PM/TX path (the blob fn sits ~8KB from its
+caller and shares cache locality with the hot 0x4202xxxx TX code; our copy at 0x42068xxx does not),
+or a dispatch that assumes the original address. We could not make an our_instances-touching lmac fn
+hold the invariant by any code form or placement reachable from deblob.rs alone.
+
+## NET RESULT for lmac.o
+- De-blobbed + validated: lmac_update_tx_statistic (no-op). Holds full 307/30s.
+- ~15 functions are ROM *ABS* bound (documented earlier) -> must stay shims.
+- The remaining interposable functions cannot hold the radiate invariant when reimplemented (the
+  placement blocker above), so they stay shims. lmac.o is therefore NOT meaningfully de-blobbable via
+  this symbol-interposition mechanism beyond the trivial no-op. The reverse-engineered context model
+  (our_instances_ptr base, lmac_txq layout, lmacConfMib config globals, TXOP-queue globals, the full
+  TxFrame/SetTxFrame/ProcessTxComplete/TxDone orchestrator models) is complete and documented above
+  for a future approach that can control function placement (e.g. a linker script that lands the
+  Rust reimplementations at/near the original blob addresses, or de-blobbing at the .o/link level
+  rather than per-symbol interposition).
