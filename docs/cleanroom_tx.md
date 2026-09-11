@@ -138,7 +138,58 @@ clean-room TX must reproduce the hardware "TX-allowed/txing" state the scheduler
 the context in which these control-register writes are accepted), not merely issue the enable write.
 CR-RUST remains 0 on mon0; CR-CTRL steady (same firmware/RF).
 
+## Session 9c: leads 2a + 2b — the write-lock is MAC-ACTIVE-STATE gated (near-fundamental)
+
+2a asked: is the control-register write-lock gated by execution CONTEXT (ppTask/privilege) or by a
+MAC-STATE precondition? Answer, with a sharp register oracle: it is MAC-ACTIVE-STATE gated.
+
+- In ppTask context (probe embedded in our interposed hal_mac_txq_enable, which the blob calls on
+  ppTask during its OWN slot-0 beacon arm) the writes that our normal task could not make now STICK:
+  WDEV_PM_TXBLOCK_RETENTION bit-flip 0x0000->0x0001 stuck; an idle slot's EDCA 0x0000->0x0abc stuck
+  (dead from our task); idle slot 1 PLCP0_ENABLE[31:30] LATCHED. Driving our full arm there set
+  slot-0 PLCP0_ENABLE to 0xc067a4c8 (launch bits latched, descriptor base correct).
+- DECISIVE disambiguation (from our OWN normal task, no interposition): probe write-stickiness in the
+  ~active window right after send_raw_frame (WDEV_PM_TXBLOCK_RETENTION != 0x00ff1000, i.e. the MAC is
+  keying up the blob's just-submitted beacon): `txblock=0x00000000 bit0_stuck=true
+  slot1_launch_latched=true`. So writes STICK from our normal task too, as long as the MAC is ACTIVE.
+  => it is NOT execution-context / privilege that gates the control-register writes; it is the MAC TX
+  clock/active state. When the MAC is idle (block 0x00ff1000) the writes are dropped from ANY context;
+  when it is active (block cleared, txing) they stick from ANY context.
+
+2b (the PM-unblock path): the block register is written (cleared) by CPU only in hal_mac_init and
+hal_pm_unblock_txq (0xe0000); NO software on the per-beacon submit->arm path clears the full
+0x00ff1000. So the per-beacon 0x00ff1000 -> 0x00002000 transition (block cleared, bit13 "txing" set)
+is a HARDWARE-FSM consequence of the MAC entering active TX for a scheduled frame, not a standalone
+CPU write. Once the FSM has made the MAC active, CPU writes to the control registers (block bits AND
+launch bits) are accepted — that is exactly what 2a measured.
+
+Did CR-RUST radiate? No. We could LATCH the launch bits in-context/in-window (slot 1: latched;
+slot 0 overwrite: 0xc067a4c8 with correct descriptor base after matching the blob's txinfo so
+mac_tx_set_txop_q keeps PLCP0_ENABLE bit22), but: (i) slot 1 is not a serviceable TX queue (launched,
+never emitted); (ii) overwriting slot 0 in-context either re-sent the blob's own frame (wrong bit22
+-> doubled CR-CTRL) or went silent (correct bit22 -> our frame's DMA still not emitted), and a
+per-beacon in-context arm destabilised the blob's TX entirely (timing-sensitive-path lesson); a
+one-shot 20-beacon window stayed stable (CR-CTRL 421/healthy) but still produced no CR-RUST. Getting
+an independent frame onto the air needs a correctly-staged DMA on a serviceable slot, which slot 0
+only is — and slot 0 is owned by the scheduler whose TX is what makes the MAC active in the first
+place.
+
+FINAL VERDICT on clean-room C6 TX feasibility: the PLCP0_ENABLE launch-enable (and the PM TX-block)
+are writable ONLY while the MAC TX clock/active state is up, and that state is entered ONLY as a
+hardware-FSM consequence of a frame scheduled through the blob's submit->schedule flow (which also
+owns the one serviceable slot). This is a chicken-and-egg / near-fundamental barrier for an
+idle-start clean-room arm: there is no CPU-reachable write or sequence from an idle MAC that opens
+the interlock. A clean-room TX would have to reproduce the hardware path that brings the MAC to the
+active/txing state (the full scheduler+PM+queue bring-up that makes the block clear and the launch
+bits latchable), not merely issue the register writes. The write-lock being MAC-state (not context)
+gated is the key new datum: once the MAC is active, our own task CAN write the launch bits — the
+remaining wall is bringing the MAC to that active state without the blob scheduler, and getting a
+frame staged on the single serviceable slot.
+
 ## Next leads (for a future pass)
+- Whether the MAC active/txing state can be forced/held independent of a scheduled frame (a clock or
+  PM-wake write that sets bit13 and clears the block and STAYS), which 2a shows would then make the
+  launch bits writable from our own task; and whether a second serviceable TX slot can be activated.
 - Find what makes the PM FSM accept control-register writes and clear the TX-block in-context:
   trace the PM path from frame-submit/pp_post through the tbtt/wake hooks to the 0x600a4ca8 clear;
   the clear is NOT a plain per-frame CPU write (none exists on the path), so it is either a HW

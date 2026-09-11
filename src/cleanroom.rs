@@ -491,14 +491,25 @@ fn txq_plcp0_enable_addr(ac: i32) -> *mut u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_txq_enable(ac: i32) {
     unsafe {
+        // ---- LEAD 2a(2): on alternate beacons, overwrite slot 0's programming with OUR frame
+        // BEFORE the arm write below, so the blob's own |=0xc0000000 launches OUR frame (CR-RUST)
+        // on the functional queue, in ppTask context. Even beacons keep the blob's own beacon
+        // (CR-CTRL) as the same-RF control. ac==0 is the beacon queue. ----
+        if ARM_INCTX_ENABLED.load(core::sync::atomic::Ordering::Relaxed) && ac == 0 {
+            let n = cleanroom_tx::CR_CALL.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            // One-shot window (calls 40..60): arm OUR frame on slot 0 for ~20 beacons, then stop, to
+            // test radiation without the sustained-path destabilisation a per-beacon arm causes.
+            if (40..60).contains(&n) {
+                cleanroom_tx::arm_inctx();
+            }
+        }
         let addr = txq_plcp0_enable_addr(ac);
         core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) | 0xc000_0000);
-        // Note: legacy (non HE-TB) frames need nothing more for the arm. HE-TB muedca
-        // bookkeeping is left as a TODO (delegate to blob::blob_hal_mac_txq_enable when
-        // HE-TB support is added). Keep the symbol referenced so it stays linked.
         let _ = blob::blob_hal_mac_txq_enable as usize;
     }
 }
+
+pub static ARM_INCTX_ENABLED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 
 /// blob `hal_mac_txq_disable`: clear slot_valid|slot_enabled.
 #[unsafe(no_mangle)]
@@ -818,9 +829,76 @@ mod cleanroom_tx {
         unsafe { rd(0x600a_4d6c - (slot as u32) * 0x10) }
     }
 
+    // ---- LEAD 2a(2): arm OUR frame from ppTask context (called inside hal_mac_txq_enable) ----
+    // Proven: control-register writes + launch bits STICK when issued in this (MAC-active ppTask)
+    // context. We drive the full arm of our pre-built eb on an idle slot here, unblocking the queues
+    // first (that write also sticks in this context). Returns the PLCP0_ENABLE readback.
+    pub const MY_SLOT2: i32 = 1; // idle slot proven to latch launch bits from ppTask context
+    pub static CR_EB: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    pub static CR_SEQ: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    pub static CR_CALL: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    pub static CR_ARM_RB: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    static mut CR_CTX: [u8; 0x40] = [0u8; 0x40];
+
+    /// Reprogram slot 0 (the functional queue the blob just set up for its beacon) with OUR frame,
+    /// WITHOUT setting the arm bit — the blob's own `hal_mac_txq_enable` write that follows will
+    /// launch whatever is now in slot 0. Called in ppTask context before that arm write. Leaves
+    /// our_instances[0] (blob's cur_eb/state) intact so the blob's completion recycles ITS eb.
+    pub fn arm_inctx() {
+        use core::sync::atomic::Ordering::Relaxed;
+        let eb = CR_EB.load(Relaxed);
+        if eb == 0 {
+            return;
+        }
+        unsafe {
+            let seq = CR_SEQ.fetch_add(1, Relaxed) as u16;
+            prep_eb(eb, 0, 0, seq); // our frame, AC/slot 0
+            let ctx = core::ptr::addr_of_mut!(CR_CTX) as *mut u8;
+            core::ptr::write_unaligned(ctx as *mut u32, eb);
+            *ctx.add(4) = 0; // slot 0
+            *ctx.add(5) = 2;
+            *ctx.add(8) = 4;
+            *ctx.add(0x1c) = 0;
+            *ctx.add(0x1d) = 1;
+            let ours = rd(0x4004_ffe0);
+            super::hal_mac_tx_config_timeout(ctx, 0x200);
+            super::hal_mac_tx_set_ppdu(ctx, ours as i32); // overwrites slot-0 PLCP with our frame
+            let backoff = (hal_now() as u16) & 0x0f;
+            core::ptr::write_unaligned(ctx.add(6) as *mut u16, backoff);
+            super::hal_mac_tx_config_edca(ctx);
+            CR_ARM_RB.store(rd(0x600a_4d6c), Relaxed); // slot0 PLCP0_ENABLE (pre-arm)
+        }
+    }
+
     #[inline(always)]
     pub fn raw_txblock() -> u32 {
         unsafe { rd(0x600a_4ca8) }
+    }
+
+    /// From OUR normal task: spin until the MAC is in the active window (block != 0x00ff1000, i.e.
+    /// the blob's just-submitted beacon is keying up), then test whether a CPU write to the block
+    /// register and to an idle slot's launch bits STICKS. Returns (bit0_stuck, block_val, launch).
+    /// This separates execution-context gating from MAC-active-state gating.
+    pub fn active_window_write_probe() -> (bool, u32, bool) {
+        unsafe {
+            let mut blk = 0x00ff_1000u32;
+            for _ in 0..200000 {
+                let b = rd(0x600a_4ca8);
+                if b != 0x00ff_1000 {
+                    blk = b;
+                    // MAC active: try the writes immediately.
+                    wr(0x600a_4ca8, b ^ 0x1);
+                    let stuck = (rd(0x600a_4ca8) & 1) != (b & 1);
+                    wr(0x600a_4ca8, b);
+                    let p = rd(0x600a_4d5c); // idle slot 1 launch
+                    wr(0x600a_4d5c, p | 0xc000_0000);
+                    let latched = rd(0x600a_4d5c) & 0xc000_0000 != 0;
+                    wr(0x600a_4d5c, p);
+                    return (stuck, blk, latched);
+                }
+            }
+            (false, blk, false)
+        }
     }
 
     /// One-time per-bit writability probe of WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8), run in the
@@ -861,6 +939,7 @@ mod cleanroom_tx {
         unsafe {
             let dma = rd_at(eb + 4);        // dma_desc
             let frame = rd_at(dma + 4);     // dma_desc[1] = on-air frame bytes
+            wr16(eb + 0x14, 0);             // header-len part = 0 (total len comes from eb+0x16)
             let l14 = rd16(eb + 0x14) as u32;
             let l16 = rd16(eb + 0x16) as u32;
             // dma_desc[0]: owner | eof | (clear 29) | length(bits14-27)
@@ -881,6 +960,8 @@ mod cleanroom_tx {
             // flags word: clear discard/HE/AMPDU; broadcast addr1 -> |=0x402; match live beacon 0x6xxx
             let mut fl = rd(txinfo);
             fl &= !(0x0001_0000u32 | 0x8000_0000 | 0x0040_0000);
+            fl &= !0x40; // ensure bit6 clear so (flags & 0xc0) == 0x80
+            fl |= 0x80;  // set bit7: mac_tx_set_txop_q keeps PLCP0_ENABLE bit22 (descriptor base)
             if (rd8(frame + 4) & 1) != 0 { fl |= 0x402; }
             fl |= 0x6000;
             wr(txinfo, fl);
@@ -1065,13 +1146,32 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     let mut ctx = [0u8; 0x40];
     let ctx_ptr = ctx.as_mut_ptr();
 
+    // LEAD 2a(2): publish our eb and let hal_mac_txq_enable (ppTask context) arm it on slot 1.
+    cleanroom_tx::CR_EB.store(eb, core::sync::atomic::Ordering::Relaxed);
+    ARM_INCTX_ENABLED.store(eb != 0, core::sync::atomic::Ordering::Relaxed);
+
     let slot = cleanroom_tx::MY_AC;
+    // Our NORMAL-task arm is disabled; arming happens only from ppTask (in-context) for lead 2a(2).
+    const RUN_MY_ARM: bool = false;
     let mut round: u32 = 0;
     let mut seq: u16 = 0;
     loop {
         // ===== CONTROL PHASE: 10 blob-driven beacons on slot 0 (same-RF positive reference) =====
         for k in 0..10 {
             let _ = sniffer.send_raw_frame(true, ctrl, false);
+            if round == 1 && k == 0 {
+                let rb = cleanroom_tx::CR_ARM_RB.load(core::sync::atomic::Ordering::Relaxed);
+                println!("[CR.2a2] in-ctx arm of slot{} readback PLCP0_ENABLE={rb:#010x} (latched={})",
+                    cleanroom_tx::MY_SLOT2, rb & 0xc000_0000 != 0);
+            }
+            // LEAD 2a refinement: is the write-lock CONTEXT(ppTask)-gated or MAC-ACTIVE-STATE gated?
+            // Probe write-stickiness from OUR OWN task, but in the ~active window right after submit
+            // (block != 0x00ff1000). If a write STICKS here (our task, MAC active) it is MAC-state,
+            // not execution-context, that gates it.
+            if round == 2 && k == 0 {
+                let (stuck, blk, plcp_latch) = cleanroom_tx::active_window_write_probe();
+                println!("[CR.2a3] our-task active-window write: txblock={blk:#010x} bit0_stuck={stuck} slot1_launch_latched={plcp_latch}");
+            }
             // On round 0, tight-poll PLCP0_ENABLE right after submit to CATCH the blob's own
             // in-context arm bit (0xc0000000) latching — proves the bits ARE settable in-context.
             if round == 0 && k == 0 {
@@ -1100,7 +1200,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
         delay.delay(Duration::from_millis(50));
 
         // ===== TEST PHASE: 10 of OUR OWN Rust-driven arms on slot 0 (blob beacon quiesced) =====
-        if eb != 0 {
+        if eb != 0 && RUN_MY_ARM {
             if round == 0 {
                 cleanroom_tx::txblock_write_probe();
             }
