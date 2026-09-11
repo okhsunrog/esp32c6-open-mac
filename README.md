@@ -60,7 +60,7 @@ bookkeeping is skipped for the legacy DSSS test beacon (guarded out or delegated
 | Object          | External surface | Notes |
 |-----------------|------------------|-------|
 | **`hal_mac_tx.o`** | **de-blobbed (19/23 fns Rust)** | Only intentional shims left: `hal_init_tx_pwr` (low-value PHY power-cal wrapper) + HE-only internals `mac_tx_set_hesig`/`mplen`/`tb` (never exercised by a legacy beacon). |
-| `lmac.o`        | next             | The lmac layer (lmacTxFrame, lmacProcessTxComplete, …). |
+| `lmac.o`        | Phase 1 done (46 fns interposed, radiates 287/30s); Phase 2 next | The lmac layer (lmacTxFrame, lmacProcessTxComplete, retry/timeout/collision, …). |
 | `pp.o`          | later            | The pp scheduler (ppTxPkt/ppProcessTxQ/ppTask/pp_post). |
 
 Milestones reached: positive control (blob radiates on this C6) → both decisive

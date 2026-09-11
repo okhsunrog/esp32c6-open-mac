@@ -46,6 +46,54 @@ core::arch::global_asm!(
     SHIM mac_tx_set_hesig
     SHIM mac_tx_set_mplen
     SHIM mac_tx_set_tb
+
+    // ---- lmac.o cross-boundary shims (Phase 1: 46 functions -> tail blob_<fn>). ----
+    SHIM GetAccess
+    SHIM is_lmac_idle
+    SHIM lmacAdjustTimestamp
+    SHIM lmacDisableTransmit
+    SHIM lmacDiscardAgedMSDU
+    SHIM lmacDiscardMSDU
+    SHIM lmacEndFrameExchangeSequence
+    SHIM lmacEndRetryAMPDUFail
+    SHIM lmacGetTxFrame
+    SHIM lmacInit
+    SHIM lmacIsIdle
+    SHIM lmacIsLongFrame
+    SHIM lmacMSDUAged
+    SHIM lmacPostTxComplete
+    SHIM lmacProcessAckTimeout
+    SHIM lmacProcessAllTxTimeout
+    SHIM lmacProcessCollisions
+    SHIM lmacProcessCollisions_task
+    SHIM lmacProcessCtsTimeout
+    SHIM lmacProcessLongFrameSuccess
+    SHIM lmacProcessLongRetryFail
+    SHIM lmacProcessModemStateRxBeacon
+    SHIM lmacProcessRxSucData
+    SHIM lmacProcessShortFrameSuccess
+    SHIM lmacProcessShortRetryFail
+    SHIM lmacProcessTxComplete
+    SHIM lmacProcessTxError
+    SHIM lmacProcessTxopQComplete
+    SHIM lmacProcessTxRtsError
+    SHIM lmacProcessTxSuccess
+    SHIM lmacProcessTxTimeout
+    SHIM lmacReachLongLimit
+    SHIM lmacReachShortLimit
+    SHIM lmac_record_txtime
+    SHIM lmacRecycleMPDU
+    SHIM lmacReleaseTxopQueue
+    SHIM lmacRequestTxopQueue
+    SHIM lmacRetryTxFrame
+    SHIM lmacRxDone
+    SHIM lmacSetAcParam
+    SHIM lmacSetMuEDCAParam
+    SHIM lmacSetTxFrame
+    SHIM lmac_stop_hw_txq
+    SHIM lmacTxDone
+    SHIM lmacTxFrame
+    SHIM lmac_update_tx_statistic
 "#
 );
 
