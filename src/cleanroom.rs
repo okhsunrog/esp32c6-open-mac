@@ -816,6 +816,85 @@ mod cleanroom_tx {
         fn hal_now() -> u32;
         // coex medium request the blob issues (from ppProcessTxQ) right before lmacTxFrame.
         fn pp_coex_tx_request(eb: u32);
+        // FAITHFUL reproduction: the blob's own submit + schedule, operating on REAL our_instances
+        // state. ppTxPkt(eb, kick): proto/sec/rate/map + enqueue onto our_instances[ac] pending;
+        // kick=0 skips pp_post so the blob's ppTask is NOT woken (we drive the schedule ourselves).
+        fn ppTxPkt(eb: u32, kick: i32) -> i32;
+        // ppProcessTxQ(ac): pop from pending + pp_coex_tx_request + lmacTxFrame (arm) on real state.
+        fn ppProcessTxQ(ac: i32) -> i32;
+        fn esf_buf_recycle(eb: u32);
+    }
+
+    /// our_instances[ac] real lmac txq block (base = *(u32*)0x4004ffe0 + ac*0x34).
+    #[inline(always)]
+    unsafe fn our_txq(ac: i32) -> u32 {
+        unsafe { rd(0x4004_ffe0).wrapping_add((ac as u32).wrapping_mul(0x34)) }
+    }
+
+    /// After a faithful arm that did NOT complete (MAC never went active), the real our_instances[ac]
+    /// stays state==1 (armed) and would wedge the queue. If (after a settle) state is still 1, reset
+    /// it, disarm the slot, and recycle the leaked eb so the control phase (and next round) work.
+    /// Returns true if it had to clean up (i.e. the frame never completed / did not radiate).
+    pub fn faithful_cleanup(ac: i32) -> bool {
+        unsafe {
+            let txq = our_txq(ac);
+            let state = core::ptr::read_volatile((txq + 0x12) as *const u8);
+            if state == 0 {
+                return false; // completed normally (MAC ISR handled it) -> radiated/consumed
+            }
+            let eb = rd(txq); // cur_eb
+            core::ptr::write_volatile((txq + 0x12) as *mut u8, 0); // state = idle
+            wr(txq, 0); // cur_eb = 0
+            super::hal_mac_txq_disable(ac);
+            if eb != 0 {
+                esf_buf_recycle(eb);
+            }
+            true
+        }
+    }
+
+    /// FAITHFUL submit+schedule+arm on REAL scheduler state, from our task (blob pp idle).
+    /// Returns (ac, txpkt_ret, blk_before, blk_after, plcp0_before, plcp0_after).
+    pub fn faithful_tx(eb: u32, seq: u16) -> (i32, i32, u32, u32, u32, u32) {
+        unsafe {
+            // Mirror ieee80211_output_raw_process's eb/dma/txinfo setup BEFORE ppTxPkt (the fields
+            // the blob's raw-submit fills), then let the blob's real ppTxPkt do proto/sec/rate/map/
+            // enqueue with kick=0. ppMapTxQueue will set the AC; do NOT pre-set AC bits here.
+            let dma = rd_at(eb + 4);
+            let frame = rd_at(dma + 4);
+            core::ptr::write_volatile((eb + 0x14) as *mut u16, 0);
+            let l16 = core::ptr::read_volatile((eb + 0x16) as *const u16) as u32;
+            let mut w0 = rd(dma);
+            w0 |= 0x8000_0000;
+            w0 |= 0x4000_0000;
+            w0 &= 0xdfff_ffff;
+            w0 = ((l16 & 0x3fff) << 0xe) | (w0 & 0xf000_3fff);
+            wr(dma, w0);
+            let txinfo = rd_at(eb + 0x34);
+            core::ptr::write_volatile((txinfo + 4) as *mut u8, 7); // cat = mgmt
+            wr(txinfo + 0x18, hal_now());
+            let mut w10 = rd(txinfo + 0x10);
+            w10 &= 0xfff7_ffff; // iface 0
+            wr(txinfo + 0x10, w10);
+            if (core::ptr::read_volatile((frame + 4) as *const u8) & 1) != 0 {
+                wr(txinfo, rd(txinfo) | 0x402);
+            }
+            core::ptr::write_volatile((txinfo + 0xc) as *mut u8, 0); // rate 1M DSSS
+            core::ptr::write_volatile((frame + 0x16) as *mut u16, seq << 4); // seq ctrl
+            wr(eb + 0x2c, 0); // trc = NULL (raw frame -> rcGetSched no-op)
+
+            // Faithful submit onto REAL our_instances pending (no kick).
+            let ret = ppTxPkt(eb, 0);
+            // AC that ppMapTxQueue assigned into txinfo+0x10 bits 20-23.
+            let ac = ((rd(txinfo + 0x10) >> 0x14) & 0xf) as i32;
+            let blk_before = rd(0x600a_4ca8);
+            let plcp0_before = rd(0x600a_4d6c - (ac as u32) * 0x10);
+            // Faithful schedule + arm on real state (pop + coex + lmacTxFrame -> our Rust hal).
+            let _ = ppProcessTxQ(ac);
+            let plcp0_after = rd(0x600a_4d6c - (ac as u32) * 0x10);
+            let blk_after = rd(0x600a_4ca8);
+            (ac, ret, blk_before, blk_after, plcp0_before, plcp0_after)
+        }
     }
 
     /// Issue the coex TX request the blob does before arming (tests the coex-grant hypothesis).
@@ -1146,89 +1225,48 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     let mut ctx = [0u8; 0x40];
     let ctx_ptr = ctx.as_mut_ptr();
 
-    // LEAD 2a(2): publish our eb and let hal_mac_txq_enable (ppTask context) arm it on slot 1.
-    cleanroom_tx::CR_EB.store(eb, core::sync::atomic::Ordering::Relaxed);
-    ARM_INCTX_ENABLED.store(eb != 0, core::sync::atomic::Ordering::Relaxed);
+    // The intrusive in-context arm (lead 2a(2)) is disabled for the faithful reproduction.
+    ARM_INCTX_ENABLED.store(false, core::sync::atomic::Ordering::Relaxed);
+    let _ = eb;
+    let _ = ctx_ptr;
 
-    let slot = cleanroom_tx::MY_AC;
-    // Our NORMAL-task arm is disabled; arming happens only from ppTask (in-context) for lead 2a(2).
-    const RUN_MY_ARM: bool = false;
+    // ================= FAITHFUL REPRODUCTION (session 9d) =================
+    // Reproduce the blob's submit->schedule->arm on the REAL our_instances state, from our task,
+    // with the blob pp idle (no send_raw_frame during the faithful phase). Oracle: does the MAC go
+    // active (0x600a4ca8: 0x00ff1000 -> 0x00002000) and PLCP0_ENABLE latch (0xc.......)?
+    println!("[CR.F] faithful reproduction: ppTxPkt(eb,0) + ppProcessTxQ(ac) on real state");
     let mut round: u32 = 0;
     let mut seq: u16 = 0;
     loop {
-        // ===== CONTROL PHASE: 10 blob-driven beacons on slot 0 (same-RF positive reference) =====
-        for k in 0..10 {
-            let _ = sniffer.send_raw_frame(true, ctrl, false);
-            if round == 1 && k == 0 {
-                let rb = cleanroom_tx::CR_ARM_RB.load(core::sync::atomic::Ordering::Relaxed);
-                println!("[CR.2a2] in-ctx arm of slot{} readback PLCP0_ENABLE={rb:#010x} (latched={})",
-                    cleanroom_tx::MY_SLOT2, rb & 0xc000_0000 != 0);
-            }
-            // LEAD 2a refinement: is the write-lock CONTEXT(ppTask)-gated or MAC-ACTIVE-STATE gated?
-            // Probe write-stickiness from OUR OWN task, but in the ~active window right after submit
-            // (block != 0x00ff1000). If a write STICKS here (our task, MAC active) it is MAC-state,
-            // not execution-context, that gates it.
-            if round == 2 && k == 0 {
-                let (stuck, blk, plcp_latch) = cleanroom_tx::active_window_write_probe();
-                println!("[CR.2a3] our-task active-window write: txblock={blk:#010x} bit0_stuck={stuck} slot1_launch_latched={plcp_latch}");
-            }
-            // On round 0, tight-poll PLCP0_ENABLE right after submit to CATCH the blob's own
-            // in-context arm bit (0xc0000000) latching — proves the bits ARE settable in-context.
-            if round == 0 && k == 0 {
-                // Track the block register (0x600a4ca8) trajectory right after submit: find if/when
-                // it leaves the blocked state 0x00ff1000 (a window our arm could exploit), and catch
-                // the launch bit + the block value at that instant.
-                let mut arm_caught = false;
-                let mut txblock_at_arm = 0xdead_beef_u32;
-                let mut n_unblocked = 0u32;    // samples with block != 0x00ff1000
-                let mut first_reblock: i32 = -1;
-                let mut seen_unblock = false;
-                const N: i32 = 60000;
-                for idx in 0..N {
-                    let b = cleanroom_tx::raw_txblock();
-                    let v = cleanroom_tx::raw_plcp0(slot);
-                    if b != 0x00ff_1000 { n_unblocked += 1; seen_unblock = true; }
-                    else if seen_unblock && first_reblock < 0 { first_reblock = idx; }
-                    if (v & 0xc000_0000) != 0 { arm_caught = true; txblock_at_arm = b; }
+        // ----- FAITHFUL PHASE: one full submit+schedule+arm per iteration (NO send_raw_frame) -----
+        for i in 0..4u32 {
+            let feb = cleanroom_tx::alloc_eb(&rust_buf[..rust_len]);
+            if feb == 0 {
+                println!("[CR.F] esf_buf_alloc returned 0 (pool empty)");
+            } else {
+                let (ac, ret, bb, ba, pb, pa) = cleanroom_tx::faithful_tx(feb, seq);
+                seq = seq.wrapping_add(1);
+                if round < 3 {
+                    println!("[CR.F] r{round}#{i} eb={feb:#010x} ac={ac} txpkt_ret={ret} block {bb:#010x}->{ba:#010x} plcp0 {pb:#010x}->{pa:#010x}");
                 }
-                println!("[CR] blob poll: arm_caught={arm_caught} txblock_at_arm={txblock_at_arm:#010x} unblocked_samples={n_unblocked}/{N} first_reblock@{first_reblock}");
+                delay.delay(Duration::from_millis(40)); // let it TX+complete if it went active
+                let cleaned = cleanroom_tx::faithful_cleanup(ac);
+                if round < 3 {
+                    let ba2 = cleanroom_tx::raw_txblock();
+                    println!("[CR.F] r{round}#{i} post: completed={} block_now={ba2:#010x} (cleaned_wedge={cleaned})", !cleaned);
+                }
             }
-            delay.delay(Duration::from_millis(100));
+            delay.delay(Duration::from_millis(60));
         }
 
-        // Let the last blob beacon fully complete + recycle before we take over slot 0.
-        delay.delay(Duration::from_millis(50));
-
-        // ===== TEST PHASE: 10 of OUR OWN Rust-driven arms on slot 0 (blob beacon quiesced) =====
-        if eb != 0 && RUN_MY_ARM {
-            if round == 0 {
-                cleanroom_tx::txblock_write_probe();
-            }
-            for i in 0..10u32 {
-                cleanroom_tx::prep_eb(eb, 0, slot as u32, seq);
-                seq = seq.wrapping_add(1);
-                cleanroom_tx::coex_request(eb); // blob issues this before lmacTxFrame
-                let arm_rb = cleanroom_tx::arm(ctx_ptr, eb, slot);
-                if round == 0 && i < 4 {
-                    let (arms, plcp0, edca, pmd) = cleanroom_tx::snapshot(slot);
-                    let txb = cleanroom_tx::LAST_TXBLOCK.load(core::sync::atomic::Ordering::Relaxed);
-                    let txa = cleanroom_tx::LAST_TXBLOCK_AFTER.load(core::sync::atomic::Ordering::Relaxed);
-                    println!(
-                        "[CR] test#{i} txblock {txb:#010x}->{txa:#010x} enable_readback={arm_rb:#010x} | arms={arms:#04x} plcp0={plcp0:#010x} edca={edca:#010x} pmd={pmd:#010x}"
-                    );
-                }
-                delay.delay(Duration::from_millis(60));
-                let (_, _, _, pmd_done) = cleanroom_tx::snapshot(slot);
-                if round == 0 && i < 4 {
-                    println!("[CR] test#{i} post-wait pmd={pmd_done:#010x}");
-                }
-                cleanroom_tx::disarm(slot);
-                delay.delay(Duration::from_millis(40));
-            }
+        // ----- CONTROL PHASE: a few blob beacons (separate, confirm RF/capture health) -----
+        for _ in 0..6 {
+            let _ = sniffer.send_raw_frame(true, ctrl, false);
+            delay.delay(Duration::from_millis(100));
         }
         round += 1;
         if round % 5 == 0 {
-            println!("[CR] completed {round} control+test rounds");
+            println!("[CR.F] completed {round} faithful+control rounds");
         }
     }
 }

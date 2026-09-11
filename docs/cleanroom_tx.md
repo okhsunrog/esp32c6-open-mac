@@ -186,6 +186,57 @@ gated is the key new datum: once the MAC is active, our own task CAN write the l
 remaining wall is bringing the MAC to that active state without the blob scheduler, and getting a
 frame staged on the single serviceable slot.
 
+## Session 9d: BREAKTHROUGH — faithful reproduction radiates CR-RUST
+
+The honest test: reproduce the blob's submit->schedule->arm on the REAL our_instances state (not a
+fake context), with a faithfully-built eb, and let the MAC decide. It WORKS — our frame radiates.
+
+The path that radiates (from our own task, blob pp idle / no send_raw_frame during the faithful
+phase):
+- `eb = esf_buf_alloc(rust_beacon, 1, len)` — real static-TX pool eb.
+- Faithful eb setup mirroring ieee80211_output_raw_process: dma_desc owner|eof|length, txinfo cat=7,
+  tsf=hal_now, iface 0, broadcast 0x402, rate idx 0 (1 Mbit DSSS), seqno, and eb+0x2c (trc)=0.
+- `ppTxPkt(eb, 0)` — the blob's REAL submit: ppTxProtoProc / ppProcTxSecFrame / rcGetSched /
+  ppMapTxQueue + ENQUEUE onto the REAL our_instances[ac] pending list. kick=0 so pp_post is NOT
+  issued and the blob's ppTask stays parked — WE drive the schedule.
+- `ppProcessTxQ(ac)` (ac=0, the AC ppMapTxQueue assigned) — the blob's REAL schedule: pop from the
+  pending list + pp_coex_tx_request + lmacTxFrame (arm) on the REAL our_instances[0] state, driving
+  the arm through our proven Rust hal_mac_tx layer (config_edca / set_ppdu / hal_mac_txq_enable).
+- Completion is serviced by the blob MAC ISR (wDev_ProcessFiq -> lmacProcessTxComplete): our
+  faithful_cleanup finds state already back to 0 (completed=true), no wedge.
+
+Register oracles at each faithful arm (every iteration, steady):
+```
+ac=0 txpkt_ret=0  block 0x00000000->0x00000000  plcp0 0x0067a4c8 -> 0xc067a5c8  completed=true
+```
+i.e. the MAC is ACTIVE (0x600a4ca8 = 0, not the idle 0x00ff1000), the launch bits LATCH
+(PLCP0_ENABLE bit31|bit30 set), and the frame COMPLETES. (It re-blocks to 0x00ff1000 between
+iterations and is re-activated by the next ppTxPkt.)
+
+Radiation (mon0 ch1, faithful phase 4 arms/round + occasional CR-CTRL control 6/round, 30s bins):
+```
+          bin0 bin1 bin2 bin3   total   source MAC
+CR-RUST     6    7    8    0       21    02:00:00:00:c6:00  (our faithful Rust path, 1 Mbit DSSS)
+CR-CTRL    11   13    9    3       36    02:00:00:00:da:b0  (blob beacon control)
+```
+CR-RUST radiates steadily, proportional to its attempt share (4:6 vs the control). (bin3 taper is the
+AX210 monitor vif degrading, not TX; rebuilt via tools/mon_up.sh.)
+
+Why the earlier cleanroom arm never emitted, now explained: the MAC-active transition (block
+0x00ff1000 -> 0, which unlocks the launch/PM-block writes — the session-9c finding) is triggered by
+the PM wake on the SUBMIT path — `pm_on_data_tx`, called from `ppMapTxQueue` inside `ppTxPkt` — NOT
+by the arm itself. Our fake-context cleanroom arm skipped ppTxPkt, so pm_on_data_tx never ran, the
+MAC stayed blocked, and the launch bits could not latch. The faithful ppTxPkt restores the PM-wake +
+the real eb/DMA/our_instances linkage, the MAC goes active, and the arm (through our Rust hal) fires
+the PHY.
+
+VERDICT: clean-room C6 TX from Rust IS feasible on top of the working esp-radio substrate. The
+missing ingredient was faithfulness of the submit+schedule on REAL scheduler state (the PM-wake and
+the real eb/pending linkage), not the arm register writes (those were already our proven Rust hal).
+Remaining work to a pure-Rust path: reimplement ppTxPkt (incl. the pm_on_data_tx PM-wake + the
+our_instances enqueue) and ppProcessTxQ/lmacTxFrame in Rust rather than calling the blob copies; the
+hardware behaviour is now known to follow once the real state + PM-wake are reproduced.
+
 ## Next leads (for a future pass)
 - Whether the MAC active/txing state can be forced/held independent of a scheduled frame (a clock or
   PM-wake write that sets bit13 and clears the block and STAYS), which 2a shows would then make the
