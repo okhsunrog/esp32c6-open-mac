@@ -826,6 +826,8 @@ mod cleanroom_tx {
         // leaf helpers kept as blob calls (next de-blob frontier):
         fn ppSearchTxframe(ac: i32) -> u32; // pop eb from our_instances[ac] pending (ROM)
         fn lmacAdjustTimestamp(); // beacon timestamp fixup on dequeue (blob shim leaf)
+        fn ppProcessWaitingQueue(); // drains the hmac waiting queue (blob leaf)
+        fn pm_on_data_tx(iface: u32, p2: i32) -> i32; // PM-wake -- the MAC-active ingredient
         fn lmacTxFrame(eb: u32, ac: i32); // shim -> blob_lmacTxFrame (step 2 -> cr_lmacTxFrame)
         fn ppTxProtoProc(eb: u32);
         fn ppProcTxSecFrame(eb: u32) -> i32;
@@ -878,7 +880,7 @@ mod cleanroom_tx {
                 return 1;
             }
             cr_rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
-            let map = ppMapTxQueue(eb); // sets AC in txinfo+0x10 AND runs pm_on_data_tx (PM-wake)
+            let map = cr_ppMapTxQueue(eb); // Rust AC mapping; keeps blob pm_on_data_tx (PM-wake)
             if map == 0 {
                 let ti = rd_at(eb + 0x34);
                 wr(ti + 0x18, hal_now()); // tsf submit stamp (blob: _WDEV_TSF0_TIMER_LO)
@@ -898,6 +900,33 @@ mod cleanroom_tx {
                 esf_buf_recycle(eb); // map fail / deferred-to-hmac not expected for our beacon
                 1
             }
+        }
+    }
+
+    /// Rust ppMapTxQueue for the legacy beacon: choose the EDCA AC and write it into txinfo+0x10
+    /// bits20-23, keeping the blob pm_on_data_tx (the PM-wake that makes the MAC active -- the
+    /// breakthrough ingredient) and ppProcessWaitingQueue (hmac drain). For our raw beacon trc==0,
+    /// so it takes the simple branch: txinfo+4=7, AC=iface. The QoS-data/TWT branches
+    /// (ppSearchTxQueue / pm_on_twt_force_tx) are not exercised by the beacon and are omitted.
+    /// Returns the blob convention: 0 = mapped.
+    pub fn cr_ppMapTxQueue(eb: u32) -> i32 {
+        unsafe {
+            ppProcessWaitingQueue();
+            let txinfo = rd_at(eb + 0x34);
+            let t4 = rd(txinfo + 4);
+            if (t4 & 0xf0) == 0x40 {
+                wr(txinfo + 0x10, (rd(txinfo + 0x10) & 0xff0f_ffff) | 0x20_0000);
+            } else {
+                let iface = (rd(txinfo + 0x10) >> 0x13) & 1;
+                let trc = rd(eb + 0x2c);
+                if trc == 0 || (core::ptr::read_volatile((trc + 0xc) as *const u16) & 0x80) != 0 {
+                    core::ptr::write_volatile((txinfo + 4) as *mut u8, 7);
+                    wr(txinfo + 0x10, (rd(txinfo + 0x10) & 0xff0f_ffff) | (iface << 0x14));
+                    pm_on_data_tx(iface, 0); // PM-wake (keep blob)
+                }
+                // (QoS-data / TWT mapping branches not exercised by the legacy beacon.)
+            }
+            0
         }
     }
 

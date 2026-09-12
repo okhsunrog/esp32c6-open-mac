@@ -325,3 +325,7 @@ exactly one recycle per frame (ours) -- the blob ISR is not double-recycling.
   call -- it derefs an AP/beacon context that is null in our raw path (Load access fault at
   0x4080519c); our beacon uses timestamp=0 so the fixup is unnecessary. Health: 96/96/96 allocfail=0;
   radiation CR-RUST 4 == CR-CTRL 4 (parity; short mid-flash window + congested channel).
+- cr_ppMapTxQueue (Rust AC mapping): for the raw beacon (trc==0) -> txinfo+4=7, AC=iface<<0x14 in
+  txinfo+0x10, and KEEP blob pm_on_data_tx (the PM-wake) + ppProcessWaitingQueue (hmac drain). The
+  QoS-data/TWT mapping branches (ppSearchTxQueue/pm_on_twt_force_tx) aren't exercised by the beacon.
+  Health 96/96/96 allocfail=0; radiation CR-RUST present vs CR-CTRL (both steady under congestion).
