@@ -874,7 +874,7 @@ mod cleanroom_tx {
                 esf_buf_recycle(eb);
                 return 1;
             }
-            ppTxProtoProc(eb);
+            cr_ppTxProtoProc(eb);
             if ppProcTxSecFrame(eb) == 1 {
                 esf_buf_recycle(eb);
                 return 1;
@@ -899,6 +899,39 @@ mod cleanroom_tx {
             } else {
                 esf_buf_recycle(eb); // map fail / deferred-to-hmac not expected for our beacon
                 1
+            }
+        }
+    }
+
+    /// Rust ppTxProtoProc for the legacy beacon: reads the on-air FC byte and sets the protocol
+    /// flags. For a broadcast mgmt beacon (FC 0x80, addr1[0]&1) only txinfo bit1 (0x2) is set; the
+    /// data (FC&0xc==8) and null/QoS (FC&0xf0 0x50/0x40) branches are faithfully replicated but not
+    /// taken by the beacon.
+    pub fn cr_ppTxProtoProc(eb: u32) {
+        unsafe {
+            let mut frame = rd_at(rd_at(eb + 4) + 4); // dma_desc[1]
+            if (core::ptr::read_volatile((eb + 0x24) as *const u16) & 0x2000) != 0 {
+                frame += 8; // FTM offset (not our beacon)
+            }
+            let txinfo = rd_at(eb + 0x34);
+            if (core::ptr::read_volatile((frame + 4) as *const u8) & 1) != 0 {
+                wr(txinfo, rd(txinfo) | 2); // broadcast/multicast -> no-ack
+            }
+            let fc = core::ptr::read_volatile(frame as *const u8);
+            if (fc & 0xc) == 8 {
+                let f = rd(txinfo);
+                wr(txinfo, f | 8);
+                if (rd(txinfo + 0x30) & 0x2_0000) == 0 && (fc & 0x70) == 0x40 {
+                    wr(txinfo, rd(txinfo) & 0xffff_fff7);
+                }
+            } else if (fc & 0xc) == 0 {
+                if (fc & 0xf0) == 0x50 {
+                    if (rd(txinfo) & 2) == 0 {
+                        wr(txinfo, rd(txinfo) | 0x800_0000);
+                    }
+                } else if (fc & 0xf0) == 0x40 && (rd(txinfo) & 2) == 0 {
+                    wr(txinfo, rd(txinfo) | 0x800);
+                }
             }
         }
     }

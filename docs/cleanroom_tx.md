@@ -329,3 +329,40 @@ exactly one recycle per frame (ours) -- the blob ISR is not double-recycling.
   txinfo+0x10, and KEEP blob pm_on_data_tx (the PM-wake) + ppProcessWaitingQueue (hmac drain). The
   QoS-data/TWT mapping branches (ppSearchTxQueue/pm_on_twt_force_tx) aren't exercised by the beacon.
   Health 96/96/96 allocfail=0; radiation CR-RUST present vs CR-CTRL (both steady under congestion).
+- cr_ppTxProtoProc (Rust): reads the on-air FC and sets the protocol flags; for our broadcast mgmt
+  beacon only txinfo bit1 (no-ack) is set. Sustained health arms=latched=completed=160, allocfail=0;
+  radiation over 120s CR-RUST 9 (bins 3/3/1/2) vs CR-CTRL 19 (7/3/3/6) on a heavily congested channel
+  (1279 competing beacons) -- both steady across all bins.
+
+## Session 9f summary: Rust now covers the whole TX pipeline; remaining blob leaves
+
+NOW RUST (called directly by faithful_tx / our loop, real scheduler state, radiation + pool-health
+verified, each committed): cr_ppTxPkt, cr_ppProcessTxQ, cr_lmacTxFrame (orchestrators, session 9e);
+cr_ppMapTxQueue (AC mapping), cr_ppGetTxframe (pending-list pop), cr_ppTxProtoProc (proto flags),
+cr_hal_random, cr_rcGetSched, and cr_complete (the completion path -- poll + hal_mac_get_txq_complete
+decode + clr_txq_state + esf_buf_recycle, pool-healthy over 160+ frames). The hal_mac_tx register
+layer (set_plcp0/1, config_edca/timeout, set_ppdu, txq_enable, get_txq_complete/state/pmd,
+clr_txq_state) was already Rust from the de-blob work.
+
+REMAINING BLOB LEAVES (intentional, with reasons):
+- esf_buf_alloc / esf_buf_recycle: the eb POOL allocator is deeply tied to the blob memory pools
+  (g_eb_list_desc, the static/dynamic pools, g_wifi_global_lock). Rewriting it is a large side-quest
+  with no radiation benefit; kept as the allocator boundary.
+- ppProcTxSecFrame: real security-header work (adjusts the MPDU length/seqno by the key/IV size and,
+  for encrypted frames, does the crypto). Not a no-op even for our open beacon; kept.
+- pm_on_data_tx: the PM-wake that makes the MAC active -- the breakthrough ingredient. Deep PM FSM
+  (connection/sleep/coex-slice state); reimplementing risks the MAC-active transition, so kept and
+  validated (the MAC still goes active: block 0x600a4ca8 -> 0, launch latches).
+- pp_coex_tx_request: coex signaling via the OSI coex callbacks; no effect on our interlock (tested
+  earlier) and reimplementing needs the OSI coex layer; kept.
+- lmacSetTxFrame: its PPDU programming already routes through our Rust hal (config_timeout/set_ppdu);
+  only the TSF-based lifetime calc + TXOP-token sequencing is blob. Kept (low incremental value).
+- ppProcessWaitingQueue (hmac drain), lmacAdjustTimestamp (AP-beacon TSF fixup -- DROPPED from our
+  pop since it faults on our raw path), ic_interface_enabled / lmacIsLongFrame (trivial guards; ROM
+  / uncertain runtime DAT addresses, return the expected constant for our beacon) -- kept as guards.
+
+Completion-ISR note: the blob MAC ISR (wDev_ProcessFiq -> lmacProcessTxComplete) still fires on TX-
+done, but because cr_lmacTxFrame leaves our_instances[ac].state!=1 it takes the skip branch for our
+AC (clears the completed bit + logs, no recycle). Our cr_complete owns the decode + recycle; allocfail
+stays 0 over sustained runs with no crash, proving exactly one recycle per frame (no ISR double-free).
+Replacing the shared MAC ISR itself was deemed unnecessary and risky (it also serves RX/beacon/timers).
