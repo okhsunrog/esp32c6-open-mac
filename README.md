@@ -80,18 +80,34 @@ bookkeeping is skipped for the legacy DSSS test beacon (guarded out or delegated
 
 ## Status
 
-| Layer | Status | Notes |
-|-------|--------|-------|
-| `hal_mac_tx.o` (register/arm ops) | **de-blobbed — 19/23 fns real Rust, radiating** | Arm path fully Rust. Only intentional shims: `hal_init_tx_pwr` (low-value PHY power-cal) + HE-only `mac_tx_set_hesig`/`mplen`/`tb` (a legacy beacon never exercises them). |
-| Faithful submit→schedule→arm | **radiates (`CR-RUST`)** | Our Rust drives it on real `our_instances` state; currently still *calls* blob `ppTxPkt` + `ppProcessTxQ`. |
-| `ppTxPkt` (+ `pm_on_data_tx`, enqueue) | **next — reimplement in Rust** | The PM-wake + real-state enqueue are the ingredient the breakthrough identified. |
-| `ppProcessTxQ` / `lmacTxFrame` | after `ppTxPkt` | Schedule + arm, reimplement in Rust on real state. |
-| `lmac.o` per-symbol interposition | abandoned (not viable) | Replacing individual lmac fns in place breaks TX (a functionally-identical copy stalls); the faithful-reproduction route above supersedes it. |
+**The whole legacy-beacon TX pipeline is now Rust**, driving the real scheduler state, with
+`CR-RUST` radiating and the eb pool healthy over sustained runs (health oracle
+`arms=latched=completed`, `allocfail=0`). What is Rust vs. the remaining intentional blob
+leaves:
+
+| Stage | Status |
+|-------|--------|
+| Register/arm ops (`hal_mac_tx.o`: plcp0/1, config_edca/timeout, txq_enable, set_ppdu, get_txq_complete…) | **Rust** (19/23; rest HE-only / low-value) |
+| Submit `cr_ppTxPkt` (proto flags, AC map, enqueue onto real TxRxCxt pending list) | **Rust** |
+| Schedule `cr_ppProcessTxQ` (idle guard, pop, coex, arm) | **Rust** |
+| Arm `cr_lmacTxFrame` (cur_eb, backoff, EDCA, state, txq_enable) | **Rust** |
+| Pending-list pop `cr_ppGetTxframe`, AC map `cr_ppMapTxQueue`, `cr_hal_random`, `cr_rcGetSched` | **Rust** |
+| Completion `cr_complete` (poll arm-clear → decode → clr state → recycle eb; our loop owns it, ISR skips our AC) | **Rust** |
+
+Remaining **intentional** blob leaves (substrate-level, documented in `docs/cleanroom_tx.md`):
+`esf_buf_alloc`/`recycle` (the eb pool allocator — substrate boundary), `pm_on_data_tx`
+(the PM-wake FSM — the breakthrough ingredient, validated), `ppProcTxSecFrame` (security
+header), `pp_coex_tx_request` (coex OSI), `lmacSetTxFrame`'s TSF-lifetime/TXOP sequencing
+(its PPDU programming already routes through our Rust hal), and a few constant-returning
+guards. Per-symbol interposition of individual `lmac.o` functions is **not viable** (a
+functionally-identical copy stalls — a placement/timing coupling); the faithful-reproduction
+route (our code calling our Rust directly on real state) supersedes it and is what works.
 
 Milestones: positive control (blob radiates here) → direct-poke / init-state ruled out →
 interlock localized to `PLCP0_ENABLE[31:30]` → then to the PM TX-block reg `0x600a4ca8` →
-proved it is MAC-active-state gated (not context) → **faithful Rust submit→schedule→arm on
-real state radiates `CR-RUST`**, root-caused to the `pm_on_data_tx` PM-wake in `ppTxPkt`.
+proved it is MAC-active-state gated (not context) → faithful Rust submit→schedule→arm on
+real state radiates `CR-RUST` (root cause: the `pm_on_data_tx` PM-wake in `ppTxPkt`) →
+**full pipeline incl. completion reimplemented in Rust, pool-healthy over sustained runs.**
 
 See `docs/deblob_progress.md` (per-function de-blob log + register map) and
 `docs/cleanroom_tx.md` (the clean-room arm path, the interlock investigation, and the
