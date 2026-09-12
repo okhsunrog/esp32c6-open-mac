@@ -255,3 +255,15 @@ hardware behaviour is now known to follow once the real state + PM-wake are repr
 - The only mechanism proven to latch bits 30/31 remains the blob's full submit->schedule->arm chain;
   a clean-room TX therefore needs to reproduce whatever hardware "tx-requested" state that chain sets
   before the enable write, not just the enable write itself.
+
+## Session 9e: pure-Rust reimplementation of the orchestrators (called by faithful_tx)
+
+Replacing the blob ppTxPkt/ppProcessTxQ/lmacTxFrame that faithful_tx calls with Rust `cr_*`
+reimplementations, operating on the REAL our_instances state. These are called DIRECTLY by our
+driving code (not symbol interposition), so the lmac placement/timing wall does not apply. Leaf
+helpers stay blob for now. Radiation held at every step (binned mon0 vs CR-CTRL control).
+
+- cr_ppProcessTxQ (Rust): lmacIsIdle guard (our_instances[ac].state+0x12==0), ppSearchTxframe pop
+  (blob leaf), pp_coex_tx_request (blob leaf), lmacTxFrame. Legacy-beacon AMPDU/RTS/fragment branches
+  skipped (flags not HE/AMPDU, trc==0). Oracles: block 0x00000000 (active), PLCP0_ENABLE ->
+  0xc067a5c8 (latched), completed=true. Radiation: CR-RUST 260 (bins 98/118/44) vs CR-CTRL 400.

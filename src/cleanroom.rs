@@ -823,6 +823,43 @@ mod cleanroom_tx {
         // ppProcessTxQ(ac): pop from pending + pp_coex_tx_request + lmacTxFrame (arm) on real state.
         fn ppProcessTxQ(ac: i32) -> i32;
         fn esf_buf_recycle(eb: u32);
+        // leaf helpers kept as blob calls (next de-blob frontier):
+        fn ppSearchTxframe(ac: i32) -> u32; // pop eb from our_instances[ac] pending (ROM)
+        fn lmacTxFrame(eb: u32, ac: i32); // shim -> blob_lmacTxFrame (step 2 -> cr_lmacTxFrame)
+        fn ppTxProtoProc(eb: u32);
+        fn ppProcTxSecFrame(eb: u32) -> i32;
+        fn rcGetSched(trc: u32, txinfo: u32);
+        fn ppMapTxQueue(eb: u32) -> i32; // sets AC in txinfo AND runs pm_on_data_tx (PM-wake!)
+        fn ic_interface_enabled(iface: u32) -> i32;
+        fn lmacIsLongFrame(eb: u32) -> i32;
+        fn hal_random() -> u32;
+        fn lmacSetTxFrame(txq: u32, mode: i32); // shim -> blob (builds PPDU via our Rust hal)
+    }
+
+    /// Rust reimplementation of ppProcessTxQ for the legacy DSSS beacon path, operating on the REAL
+    /// our_instances[ac] state. Called DIRECTLY by faithful_tx (NOT symbol interposition), so the
+    /// lmac placement/timing wall does not apply. Leaf helpers (ppSearchTxframe/pp_coex_tx_request)
+    /// stay blob for now.
+    pub fn cr_ppProcessTxQ(ac: i32) -> i32 {
+        unsafe {
+            let base = rd(0x4004_ffe0);
+            let txq = base.wrapping_add((ac as u32).wrapping_mul(0x34));
+            // lmacIsIdle(ac): our_instances[ac].state(+0x12) must be 0 (idle). pm/twt/mesh guards are
+            // permissive for a non-connected beacon-only build -> skipped.
+            if core::ptr::read_volatile((txq + 0x12) as *const u8) != 0 {
+                return -1;
+            }
+            let eb = ppSearchTxframe(ac); // pop from real pending list
+            if eb == 0 {
+                return -2;
+            }
+            // Legacy DSSS beacon: txinfo flags have no HE(bit31)/AMPDU(0x400000)/0x1040000 bit and
+            // trc(eb+0x2c)==0, so the blob's AMPDU-reorder and RTS/fragment branches are NOT taken
+            // (verified against the decompile) -> go straight to the coex request + arm.
+            pp_coex_tx_request(eb);
+            lmacTxFrame(eb, ac); // step 2 swaps this for cr_lmacTxFrame
+            0
+        }
     }
 
     /// our_instances[ac] real lmac txq block (base = *(u32*)0x4004ffe0 + ac*0x34).
@@ -890,7 +927,7 @@ mod cleanroom_tx {
             let blk_before = rd(0x600a_4ca8);
             let plcp0_before = rd(0x600a_4d6c - (ac as u32) * 0x10);
             // Faithful schedule + arm on real state (pop + coex + lmacTxFrame -> our Rust hal).
-            let _ = ppProcessTxQ(ac);
+            let _ = cr_ppProcessTxQ(ac);
             let plcp0_after = rd(0x600a_4d6c - (ac as u32) * 0x10);
             let blk_after = rd(0x600a_4ca8);
             (ac, ret, blk_before, blk_after, plcp0_before, plcp0_after)
