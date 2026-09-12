@@ -836,6 +836,41 @@ mod cleanroom_tx {
         fn lmacSetTxFrame(txq: u32, mode: i32); // shim -> blob (builds PPDU via our Rust hal)
     }
 
+    /// Rust reimplementation of lmacTxFrame (the ARM) for the legacy DSSS beacon, on the REAL
+    /// our_instances[ac] state. lmacSetTxFrame (PPDU build) stays the blob shim, which itself routes
+    /// through our proven Rust hal (config_timeout/set_ppdu). The arm sequencing + real-state
+    /// bookkeeping (cur_eb, random backoff, config_edca, state=ARMED, txq_enable) is Rust here.
+    pub fn cr_lmacTxFrame(eb: u32, ac: i32) {
+        unsafe {
+            let base = rd(0x4004_ffe0);
+            let txq = base.wrapping_add((ac as u32).wrapping_mul(0x34));
+            let txinfo = rd_at(eb + 0x34);
+            let flags = rd(txinfo);
+            // Discard path (txinfo bit16 & !offchan) is not taken by a normal beacon -> omitted.
+            let state = core::ptr::read_volatile((txq + 0x12) as *const u8);
+            if state == 0 || state == 3 {
+                core::ptr::write_volatile(txq as *mut u32, eb); // cur_eb
+                if (flags & 0x2102) == 0x2000 {
+                    wr(txinfo, flags | 0x1000);
+                }
+                // long-frame -> RTS (beacon is short; lmacIsLongFrame returns 0 -> no-op, but faithful)
+                if lmacIsLongFrame(eb) != 0 && (rd(txinfo) & 2) == 0 {
+                    wr(txinfo, (rd(txinfo) & 0xffff_efff) | 0x100);
+                }
+                // state==3 retry-RTS and FTM (0x20000000) branches skipped (not taken by the beacon).
+                lmacSetTxFrame(txq, 0); // PPDU build (blob shim -> our Rust hal)
+            }
+            // EDCA random backoff masked by CW exponent at txq+8, exactly as the blob.
+            let r = hal_random();
+            let cw = core::ptr::read_volatile((txq + 8) as *const u8) as u32;
+            let backoff = (!(0xffff_ffffu32 << (cw & 0x1f)) & r) as u16;
+            core::ptr::write_unaligned((txq + 6) as *mut u16, backoff);
+            super::hal_mac_tx_config_edca(txq as *mut u8);
+            core::ptr::write_volatile((txq + 0x12) as *mut u8, 1); // state = ARMED
+            super::hal_mac_txq_enable(core::ptr::read_volatile((txq + 4) as *const u8) as i32);
+        }
+    }
+
     /// Rust reimplementation of ppProcessTxQ for the legacy DSSS beacon path, operating on the REAL
     /// our_instances[ac] state. Called DIRECTLY by faithful_tx (NOT symbol interposition), so the
     /// lmac placement/timing wall does not apply. Leaf helpers (ppSearchTxframe/pp_coex_tx_request)
@@ -857,7 +892,7 @@ mod cleanroom_tx {
             // trc(eb+0x2c)==0, so the blob's AMPDU-reorder and RTS/fragment branches are NOT taken
             // (verified against the decompile) -> go straight to the coex request + arm.
             pp_coex_tx_request(eb);
-            lmacTxFrame(eb, ac); // step 2 swaps this for cr_lmacTxFrame
+            cr_lmacTxFrame(eb, ac);
             0
         }
     }

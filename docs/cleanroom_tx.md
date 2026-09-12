@@ -267,3 +267,7 @@ helpers stay blob for now. Radiation held at every step (binned mon0 vs CR-CTRL 
   (blob leaf), pp_coex_tx_request (blob leaf), lmacTxFrame. Legacy-beacon AMPDU/RTS/fragment branches
   skipped (flags not HE/AMPDU, trc==0). Oracles: block 0x00000000 (active), PLCP0_ENABLE ->
   0xc067a5c8 (latched), completed=true. Radiation: CR-RUST 260 (bins 98/118/44) vs CR-CTRL 400.
+- cr_lmacTxFrame (Rust): the ARM on real our_instances[ac] state -- cur_eb=eb, lmacSetTxFrame (blob
+  shim -> our Rust hal builds PPDU), hal_random backoff masked by CW (txq+8), hal_mac_tx_config_edca,
+  state(+0x12)=ARMED, hal_mac_txq_enable(slot=txq+4). long-frame/FTM/retry branches skipped (beacon).
+  Radiation: CR-RUST 241 (bins 102/119/20) vs CR-CTRL 349; oracles unchanged.
