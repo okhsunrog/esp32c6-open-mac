@@ -289,3 +289,14 @@ faithful_tx, and CR-RUST radiates. Remaining blob leaf-helpers = the next de-blo
   lmacSetTxFrame (PPDU-build orchestration; its hal leaves are already our Rust), hal_random,
   ic_interface_enabled/lmacIsLongFrame, esf_buf_recycle, and the completion/ISR path
   (wDev_ProcessFiq -> lmacProcessTxComplete -> lmacTxDone).
+
+## Session 9f: remaining leaf helpers + completion path in Rust
+
+Continuing the pure-Rust reimplementation; same rules (called directly by our code, real state,
+radiation + pool-health verified, committed per step). Added a periodic [CR.H] health line
+(arms/latched/completed/allocfail + last PLCP0_ENABLE) as the per-step oracle: latched==arms and
+completed==arms means every faithful frame armed (MAC went active, launch latched 0xc067a5c8) and
+completed with a healthy pool.
+
+- cr_hal_random (Rust xorshift) + cr_rcGetSched (Rust, trc==0 no-op). Health: arms=64 latched=64
+  completed=64 allocfail=0 last_plcp0=0xc067a5c8; radiation CR-RUST 76 vs CR-CTRL 147.

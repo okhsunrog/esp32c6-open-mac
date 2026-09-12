@@ -876,7 +876,7 @@ mod cleanroom_tx {
                 esf_buf_recycle(eb);
                 return 1;
             }
-            rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
+            cr_rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
             let map = ppMapTxQueue(eb); // sets AC in txinfo+0x10 AND runs pm_on_data_tx (PM-wake)
             if map == 0 {
                 let ti = rd_at(eb + 0x34);
@@ -897,6 +897,27 @@ mod cleanroom_tx {
                 esf_buf_recycle(eb); // map fail / deferred-to-hmac not expected for our beacon
                 1
             }
+        }
+    }
+
+    /// Rust hal_random: the blob's is just g_wifi_osi_funcs._rand(); we only use it for the EDCA
+    /// backoff (masked to the CW window), so a self-contained xorshift PRNG is equivalent.
+    pub static CR_RNG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0x1234_5678);
+    pub fn cr_hal_random() -> u32 {
+        let mut x = CR_RNG.load(core::sync::atomic::Ordering::Relaxed);
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        CR_RNG.store(x, core::sync::atomic::Ordering::Relaxed);
+        x
+    }
+
+    /// Rust rcGetSched: for raw frames trc==NULL the blob returns immediately (rate comes from the
+    /// descriptor). Our beacon always has trc==0, so this is a no-op. (trc!=0 rate-control selection
+    /// is not exercised by the legacy beacon and stays unimplemented.)
+    pub fn cr_rcGetSched(trc: u32, _txinfo: u32) {
+        if trc == 0 {
+            return;
         }
     }
 
@@ -925,7 +946,7 @@ mod cleanroom_tx {
                 lmacSetTxFrame(txq, 0); // PPDU build (blob shim -> our Rust hal)
             }
             // EDCA random backoff masked by CW exponent at txq+8, exactly as the blob.
-            let r = hal_random();
+            let r = cr_hal_random();
             let cw = core::ptr::read_volatile((txq + 8) as *const u8) as u32;
             let backoff = (!(0xffff_ffffu32 << (cw & 0x1f)) & r) as u16;
             core::ptr::write_unaligned((txq + 6) as *mut u16, backoff);
@@ -1373,23 +1394,26 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     println!("[CR.F] faithful reproduction: ppTxPkt(eb,0) + ppProcessTxQ(ac) on real state");
     let mut round: u32 = 0;
     let mut seq: u16 = 0;
+    let (mut n_arm, mut n_latch, mut n_done, mut n_allocfail) = (0u32, 0u32, 0u32, 0u32);
+    let mut last_pa: u32 = 0;
     loop {
         // ----- FAITHFUL PHASE: one full submit+schedule+arm per iteration (NO send_raw_frame) -----
-        for i in 0..4u32 {
+        for _ in 0..4u32 {
             let feb = cleanroom_tx::alloc_eb(&rust_buf[..rust_len]);
             if feb == 0 {
-                println!("[CR.F] esf_buf_alloc returned 0 (pool empty)");
+                n_allocfail += 1;
             } else {
-                let (ac, ret, bb, ba, pb, pa) = cleanroom_tx::faithful_tx(feb, seq);
+                let (ac, _ret, _bb, _ba, _pb, pa) = cleanroom_tx::faithful_tx(feb, seq);
                 seq = seq.wrapping_add(1);
-                if round < 3 {
-                    println!("[CR.F] r{round}#{i} eb={feb:#010x} ac={ac} txpkt_ret={ret} block {bb:#010x}->{ba:#010x} plcp0 {pb:#010x}->{pa:#010x}");
+                n_arm += 1;
+                if pa & 0xc000_0000 != 0 {
+                    n_latch += 1;
                 }
+                last_pa = pa;
                 delay.delay(Duration::from_millis(40)); // let it TX+complete if it went active
                 let cleaned = cleanroom_tx::faithful_cleanup(ac);
-                if round < 3 {
-                    let ba2 = cleanroom_tx::raw_txblock();
-                    println!("[CR.F] r{round}#{i} post: completed={} block_now={ba2:#010x} (cleaned_wedge={cleaned})", !cleaned);
+                if !cleaned {
+                    n_done += 1; // MAC ISR serviced the completion (our_instances state back to 0)
                 }
             }
             delay.delay(Duration::from_millis(60));
@@ -1401,6 +1425,10 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
             delay.delay(Duration::from_millis(100));
         }
         round += 1;
+        // Periodic health + oracle summary (out-of-band; catchable in any monitor window).
+        if round % 8 == 0 {
+            println!("[CR.H] rounds={round} arms={n_arm} latched={n_latch} completed={n_done} allocfail={n_allocfail} last_plcp0={last_pa:#010x}");
+        }
         if round % 5 == 0 {
             println!("[CR.F] completed {round} faithful+control rounds");
         }
