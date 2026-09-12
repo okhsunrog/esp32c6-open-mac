@@ -300,3 +300,21 @@ completed with a healthy pool.
 
 - cr_hal_random (Rust xorshift) + cr_rcGetSched (Rust, trc==0 no-op). Health: arms=64 latched=64
   completed=64 allocfail=0 last_plcp0=0xc067a5c8; radiation CR-RUST 76 vs CR-CTRL 147.
+
+### PART B: completion path in Rust (polling in our loop, pool-healthy)
+cr_lmacTxFrame no longer sets our_instances[ac].state(+0x12)=1. With state!=1 the blob MAC ISR
+(lmacProcessTxComplete) takes its _L559 branch for our AC -- it clears the completed-state bit and
+logs, but does NOT recycle our eb -- so OUR code owns the completion. cr_complete (called from
+faithful_tx's loop) is the lmacProcessTxComplete+lmacTxDone essentials in Rust:
+  - poll PLCP0_ENABLE[ac] until the arm bits (0xc0000000) clear (the MAC auto-clears them when the
+    TX finishes) -- bounded, out-of-band;
+  - hal_mac_get_txq_complete(our_instances[ac], ac, res6, aux8) [our Rust] -> status nibble res6[1]>>4
+    (0 = success);
+  - hal_mac_clr_txq_state(2, ac) [our Rust];
+  - esf_buf_recycle(eb) -- the lmacTxDone-equivalent recycle (ppProcTxCallback/rcUpdateTxDone not
+    needed for a raw trc==0 no-callback beacon). The esf_buf POOL allocator stays blob (intentional).
+CRITICAL: do NOT hal_mac_txq_disable in completion -- the MAC already clears the arm bits, and
+forcing a disable desyncs slot 0 (shared with the control beacon) and kills BOTH CR-RUST and CR-CTRL
+(observed: CR-RUST 0 / CR-CTRL 5). Without the disable: pool healthy over 96+ frames (arms=latched=
+completed, allocfail=0), radiation CR-RUST 111 vs CR-CTRL 194. allocfail=0 with no crash proves
+exactly one recycle per frame (ours) -- the blob ISR is not double-recycling.

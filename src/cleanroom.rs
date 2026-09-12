@@ -900,6 +900,43 @@ mod cleanroom_tx {
         }
     }
 
+    /// Rust completion (PART B): the lmacProcessTxComplete + lmacTxDone essentials, driven from our
+    /// own loop (NOT the blob ISR / NOT symbol interposition). The MAC clears PLCP0_ENABLE's arm bits
+    /// when the TX finishes; we poll that (bounded, out-of-band), read the completion result via our
+    /// Rust hal_mac_get_txq_complete, clear the txq_state bit, disarm the slot, and recycle the eb
+    /// (esf_buf_recycle -- the pool allocator stays blob). Returns (completed, status_nibble).
+    pub fn cr_complete(ac: i32, eb: u32) -> (bool, u8) {
+        unsafe {
+            let a = 0x600a_4d6c - (ac as u32) * 0x10;
+            let mut done = false;
+            for _ in 0..4000 {
+                if (rd(a) & 0xc000_0000) == 0 {
+                    done = true;
+                    break;
+                }
+            }
+            // lmacProcessTxComplete-equivalent read of the completion result for our AC.
+            let txq = rd(0x4004_ffe0).wrapping_add((ac as u32).wrapping_mul(0x34));
+            let mut res6 = [0u8; 8];
+            let mut aux8 = [0u32; 2];
+            super::hal_mac_get_txq_complete(
+                txq as *mut i32,
+                ac,
+                res6.as_mut_ptr(),
+                aux8.as_mut_ptr(),
+            );
+            let status = (res6[1] >> 4) & 0xf; // (pmd>>12)&0xf : 0=success
+            super::hal_mac_clr_txq_state(2, ac as u32); // clear completed-state bit (as the blob does)
+            // NOTE: do NOT hal_mac_txq_disable here -- the MAC auto-clears the arm bits on
+            // completion; forcing a disable leaves slot 0 in a state that breaks the shared control
+            // beacon (AC 0). The blob completion never disables the slot.
+            // lmacTxDone-equivalent recycle: return the eb to the pool. (ppProcTxCallback /
+            // rcUpdateTxDone bookkeeping is not needed for our raw, trc==0, no-cb beacon.)
+            esf_buf_recycle(eb);
+            (done, status)
+        }
+    }
+
     /// Rust hal_random: the blob's is just g_wifi_osi_funcs._rand(); we only use it for the EDCA
     /// backoff (masked to the CW window), so a self-contained xorshift PRNG is equivalent.
     pub static CR_RNG: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0x1234_5678);
@@ -951,7 +988,9 @@ mod cleanroom_tx {
             let backoff = (!(0xffff_ffffu32 << (cw & 0x1f)) & r) as u16;
             core::ptr::write_unaligned((txq + 6) as *mut u16, backoff);
             super::hal_mac_tx_config_edca(txq as *mut u8);
-            core::ptr::write_volatile((txq + 0x12) as *mut u8, 1); // state = ARMED
+            // NOTE: we deliberately do NOT set our_instances[ac].state(+0x12)=1 here. With state!=1
+            // the blob MAC ISR's lmacProcessTxComplete skips our AC (only clears the completed bit),
+            // so it does NOT recycle our eb -- our Rust cr_complete() owns the completion + recycle.
             super::hal_mac_txq_enable(core::ptr::read_volatile((txq + 4) as *const u8) as i32);
         }
     }
@@ -1410,10 +1449,11 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
                     n_latch += 1;
                 }
                 last_pa = pa;
-                delay.delay(Duration::from_millis(40)); // let it TX+complete if it went active
-                let cleaned = cleanroom_tx::faithful_cleanup(ac);
-                if !cleaned {
-                    n_done += 1; // MAC ISR serviced the completion (our_instances state back to 0)
+                delay.delay(Duration::from_millis(40)); // let the frame win the medium + TX + complete
+                // PART B: Rust-driven completion + recycle (not the blob ISR).
+                let (completed, _status) = cleanroom_tx::cr_complete(ac, feb);
+                if completed {
+                    n_done += 1;
                 }
             }
             delay.delay(Duration::from_millis(60));
