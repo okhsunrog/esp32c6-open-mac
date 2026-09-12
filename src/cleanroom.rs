@@ -836,6 +836,70 @@ mod cleanroom_tx {
         fn lmacSetTxFrame(txq: u32, mode: i32); // shim -> blob (builds PPDU via our Rust hal)
     }
 
+    /// Rust reimplementation of ppTxPkt (submit) for the legacy beacon, kick=0. Keeps the blob leaf
+    /// helpers that carry the breakthrough ingredient: ppMapTxQueue runs pm_on_data_tx (the PM-wake
+    /// that makes the MAC active) and assigns the AC. The eb/pending enqueue onto the REAL
+    /// our_instances[ac] list (threaded via eb+0x30) is replicated in Rust. Returns the blob's
+    /// ppTxPkt convention: 0 = enqueued, 1 = discarded. The cat-sanity-check + g_lmac_cnt stats and
+    /// the kick/pp_post path are omitted (diagnostic / kick==0 only).
+    pub static CR_TXPKT_DBG: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+    /// TEMP diagnostic: call the blob ppTxPkt and observe our_instances[0] head/tail before/after to
+    /// learn where the blob's enqueue actually lands.
+    pub fn cr_ppTxPkt_probe(eb: u32, kick: i32) -> i32 {
+        unsafe {
+            let base = rd(0x4004_ffe0);
+            let h0 = rd(base + 0x20);
+            let t0 = rd(base + 0x24);
+            let r = ppTxPkt(eb, kick);
+            let h1 = rd(base + 0x20);
+            let t1 = rd(base + 0x24);
+            let ti = rd_at(eb + 0x34);
+            let ac = (rd(ti + 0x10) >> 0x14) & 0xf;
+            if !CR_TXPKT_DBG.swap(true, core::sync::atomic::Ordering::Relaxed) {
+                super::println!("[CR.txpkt] blob ppTxPkt ret={r} ac={ac} eb={eb:#010x} | our_inst[0] head {h0:#010x}->{h1:#010x} tail {t0:#010x}->{t1:#010x}");
+            }
+            r
+        }
+    }
+
+    pub fn cr_ppTxPkt(eb: u32, _kick: i32) -> i32 {
+        unsafe {
+            let txinfo = rd_at(eb + 0x34);
+            let iface = (rd(txinfo + 0x10) >> 0x13) & 1;
+            if ic_interface_enabled(iface) == 0 {
+                esf_buf_recycle(eb);
+                return 1;
+            }
+            ppTxProtoProc(eb);
+            if ppProcTxSecFrame(eb) == 1 {
+                esf_buf_recycle(eb);
+                return 1;
+            }
+            rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
+            let map = ppMapTxQueue(eb); // sets AC in txinfo+0x10 AND runs pm_on_data_tx (PM-wake)
+            if map == 0 {
+                let ti = rd_at(eb + 0x34);
+                wr(ti + 0x18, hal_now()); // tsf submit stamp (blob: _WDEV_TSF0_TIMER_LO)
+                // Pending-list base is pTxRx (TxRxCxt), *(0x4087ff80) -- per-AC lists at +ac*0x34,
+                // head +0x20 / tail +0x24 (threaded via eb+0x30). Verified from the linked ppTxPkt
+                // disasm (`lui 0x40880; lw -0x80` = *(0x4087ff80)). NOT our_instances (0x4087f840).
+                let pend = rd(0x4087_ff80);
+                let ac = (rd(ti + 0x10) >> 0x14) & 0xf;
+                let q = pend.wrapping_add(ac.wrapping_mul(0x34));
+                wr(eb + 0x30, 0); // next-link = NULL
+                let tail = rd(q + 0x24); // pending tail = pointer to the slot to fill
+                wr(tail, eb); // *(tail) = eb
+                wr(q + 0x24, eb + 0x30); // tail = &eb.next
+                // kick==0: the blob would pp_post(ac) here if idle; we drive the schedule ourselves.
+                0
+            } else {
+                esf_buf_recycle(eb); // map fail / deferred-to-hmac not expected for our beacon
+                1
+            }
+        }
+    }
+
     /// Rust reimplementation of lmacTxFrame (the ARM) for the legacy DSSS beacon, on the REAL
     /// our_instances[ac] state. lmacSetTxFrame (PPDU build) stays the blob shim, which itself routes
     /// through our proven Rust hal (config_timeout/set_ppdu). The arm sequencing + real-state
@@ -956,7 +1020,7 @@ mod cleanroom_tx {
             wr(eb + 0x2c, 0); // trc = NULL (raw frame -> rcGetSched no-op)
 
             // Faithful submit onto REAL our_instances pending (no kick).
-            let ret = ppTxPkt(eb, 0);
+            let ret = cr_ppTxPkt(eb, 0);
             // AC that ppMapTxQueue assigned into txinfo+0x10 bits 20-23.
             let ac = ((rd(txinfo + 0x10) >> 0x14) & 0xf) as i32;
             let blk_before = rd(0x600a_4ca8);

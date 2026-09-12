@@ -271,3 +271,21 @@ helpers stay blob for now. Radiation held at every step (binned mon0 vs CR-CTRL 
   shim -> our Rust hal builds PPDU), hal_random backoff masked by CW (txq+8), hal_mac_tx_config_edca,
   state(+0x12)=ARMED, hal_mac_txq_enable(slot=txq+4). long-frame/FTM/retry branches skipped (beacon).
   Radiation: CR-RUST 241 (bins 102/119/20) vs CR-CTRL 349; oracles unchanged.
+- cr_ppTxPkt (Rust): the submit -- ic_interface_enabled guard, ppTxProtoProc, ppProcTxSecFrame,
+  rcGetSched (all blob leaves), ppMapTxQueue (blob leaf, runs pm_on_data_tx = the PM-wake), then the
+  Rust ENQUEUE onto the real per-AC pending list. KEY FIX: the pending-list base is pTxRx/TxRxCxt
+  = *(0x4087ff80), NOT our_instances (0x4087f840) -- verified from the linked ppTxPkt disasm
+  (`lui 0x40880; lw -0x80`). Enqueue at TxRxCxt+ac*0x34: *( *(q+0x24) ) = eb; *(q+0x24) = eb+0x30
+  (tail append, threaded via eb+0x30). (our_instances holds the EDCA state that cr_lmacTxFrame uses;
+  the pending lists are a separate per-AC array in TxRxCxt -- the session-8 map conflated the two.)
+  The cat-sanity-check + g_lmac_cnt stats and the kick/pp_post path are omitted (diagnostic/kick==0).
+  Radiation: CR-RUST 9 vs CR-CTRL 11 (parity; low absolute counts = a congested channel, 820
+  competing beacons, hitting both equally), no panic, oracles unchanged.
+
+All three orchestrators (ppTxPkt, ppProcessTxQ, lmacTxFrame) are now Rust, called directly by
+faithful_tx, and CR-RUST radiates. Remaining blob leaf-helpers = the next de-blob frontier:
+  esf_buf_alloc, ppTxProtoProc, ppProcTxSecFrame, rcGetSched, ppMapTxQueue (+ its pm_on_data_tx),
+  pp_coex_tx_request, ppSearchTxframe/ppGetTxframe (the pending-list pop + queue selection),
+  lmacSetTxFrame (PPDU-build orchestration; its hal leaves are already our Rust), hal_random,
+  ic_interface_enabled/lmacIsLongFrame, esf_buf_recycle, and the completion/ISR path
+  (wDev_ProcessFiq -> lmacProcessTxComplete -> lmacTxDone).
