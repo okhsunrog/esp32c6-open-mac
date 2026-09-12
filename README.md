@@ -6,9 +6,29 @@ reimplementations **one function at a time**, verifying on real hardware that TX
 radiates after every step.
 
 This repo is the lab notebook: the method, the reverse-engineering digests, the tooling,
-and the current de-blob source of truth (`src/deblob.rs`). It is deliberately separate
-from the clean pure-Rust HAL work (the `esp-wifi-hal` / `FoA` forks) because the approach
-here **runs the blob pp/lmac scheduler** and cuts it down from the working side.
+and the current de-blob source of truth (`src/deblob.rs` / `src/cleanroom.rs`). It is
+deliberately separate from the clean pure-Rust HAL work (the `esp-wifi-hal` / `FoA` forks)
+because the approach here **runs the blob pp/lmac scheduler** and cuts it down from the
+working side.
+
+## ✅ Breakthrough: our own Rust code radiates a frame on the C6
+
+A Rust-driven transmit path (`src/cleanroom.rs`, `faithful_tx`) puts **our own beacon on
+the air** on the C6 — verified on an external monitor (SSID/MAC `CR-RUST`, 1 Mbit DSSS),
+steady and reproducible alongside a blob-beacon control (`CR-CTRL`). The arm fires through
+our proven Rust `hal_mac_tx` layer on the **real** `our_instances` scheduler state.
+
+The barrier that stalled every earlier attempt turned out **not** to be fundamental. The
+MAC's transmit-enable interlock (the `PLCP0_ENABLE[31:30]` launch bits, gated by the PM
+TX-block register `0x600a4ca8`) only opens once the MAC enters its active/txing state — and
+that transition is triggered by **`pm_on_data_tx`, called from `ppMapTxQueue` inside
+`ppTxPkt`** on the submit path, *not* by the arm. Every earlier shortcut (direct slot poke,
+per-symbol interposition, the fake-context clean-room arm) skipped `ppTxPkt`, so the PM wake
+never ran and the launch bits could never latch. Faithfully running the real
+`ppTxPkt → ppProcessTxQ → lmacTxFrame` sequence on real scheduler state restores the PM wake
+and the arm then keys the PHY. **Pure-Rust C6 TX is an engineering reverse-and-port, not a
+hardware wall.** (The current `faithful_tx` still calls the blob `ppTxPkt`/`ppProcessTxQ`;
+the remaining work is reimplementing those in Rust — see Status.)
 
 ## The core finding (why this approach)
 
@@ -27,10 +47,13 @@ exhaustively (7 register-hunt passes + two decisive hardware experiments):
   scheduler** brings it ready→armed→transmit transiently, per frame. That live sequence is
   what keys the PHY — not any static register state.
 
-Conclusion: the only path to open C6 TX is to **run / reproduce pp/lmac**. Rather than a
-risky clean-room rewrite, we cut the blob down from the working side: keep the blob
-scheduler running (it radiates) and replace its functions with Rust leaf-up, holding a
-"still radiates" invariant at every step.
+Conclusion (confirmed by the breakthrough above): open C6 TX requires faithfully
+**reproducing the pp/lmac submit→schedule flow on real scheduler state** — specifically the
+`pm_on_data_tx` PM-wake on the submit path plus the real `eb`/pending/DMA linkage — after
+which the arm (our Rust `hal_mac_tx`) keys the PHY. We pursued this from two directions:
+(a) cut the blob down from the working side, replacing its functions with Rust leaf-up under
+a "still radiates" invariant; and (b) drive a faithful Rust submit→schedule→arm ourselves,
+which is what achieved the breakthrough.
 
 Structural fact that makes this tractable: `libpp.a` keeps symbols and splits cleanly into
 objects — `pp.o` (ppTxPkt/ppProcessTxQ/ppTask/pp_post), `lmac.o` (lmacTxFrame/…),
@@ -57,18 +80,22 @@ bookkeeping is skipped for the legacy DSSS test beacon (guarded out or delegated
 
 ## Status
 
-| Object          | External surface | Notes |
-|-----------------|------------------|-------|
-| **`hal_mac_tx.o`** | **de-blobbed (19/23 fns Rust)** | Only intentional shims left: `hal_init_tx_pwr` (low-value PHY power-cal wrapper) + HE-only internals `mac_tx_set_hesig`/`mplen`/`tb` (never exercised by a legacy beacon). |
-| `lmac.o`        | Phase 1 done (46 fns interposed, radiates 287/30s); Phase 2 next | The lmac layer (lmacTxFrame, lmacProcessTxComplete, retry/timeout/collision, …). |
-| `pp.o`          | later            | The pp scheduler (ppTxPkt/ppProcessTxQ/ppTask/pp_post). |
+| Layer | Status | Notes |
+|-------|--------|-------|
+| `hal_mac_tx.o` (register/arm ops) | **de-blobbed — 19/23 fns real Rust, radiating** | Arm path fully Rust. Only intentional shims: `hal_init_tx_pwr` (low-value PHY power-cal) + HE-only `mac_tx_set_hesig`/`mplen`/`tb` (a legacy beacon never exercises them). |
+| Faithful submit→schedule→arm | **radiates (`CR-RUST`)** | Our Rust drives it on real `our_instances` state; currently still *calls* blob `ppTxPkt` + `ppProcessTxQ`. |
+| `ppTxPkt` (+ `pm_on_data_tx`, enqueue) | **next — reimplement in Rust** | The PM-wake + real-state enqueue are the ingredient the breakthrough identified. |
+| `ppProcessTxQ` / `lmacTxFrame` | after `ppTxPkt` | Schedule + arm, reimplement in Rust on real state. |
+| `lmac.o` per-symbol interposition | abandoned (not viable) | Replacing individual lmac fns in place breaks TX (a functionally-identical copy stalls); the faithful-reproduction route above supersedes it. |
 
-Milestones reached: positive control (blob radiates on this C6) → both decisive
-experiments (scheduler required, not init-state) → Phase-1 interposition proven →
-Phase-2 pattern proven (arm/disarm in Rust) → `hal_mac_tx.o` external surface fully Rust,
-including the tricky `mac_tx_set_plcp0` and `hal_mac_get_txq_complete`.
+Milestones: positive control (blob radiates here) → direct-poke / init-state ruled out →
+interlock localized to `PLCP0_ENABLE[31:30]` → then to the PM TX-block reg `0x600a4ca8` →
+proved it is MAC-active-state gated (not context) → **faithful Rust submit→schedule→arm on
+real state radiates `CR-RUST`**, root-caused to the `pm_on_data_tx` PM-wake in `ppTxPkt`.
 
-See `docs/deblob_progress.md` for the per-function log and the verified register map.
+See `docs/deblob_progress.md` (per-function de-blob log + register map) and
+`docs/cleanroom_tx.md` (the clean-room arm path, the interlock investigation, and the
+faithful-reproduction breakthrough, sessions 9a–9d).
 
 ## Hard-won lessons (read before touching the TX path)
 
