@@ -318,3 +318,10 @@ forcing a disable desyncs slot 0 (shared with the control beacon) and kills BOTH
 (observed: CR-RUST 0 / CR-CTRL 5). Without the disable: pool healthy over 96+ frames (arms=latched=
 completed, allocfail=0), radiation CR-RUST 111 vs CR-CTRL 194. allocfail=0 with no crash proves
 exactly one recycle per frame (ours) -- the blob ISR is not double-recycling.
+- cr_ppGetTxframe (Rust pending-list pop): dequeue the head eb from TxRxCxt[ac] (*0x4087ff80 +
+  ac*0x34; head +0x20, tail +0x24, next eb+0x30; empty -> tail=&head) with the blob guard
+  (+0x29==0 && +0x34==0). Replaces blob ppSearchTxframe in cr_ppProcessTxQ (our single-AC submit
+  doesn't need the blob's multi-queue selection/bitmap). DROPPED the blob's lmacAdjustTimestamp()
+  call -- it derefs an AP/beacon context that is null in our raw path (Load access fault at
+  0x4080519c); our beacon uses timestamp=0 so the fixup is unnecessary. Health: 96/96/96 allocfail=0;
+  radiation CR-RUST 4 == CR-CTRL 4 (parity; short mid-flash window + congested channel).

@@ -825,6 +825,7 @@ mod cleanroom_tx {
         fn esf_buf_recycle(eb: u32);
         // leaf helpers kept as blob calls (next de-blob frontier):
         fn ppSearchTxframe(ac: i32) -> u32; // pop eb from our_instances[ac] pending (ROM)
+        fn lmacAdjustTimestamp(); // beacon timestamp fixup on dequeue (blob shim leaf)
         fn lmacTxFrame(eb: u32, ac: i32); // shim -> blob_lmacTxFrame (step 2 -> cr_lmacTxFrame)
         fn ppTxProtoProc(eb: u32);
         fn ppProcTxSecFrame(eb: u32) -> i32;
@@ -897,6 +898,34 @@ mod cleanroom_tx {
                 esf_buf_recycle(eb); // map fail / deferred-to-hmac not expected for our beacon
                 1
             }
+        }
+    }
+
+    /// Rust ppGetTxframe: pop the head eb from the per-AC pending list in TxRxCxt (*0x4087ff80),
+    /// faithful to the blob (head +0x20, tail +0x24, threaded via eb+0x30; empty -> tail=&head),
+    /// with the blob's guard (+0x29==0 && +0x34==0) and the lmacAdjustTimestamp fixup. Our single
+    /// beacon is enqueued to this AC, so this directly dequeues it (the blob's multi-queue
+    /// ppSearchTxframe selection/bitmap is unnecessary for our controlled single-AC submit).
+    pub fn cr_ppGetTxframe(ac: i32) -> u32 {
+        unsafe {
+            let base = rd(0x4087_ff80);
+            let q = base.wrapping_add((ac as u32).wrapping_mul(0x34));
+            if core::ptr::read_volatile((q + 0x29) as *const u8) == 0 && rd(q + 0x34) == 0 {
+                let head = rd(q + 0x20);
+                if head != 0 {
+                    let next = rd(head + 0x30);
+                    wr(q + 0x20, next);
+                    if next == 0 {
+                        wr(q + 0x24, q + 0x20); // empty -> tail = &head
+                    }
+                    wr(head + 0x30, 0);
+                    // (blob calls lmacAdjustTimestamp() here -- a beacon-timestamp fixup that derefs
+                    // an AP/beacon context null in our raw path; our beacon uses timestamp=0 so it is
+                    // unnecessary and omitted.)
+                    return head;
+                }
+            }
+            0
         }
     }
 
@@ -1008,7 +1037,7 @@ mod cleanroom_tx {
             if core::ptr::read_volatile((txq + 0x12) as *const u8) != 0 {
                 return -1;
             }
-            let eb = ppSearchTxframe(ac); // pop from real pending list
+            let eb = cr_ppGetTxframe(ac); // Rust pop from the real TxRxCxt pending list
             if eb == 0 {
                 return -2;
             }
