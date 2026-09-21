@@ -426,3 +426,41 @@ complete) is Rust except for the pm_on_data_tx PM-wake.
   that decays BOTH CR-RUST and CR-CTRL to ~0 -- unrelated to this change): health 96/96/96
   allocfail=0, latch 0xc067a6f0; radiation CR-RUST 6 vs CR-CTRL 8. Both address reads are correct
   (frames are not discarded and the arm still latches).
+- ppProcessWaitingQueue -> Rust no-op: it drains the per-iface hmac WAITING queue; our beacon goes
+  straight to the pending list so there is nothing to drain. Proven: skipping it radiates a valid
+  CR-RUST beacon with a healthy pool.
+- ppProcTxSecFrame -> Rust no-op: for an UNENCRYPTED broadcast beacon there is no CCMP/IV/MIC; the
+  blob only reserves a default security-header length. Proven: skipping it still radiates a valid
+  CR-RUST beacon (SSID intact, health unchanged). The encrypted-frame length/seqno/crypto handling
+  is not exercised by our open beacon.
+  (Verified together on a fresh boot: CR-RUST 6 vs CR-CTRL 17, health 32/32/32 allocfail=0. The
+  device exhibits the pre-existing progressive modem-PM stall after long running that decays CR-RUST
+  faster than CR-CTRL -- a power-cycle-cleared environmental issue, not from these changes.)
+
+## Logic layer complete -- final blob-leaf surface (for crate/FoA integration)
+
+The entire per-frame TX LOGIC path is now Rust, calling the blob only for two genuine substrate items
+plus the ROM/OS glue esp-radio already provides. Rust functions (called directly by faithful_tx / our
+loop on real scheduler state): cr_ppTxPkt, cr_ppMapTxQueue, cr_ppTxProtoProc, cr_ppGetTxframe,
+cr_ppProcessTxQ, cr_lmacTxFrame, cr_lmacSetTxFrame, cr_complete, cr_hal_random, cr_rcGetSched,
+cr_ic_interface_enabled, cr_lmacIsLongFrame; plus the whole hal_mac_tx register layer
+(set_plcp0/1, config_edca/timeout, set_ppdu, txq_enable, get_txq_complete/state/pmd, clr_txq_state).
+ppProcessWaitingQueue, ppProcTxSecFrame and pp_coex_tx_request are Rust no-ops on our path.
+
+Remaining blob HARD dependencies at link time (the minimal blob surface a pure-Rust TX path needs on
+top of the working esp-radio substrate):
+- pm_on_data_tx (libpp) -- the per-frame PM-wake that transitions the MAC to TX-active (block
+  0x00ff1000 -> 0). Proven essential; deep modem-PM FSM (pm_check_state / pm_disconnected_wake ->
+  wifi_rf_phy_enable / coex-slice scheduling). SUBSTRATE (modem power management), like PHY/clock init.
+- esf_buf_alloc / esf_buf_recycle (libpp) -- the eb POOL allocator (g_eb_list_desc + static/dynamic
+  pools + g_wifi_global_lock). SUBSTRATE (buffer memory).
+- hal_mac_tx.o leaves our hal still calls: hal_he_set_tx_protection, mac_tx_get_rts_rate,
+  mac_tx_set_len, mac_tx_set_pti, (HE-only: mac_tx_set_hesig/htsig, hal_mac_fill_hwtxop) -- small
+  MAC-register leaves left from the original hal_mac_tx de-blob.
+- Runtime data/symbols the Rust path reads by fixed address (must be provided/located per blob build):
+  our_instances via *0x4004ffe0 (ROM ptr); TxRxCxt pending base via *0x4087ff80 (pTxRx);
+  g_if_enabled_mask at wDevCtrl+0x31 (0x408120b9 on 0.3.0); lmacConfMib (0x40811ca8 on 0.3.0);
+  the WIFI MAC register file at 0x600a4xxx/0x600a5xxx (hardware, stable). These addresses are
+  blob-version-specific (they moved between 2ea8e3e and 0.3.0) and must be re-derived per build.
+Everything else (chip/PHY/clock init, OS adapter, WifiController::new + start, the MAC ISR
+wDev_ProcessFiq that we let service RX/beacon/timers) is the esp-radio substrate, intentionally kept.

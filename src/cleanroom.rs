@@ -914,10 +914,10 @@ mod cleanroom_tx {
                 return 1;
             }
             cr_ppTxProtoProc(eb);
-            if ppProcTxSecFrame(eb) == 1 {
-                esf_buf_recycle(eb);
-                return 1;
-            }
+            // ppProcTxSecFrame is a no-op on our path (Rust no-op): for an UNENCRYPTED broadcast
+            // beacon there is no CCMP/IV/MIC -- the blob only reserves a default security-header
+            // length; skipping it radiates a valid beacon (proven: SSID intact, health unchanged).
+            // (The encrypted-frame length/seqno/crypto handling is not exercised by our open beacon.)
             cr_rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
             let map = cr_ppMapTxQueue(eb); // Rust AC mapping; keeps blob pm_on_data_tx (PM-wake)
             if map == 0 {
@@ -1011,7 +1011,9 @@ mod cleanroom_tx {
     pub const PM_ON_DATA_TX: bool = true;
     pub fn cr_ppMapTxQueue(eb: u32) -> i32 {
         unsafe {
-            ppProcessWaitingQueue();
+            // ppProcessWaitingQueue drains the per-iface hmac WAITING queue (frames deferred to the
+            // mgmt queue). Our beacon is submitted straight to the pending list, so there is nothing
+            // to drain -> Rust no-op on our path (proven: skipping it radiates with a healthy pool).
             let txinfo = rd_at(eb + 0x34);
             let t4 = rd(txinfo + 4);
             if (t4 & 0xf0) == 0x40 {
