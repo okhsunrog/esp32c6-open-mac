@@ -93,13 +93,24 @@ leaves:
 | Arm `cr_lmacTxFrame` (cur_eb, backoff, EDCA, state, txq_enable) | **Rust** |
 | Pending-list pop `cr_ppGetTxframe`, AC map `cr_ppMapTxQueue`, `cr_hal_random`, `cr_rcGetSched` | **Rust** |
 | Completion `cr_complete` (poll arm-clear → decode → clr state → recycle eb; our loop owns it, ISR skips our AC) | **Rust** |
+| PPDU-build seq `cr_lmacSetTxFrame`, coex `cr_pp_coex_tx_request`, guards `cr_ic_interface_enabled`/`cr_lmacIsLongFrame`, `ppProcessWaitingQueue` | **Rust** |
 
-Remaining **intentional** blob leaves (substrate-level, documented in `docs/cleanroom_tx.md`):
-`esf_buf_alloc`/`recycle` (the eb pool allocator — substrate boundary), `pm_on_data_tx`
-(the PM-wake FSM — the breakthrough ingredient, validated), `ppProcTxSecFrame` (security
-header), `pp_coex_tx_request` (coex OSI), `lmacSetTxFrame`'s TSF-lifetime/TXOP sequencing
-(its PPDU programming already routes through our Rust hal), and a few constant-returning
-guards. Per-symbol interposition of individual `lmac.o` functions is **not viable** (a
+**The entire per-frame TX logic path is now Rust.** The remaining blob is a small, well-characterised surface — substrate (things we lean on esp-radio for anyway) plus a couple of functions that do real, required work:
+
+- `pm_on_data_tx` — **substrate, required.** The per-frame PM-wake: a deep modem-PM FSM
+  (`pm_check_state` → `pm_disconnected_wake` → `wifi_rf_phy_enable` / `pm_set_state`) whose
+  clearing of the hardware PM-block interlock is a *consequence* of the modem waking, not a
+  reproducible register write. Removing it → the launch bits never latch, zero RF. On par
+  with PHY/clock init and the OS adapter we keep.
+- `ppProcTxSecFrame` — **required.** Its security-header **length** adjustment (`+4` on
+  `eb+0x16` and the DMA-descriptor length even for our no-key frame) is needed for reliable
+  emission; without it frames latch but the BB keys up only marginally. Real work with a
+  subtle descriptor/key-type layout.
+- `esf_buf_alloc`/`recycle` — the eb pool allocator (substrate boundary).
+- A few `hal_mac_tx.o` register helpers our Rust hal still calls: `hal_he_set_tx_protection`,
+  `mac_tx_get_rts_rate`, `mac_tx_set_len`, `mac_tx_set_pti` (+ HE-only).
+
+Per-symbol interposition of individual `lmac.o` functions is **not viable** (a
 functionally-identical copy stalls — a placement/timing coupling); the faithful-reproduction
 route (our code calling our Rust directly on real state) supersedes it and is what works.
 
@@ -111,7 +122,47 @@ real state radiates `CR-RUST` (root cause: the `pm_on_data_tx` PM-wake in `ppTxP
 
 See `docs/deblob_progress.md` (per-function de-blob log + register map) and
 `docs/cleanroom_tx.md` (the clean-room arm path, the interlock investigation, and the
-faithful-reproduction breakthrough, sessions 9a–9d).
+faithful-reproduction breakthrough).
+
+## Integration: how this lands in the open-MAC project
+
+This repo is the research vehicle. What it delivers back to the pure-Rust stack
+(`esp-wifi-hal` / FoA), and the honest limits:
+
+**The settled question.** C6 TX was an open question — `esp32-open-mac` had not done it, and
+the direct-register method that opens TX on the Wi-Fi-4 MACs (ESP32/S2/S3/C3) is
+*architecturally impossible* on the C6 Wi-Fi-6 MAC. This work settles why: the launch bits
+(`PLCP0_ENABLE[31:30]`) sit behind a hardware PM-block interlock (`0x600a4ca8`) that opens
+only while the MAC is in its active/txing state, and that state is reached only via the
+`pp/lmac` submit→schedule flow's **`pm_on_data_tx` PM-wake**. No idle-MAC register poke opens
+it.
+
+**The reusable deliverables.** The full reversed TX state machine + register map
+(`docs/`), and pure-Rust reimplementations of the entire TX *logic* path (submit → AC map →
+enqueue → schedule → arm → completion) driving the real scheduler state — directly portable
+code, cross-referenced with `esp-wifi-hal/src/ll.rs`.
+
+**The dependency reality.** A *fully* blob-free C6 TX is **not** achieved here. The Rust
+logic path still hard-depends on a minimal blob substrate: `pm_on_data_tx` (modem PM-wake),
+`esf_buf` pool, `ppProcTxSecFrame` (security-header length), a few `hal_mac_tx.o` register
+helpers, and the esp-radio init/OSI/ISR substrate. Of these, **`pm_on_data_tx` is the crux**
+— it is modem power management, the same category as PHY/clock init that even the C3 open
+stack leans on (`hal_init`/`libphy`).
+
+**Two paths forward for the project:**
+
+- **Minimal-blob C6 TX** (tractable now): contribute a C6 TX path that runs the pure-Rust TX
+  logic on top of a *small* libpp/esp-radio substrate (`pm_on_data_tx` + `esf_buf` +
+  init/OSI). This is "mostly open, minimal blob" — it may sit beside, rather than inside,
+  `esp-wifi-hal`'s blob-free main line.
+- **Fully blob-free C6 TX** (larger, next research target): additionally reverse and
+  reimplement the modem PM-wake. Promising lead — `pm_on_data_tx` ultimately calls
+  `wifi_rf_phy_enable`, which `esp-wifi-hal`/`esp-phy` already have; the open question is
+  reproducing the PM state transition that clears the interlock without the blob's PM FSM.
+
+**Recommended next:** share the mechanism (the PM-wake / interlock finding) upstream with
+`esp32-open-mac` — it answers their open "why no C6 TX" and shows the path — and decide with
+them whether minimal-blob C6 TX is acceptable or whether to pursue the modem-PM-wake reverse.
 
 ## Hard-won lessons (read before touching the TX path)
 
