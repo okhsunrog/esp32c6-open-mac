@@ -464,3 +464,18 @@ top of the working esp-radio substrate):
   blob-version-specific (they moved between 2ea8e3e and 0.3.0) and must be re-derived per build.
 Everything else (chip/PHY/clock init, OS adapter, WifiController::new + start, the MAC ISR
 wDev_ProcessFiq that we let service RX/beacon/timers) is the esp-radio substrate, intentionally kept.
+
+### Correction (rigorous re-test): ppProcTxSecFrame must STAY BLOB
+The ppProcTxSecFrame no-op above was WRONG -- it was validated in a lucky pre-stall window. Rigorous
+back-to-back test: ppProcTxSecFrame ON -> CR-RUST 51/CR-CTRL 92; ppProcTxSecFrame no-op -> CR-RUST ~0
+(the frames still latch 0xc067a6f0 and "complete", but the BB emits them only marginally). So its
+security-header LENGTH adjustment (+4 for our no-key frame: eb+0x16 and the dma-descriptor length)
+is REQUIRED for reliable emission -- a short frame latches but the PHY does not reliably key up. It
+does real work with a subtle descriptor layout (uses eb+8 / the _LANCHOR32 key-type table), so per
+the guidance it is KEPT AS BLOB. ppProcessWaitingQueue stays a validated Rust no-op (CR-RUST 51 with
+ppProcTxSecFrame on confirms the waiting-queue drain is genuinely empty on our path).
+
+FINAL blob-leaf list: pm_on_data_tx (PM-wake substrate), esf_buf_alloc/recycle (pool substrate),
+ppProcTxSecFrame (required security-header length work), plus the small hal_mac_tx.o register leaves
+(hal_he_set_tx_protection, mac_tx_get_rts_rate, mac_tx_set_len/pti) and the HE-only helpers. All the
+scheduling/queue LOGIC (submit, map, pop, arm, complete) and the guards are Rust.

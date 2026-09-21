@@ -914,10 +914,10 @@ mod cleanroom_tx {
                 return 1;
             }
             cr_ppTxProtoProc(eb);
-            // ppProcTxSecFrame is a no-op on our path (Rust no-op): for an UNENCRYPTED broadcast
-            // beacon there is no CCMP/IV/MIC -- the blob only reserves a default security-header
-            // length; skipping it radiates a valid beacon (proven: SSID intact, health unchanged).
-            // (The encrypted-frame length/seqno/crypto handling is not exercised by our open beacon.)
+            if ppProcTxSecFrame(eb) == 1 {
+                esf_buf_recycle(eb);
+                return 1;
+            }
             cr_rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
             let map = cr_ppMapTxQueue(eb); // Rust AC mapping; keeps blob pm_on_data_tx (PM-wake)
             if map == 0 {
