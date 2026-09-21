@@ -495,3 +495,37 @@ scheduling/queue LOGIC (submit, map, pop, arm, complete) and the guards are Rust
   debugged-safe args slot=0/enable=0/threshold=0/val=0 (only a benign MMIO RMW). So the 0.3.0 blob's
   hal_he_set_tx_protection does more than the 2ea8e3e decompile shows (a blob-version divergence);
   keeping the blob call. This is a hal_mac_tx.o internal leaf, not on the frontier -- documented.
+
+## Session 9i (cont.): mac_tx_set_pti + ppProcTxSecFrame stay blob (evidence-backed)
+
+Two more hal_mac_tx.o helpers were attempted and, per the guidance, are kept blob with evidence:
+
+- mac_tx_set_pti / hal_set_tx_pti -> STAYS BLOB. A faithful Rust reimpl of the coex-PTI CONF-region
+  register writes (EDCA reg 0x600a4d68-slot*0x10 high nibble + PTI reg 0x600a5490-slot*0x74) heap-
+  panics (linked_list_allocator hole.rs:548) on the FIRST arm on the 0.3.0 blob -- the same failure
+  class as hal_he_set_tx_protection (CONF-region 0x600a4d6x writes). Notably even ADDING the two
+  Rust helpers as dead code (not called) triggered the panic, i.e. it is layout-sensitive: adding
+  code perturbs the memory layout and surfaces a latent heap fragility in the faithful path. PTI is
+  irrelevant to our disconnected no-BT beacon (skipping mac_tx_set_pti radiates robustly, CR-RUST 75,
+  ratio unchanged), but to keep the working committed state stable the blob call is retained.
+- ppProcTxSecFrame -> STAYS BLOB (already required, session 9h). Full decompile of the open path: it
+  reserves a security/QoS header by (a) +4 to eb+0x16 and one DMA-descriptor length, then (b) in the
+  else branch, moving the frame pointer back 8 bytes on the OTHER descriptor (dma_desc = *(eb+4),
+  dma_desc[1] -= 8), +8 to eb+0x14 and dma_desc[0] length, setting eb+0x24 bit13, a memset of the
+  reserved bytes (ROMCALL_memset -- args unresolved in the decompile), and a further DMA-length
+  field. It uses a SECOND descriptor at eb+8 vs the eb+4 descriptor our set_ppdu uses. This is proven
+  required for reliable emit (a short frame latches but the PHY keys up only marginally), but it
+  cannot be cleanly reproduced/validated: the memset args are unresolved, the eb+8/eb+4 dual-
+  descriptor layout is version-specific (Ghidra project is 2ea8e3e, live blob is 0.3.0), and the
+  faithful path is heap-fragile to hal reimplementations (above). Kept blob.
+
+NET this session: cr_mac_tx_get_rts_rate + cr_mac_tx_set_len are Rust; hal_he_set_tx_protection,
+mac_tx_set_pti (hal_set_tx_pti) and ppProcTxSecFrame stay blob (heap-fragility / unresolved
+decompile). Updated remaining blob-leaf list (frontier + small hal leaves):
+  FRONTIER (substrate, later dedicated pass): pm_on_data_tx (modem-PM wake), esf_buf_alloc/recycle.
+  hal_mac_tx.o leaves that resist Rust on 0.3.0: hal_he_set_tx_protection, hal_set_tx_pti (CONF-region
+  writes heap-panic), ppProcTxSecFrame (complex dual-descriptor security-header work), plus the HE-
+  only helpers (mac_tx_set_hesig/htsig, hal_mac_fill_hwtxop) never hit by the DSSS beacon.
+CAVEAT for the port: the faithful path shows a layout-sensitive heap fragility on the 0.3.0 blob
+(adding certain Rust code surfaces a linked_list_allocator deallocate panic); a clean crate port
+should first root-cause this (heap sizing / a latent overrun) before adding more Rust on the hot path.
