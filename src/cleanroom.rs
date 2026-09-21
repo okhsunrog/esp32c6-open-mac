@@ -909,7 +909,7 @@ mod cleanroom_tx {
         unsafe {
             let txinfo = rd_at(eb + 0x34);
             let iface = (rd(txinfo + 0x10) >> 0x13) & 1;
-            if ic_interface_enabled(iface) == 0 {
+            if cr_ic_interface_enabled(iface) == 0 {
                 esf_buf_recycle(eb);
                 return 1;
             }
@@ -982,6 +982,29 @@ mod cleanroom_tx {
     /// so it takes the simple branch: txinfo+4=7, AC=iface. The QoS-data/TWT branches
     /// (ppSearchTxQueue / pm_on_twt_force_tx) are not exercised by the beacon and are omitted.
     /// Returns the blob convention: 0 = mapped.
+    /// Rust ic_interface_enabled: bit[iface] of g_if_enabled_mask. On the 0.3.0 blob the mask is the
+    /// byte at wDevCtrl+0x31 = 0x408120b9 (from the linked ic_set_vif disasm: lbu 49(wDevCtrl)); it
+    /// is set by ic_set_vif during wifi start and gates ppTxPkt per VIF (iface 0 is always up here).
+    pub fn cr_ic_interface_enabled(iface: u32) -> i32 {
+        unsafe {
+            let mask = core::ptr::read_volatile(0x4081_20b9 as *const u8) as u32;
+            ((mask >> (iface & 0x1f)) & 1) as i32
+        }
+    }
+
+    /// Rust lmacIsLongFrame: MPDU length vs the RTS/long-frame threshold (lmacConfMib+0x16 on the
+    /// 0.3.0 blob, lmacConfMib=0x40811ca8). For our short broadcast beacon this is false; and in
+    /// cr_lmacTxFrame the RTS it would gate is additionally suppressed by txinfo bit1 (broadcast),
+    /// so the result is not on the beacon's critical path.
+    pub fn cr_lmacIsLongFrame(eb: u32) -> i32 {
+        unsafe {
+            let threshold = core::ptr::read_volatile((0x4081_1ca8u32 + 0x16) as *const u16) as i32;
+            let len = core::ptr::read_volatile((eb + 0x14) as *const u16) as i32
+                + core::ptr::read_volatile((eb + 0x16) as *const u16) as i32;
+            (threshold < len) as i32
+        }
+    }
+
     pub static PM_BLK: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
     /// Crown-jewel test: when false, skip the blob pm_on_data_tx entirely (Rust no-op) to see if the
     /// MAC stays active without it in our sustained-TX steady state.
@@ -1138,7 +1161,7 @@ mod cleanroom_tx {
                 }
                 // long-frame -> RTS (beacon is short; lmacIsLongFrame returns 0 -> no-op, but
                 // faithful)
-                if lmacIsLongFrame(eb) != 0 && (rd(txinfo) & 2) == 0 {
+                if cr_lmacIsLongFrame(eb) != 0 && (rd(txinfo) & 2) == 0 {
                     wr(txinfo, (rd(txinfo) & 0xffff_efff) | 0x100);
                 }
                 // state==3 retry-RTS and FTM (0x20000000) branches skipped (not taken by the

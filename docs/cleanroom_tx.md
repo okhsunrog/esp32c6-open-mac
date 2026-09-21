@@ -412,3 +412,17 @@ version-specific static index), and the trivial guards ic_interface_enabled / lm
 uncertain runtime DAT addresses; always the beacon constant on our path). All are substrate/PM/pool
 or blob-version-address-dependent; the per-frame TX critical path (submit -> map -> pop -> arm ->
 complete) is Rust except for the pm_on_data_tx PM-wake.
+
+## Session 9h: the guard leaves in Rust (ic_interface_enabled, lmacIsLongFrame)
+
+- cr_ic_interface_enabled (Rust): reads bit[iface] of g_if_enabled_mask, the byte at
+  wDevCtrl+0x31 = 0x408120b9 on the 0.3.0 blob (found via the linked ic_set_vif disasm: `lbu
+  49(wDevCtrl)`). Gates cr_ppTxPkt per VIF; iface 0 is up (set by ic_set_vif at wifi start).
+- cr_lmacIsLongFrame (Rust): MPDU length (eb+0x14 + eb+0x16) vs the RTS/long-frame threshold
+  (lmacConfMib+0x16; lmacConfMib=0x40811ca8 on 0.3.0, different from 2ea8e3e's 0x40811b68 -- offsets
+  re-derived for 0.3.0). False for our short beacon; and in cr_lmacTxFrame the RTS it would gate is
+  also suppressed by txinfo bit1 (broadcast), so it is off the beacon critical path.
+- Verified on a FRESH boot (a long-running device shows the pre-existing progressive modem-PM stall
+  that decays BOTH CR-RUST and CR-CTRL to ~0 -- unrelated to this change): health 96/96/96
+  allocfail=0, latch 0xc067a6f0; radiation CR-RUST 6 vs CR-CTRL 8. Both address reads are correct
+  (frames are not discarded and the arm still latches).
