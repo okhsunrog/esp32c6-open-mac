@@ -529,3 +529,54 @@ decompile). Updated remaining blob-leaf list (frontier + small hal leaves):
 CAVEAT for the port: the faithful path shows a layout-sensitive heap fragility on the 0.3.0 blob
 (adding certain Rust code surfaces a linked_list_allocator deallocate panic); a clean crate port
 should first root-cause this (heap sizing / a latent overrun) before adding more Rust on the hot path.
+
+## Session 9j: root-caused + fixed the layout-sensitive heap corruption ("hole list out of order")
+
+The "adding code (even dead) triggers a linked_list_allocator deallocate panic" fragility was a real
+memory-safety bug, now root-caused and FIXED (not hidden). It also explains the progressive stall and
+random panics, and it was blocking further Rust on the hot path.
+
+Evidence chain (all on the live 0.3.0 blob, ESP32-C6, from fresh flash):
+- The panic message is hole.rs:548 "Hole list out of order?" (a debug_assert that IS enabled in this
+  profile) -- a corrupted free-list `next` pointer, not an OOM. Backtrace symbolised to
+  `free +0x9a -> linked_list_allocator::Heap::deallocate +0x228`: a C free() finds the LLA free-list
+  already corrupt. eb=0x4087a5b4 lives in the `#[ram(reclaimed)]` heap (0x4086e610..0x4087e610), so
+  the esf_buf buffers are esp_alloc/LLA allocations (confirmed: removing that heap OOMs esp-radio at
+  init). So the corruptor writes into LLA-managed memory.
+- Inline diagnostics at the first recycle showed freecount=0 / dblfree=false at the detecting
+  recycle -> the recycle only DETECTS pre-existing corruption; and `cur_eb=0x4087a5b4` (a stale eb) !=
+  our freshly-allocated `feb=0x4087a6b4` -> the frame being armed was NOT our frame.
+- Entry diagnostics in cr_ppTxPkt were decisive:
+    [CR.p0] enter eb=0x4087a6b4 iface=0 ic_en=0
+    [CR.p0] PATH=iface_disabled -> recycle
+  cr_ic_interface_enabled(0) returned 0. It reimplemented the ROM check by reading a guessed mask byte
+  at wDevCtrl+0x29 = 0x408120b9, which is WRONG on the 0.3.0 blob and reads 0. So cr_ppTxPkt took its
+  interface-disabled DROP path and esf_buf_recycle()'d the eb -- then main's cr_complete recycled the
+  SAME eb again. That double-free corrupts the LLA free-list; whether the corrupted hole is later
+  walked by a live free() (-> panic) or not depends on the memory layout, hence "adding dead code
+  triggers it". As a second symptom, our real frame never armed (a leftover eb was armed instead), so
+  the earlier "latching" was arming stale buffers.
+
+Root cause: a blob-version-specific ADDRESS error (coordinator hypothesis #1) causing a double-free
+(hypothesis #2). cr_ic_interface_enabled read 0x408120b9, correct on 2ea8e3e but wrong on 0.3.0.
+
+Fix: call the ROM `ic_interface_enabled` (0x40000c10) directly -- the authoritative per-VIF check the
+blob's own ppTxPkt invokes (verified: blob ppTxPkt @0x40804f0c does `jalr` to 0x40000c10, then
+`bnez` -> drop+recycle on 0). Declared as `#[link_name = "ic_interface_enabled"] rom_ic_interface_enabled`.
+cr_complete's esf_buf_recycle is now the SINGLE recycle of the eb (cr_ppTxPkt no longer drops it).
+
+Proof (fresh flash, previously-panicking Rust code -- cr_hal_he_set_tx_protection -- wired to stress
+the fix):
+- BEFORE: panics at the FIRST faithful arm (hole.rs:548), every time, with the Rust protection wired.
+- AFTER: no panic over sustained runs; [CR.H] rounds=56 arms=224 latched=224 completed=224
+  allocfail=0 last_plcp0=0xc067a6f0 (arming OUR frame now: cur_eb==feb); recycles==arms, dblfree==0.
+  Latching is 224/224 (vs the old baseline's 31-96/32-160 of a stale eb).
+
+Bonus: because the heap corruption was what made reimplementations panic, hal_he_set_tx_protection is
+now promoted to Rust (cr_hal_he_set_tx_protection) and runs clean -- it was never the culprit; the
+double-free was. The earlier "reimplementing hal leaves heap-panics" note (session 9i) is SUPERSEDED:
+those panics were this double-free surfacing under a layout change, not a fault in those leaves.
+
+Caveat retired: the "layout-sensitive heap fragility" is no longer a mystery to root-cause before a
+crate port -- it was this single wrong address. Audit every remaining fixed address/offset against the
+0.3.0 linked ELF the same way (a wrong base/offset = a stray read/write); ic_interface_enabled was one.

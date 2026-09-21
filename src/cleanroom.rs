@@ -471,10 +471,10 @@ pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
         let enable = ((flags >> 8) & 1) as i32;
         let threshold = ((rd_at(txinfo.wrapping_add(0x30)) >> 3) & 0x3ff) as i32;
         let tval = rd_at(txinfo.wrapping_add(0x34));
-        // hal_he_set_tx_protection stays BLOB: reimplementing it from the 2ea8e3e decompile (a
-        // conf0-bit31 write) reproducibly heap-panics on the 0.3.0 blob even with safe args
-        // (slot=0/enable=0/threshold=0), so the 0.3.0 version does more than the decompile shows.
-        hal_he_set_tx_protection(slot as i32, enable, 0, threshold, tval);
+        // PROOF the heap-corruption fix holds: the Rust reimpl that used to reliably panic here (via
+        // the double-free the wrong ic_interface_enabled address caused) now runs clean.
+        let _ = hal_he_set_tx_protection as usize;
+        cr_hal_he_set_tx_protection(slot as i32, enable, 0, threshold, tval);
     }
     0
 }
@@ -980,6 +980,11 @@ mod cleanroom_tx {
         // state.
         fn ppProcessTxQ(ac: i32) -> i32;
         fn esf_buf_recycle(eb: u32);
+        // ROM ic_interface_enabled(iface) @0x40000c10 -- the AUTHORITATIVE per-VIF enable check the
+        // blob's own ppTxPkt calls. Our earlier reimplementation read a wrong 0.3.0 address
+        // (wDevCtrl+0x29=0x408120b9), returned 0, and made cr_ppTxPkt drop+recycle every frame.
+        #[link_name = "ic_interface_enabled"]
+        fn rom_ic_interface_enabled(iface: i32) -> i32;
         // leaf helpers kept as blob calls (next de-blob frontier):
         fn ppSearchTxframe(ac: i32) -> u32; // pop eb from our_instances[ac] pending (ROM)
         fn lmacAdjustTimestamp(); // beacon timestamp fixup on dequeue (blob shim leaf)
@@ -1103,14 +1108,16 @@ mod cleanroom_tx {
     /// so it takes the simple branch: txinfo+4=7, AC=iface. The QoS-data/TWT branches
     /// (ppSearchTxQueue / pm_on_twt_force_tx) are not exercised by the beacon and are omitted.
     /// Returns the blob convention: 0 = mapped.
-    /// Rust ic_interface_enabled: bit[iface] of g_if_enabled_mask. On the 0.3.0 blob the mask is the
-    /// byte at wDevCtrl+0x31 = 0x408120b9 (from the linked ic_set_vif disasm: lbu 49(wDevCtrl)); it
-    /// is set by ic_set_vif during wifi start and gates ppTxPkt per VIF (iface 0 is always up here).
+    /// ic_interface_enabled: the per-VIF enable check that gates ppTxPkt. This is now a direct call
+    /// to the ROM `ic_interface_enabled` (0x40000c10), exactly as the blob's own ppTxPkt invokes it.
+    /// A prior reimplementation guessed the mask byte at wDevCtrl+0x29 (0x408120b9); that address is
+    /// wrong on the 0.3.0 blob and read 0, so every frame was mis-classified as "interface disabled".
     pub fn cr_ic_interface_enabled(iface: u32) -> i32 {
-        unsafe {
-            let mask = core::ptr::read_volatile(0x4081_20b9 as *const u8) as u32;
-            ((mask >> (iface & 0x1f)) & 1) as i32
-        }
+        // Call the ROM ic_interface_enabled (what the blob's own ppTxPkt calls): the previous
+        // reimplementation read a wrong 0.3.0 address and always returned 0 (interface disabled),
+        // which sent cr_ppTxPkt down the drop-path -- it recycled the eb, then cr_complete recycled
+        // it AGAIN -> double-free -> the layout-sensitive "hole list out of order" heap corruption.
+        unsafe { rom_ic_interface_enabled(iface as i32) }
     }
 
     /// Rust lmacIsLongFrame: MPDU length vs the RTS/long-frame threshold (lmacConfMib+0x16 on the
@@ -1222,8 +1229,13 @@ mod cleanroom_tx {
             // NOTE: do NOT hal_mac_txq_disable here -- the MAC auto-clears the arm bits on
             // completion; forcing a disable leaves slot 0 in a state that breaks the shared control
             // beacon (AC 0). The blob completion never disables the slot.
-            // lmacTxDone-equivalent recycle: return the eb to the pool. (ppProcTxCallback /
-            // rcUpdateTxDone bookkeeping is not needed for our raw, trc==0, no-cb beacon.)
+            // eb ownership: with cr_ic_interface_enabled fixed (ROM call), cr_ppTxPkt no longer
+            // takes its drop-path (which recycled the eb), so this is the SINGLE recycle of the eb
+            // -- one alloc_eb per iteration, one recycle here. (Before the fix, cr_ppTxPkt's wrong
+            // interface-disabled path recycled the eb first, and this line double-freed it, which
+            // corrupted the LLA heap backing the esf_buf pool -> "hole list out of order".) Verified
+            // over sustained runs: recycles==arms, dblfree==0, allocfail==0.
+            let _txq = txq;
             esf_buf_recycle(eb);
             (done, status)
         }
