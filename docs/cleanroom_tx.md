@@ -580,3 +580,23 @@ those panics were this double-free surfacing under a layout change, not a fault 
 Caveat retired: the "layout-sensitive heap fragility" is no longer a mystery to root-cause before a
 crate port -- it was this single wrong address. Audit every remaining fixed address/offset against the
 0.3.0 linked ELF the same way (a wrong base/offset = a stray read/write); ic_interface_enabled was one.
+
+## Session 9k Part 1: ic_interface_enabled reimplemented in Rust with the correct 0.3.0 address
+
+Replaced the ROM-call stopgap (8a2605e) with a faithful Rust port, now that the exact 0.3.0 mask
+location is known from the ROM disasm. The ROM ic_interface_enabled (real body 0x40012c34, reached via
+the 0x40000c10 trampoline) does exactly: base = *(wDevCtrl_ptr @ 0x4087ff68); mask = byte at base+0x31
+(g_if_enabled_mask); return (mask >> iface) & 1. The earlier broken reimpl had TWO address errors: it
+used the STATIC wDevCtrl symbol (0x40812090) instead of the runtime pointer, and offset +0x29 instead
+of +0x31 (landing on 0x408120b9). At runtime the pointer resolves to wDevCtrl=0x40812050 (not the
+static 0x40812090), mask@+0x31 = 0x01.
+
+- cr_ic_interface_enabled: `let base = *(0x4087ff68); ( *(u8*)(base+0x31) >> iface ) & 1`
+- validated against the ROM in-place: rust(0)==rom(0)==1, rust(1)==rom(1)==0 (exact match, both VIFs)
+- fresh flash, sustained: no panic, arms==completed, latched 30-64/32-64, allocfail=0, cur_eb==feb,
+  last_plcp0=0xc067a6f0 -- radiating our own frame
+- the ROM extern is dropped; the check is fully self-contained Rust now
+
+Method note (the lesson that bit us): every fixed address/offset must be verified against the 0.3.0
+linked ELF / ROM disasm, INCLUDING the base-vs-pointer distinction -- a control block reached through a
+runtime pointer (0x4087ff68 -> 0x40812050) is not the same as its static link address (0x40812090).

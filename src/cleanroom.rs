@@ -980,11 +980,6 @@ mod cleanroom_tx {
         // state.
         fn ppProcessTxQ(ac: i32) -> i32;
         fn esf_buf_recycle(eb: u32);
-        // ROM ic_interface_enabled(iface) @0x40000c10 -- the AUTHORITATIVE per-VIF enable check the
-        // blob's own ppTxPkt calls. Our earlier reimplementation read a wrong 0.3.0 address
-        // (wDevCtrl+0x29=0x408120b9), returned 0, and made cr_ppTxPkt drop+recycle every frame.
-        #[link_name = "ic_interface_enabled"]
-        fn rom_ic_interface_enabled(iface: i32) -> i32;
         // leaf helpers kept as blob calls (next de-blob frontier):
         fn ppSearchTxframe(ac: i32) -> u32; // pop eb from our_instances[ac] pending (ROM)
         fn lmacAdjustTimestamp(); // beacon timestamp fixup on dequeue (blob shim leaf)
@@ -1108,16 +1103,22 @@ mod cleanroom_tx {
     /// so it takes the simple branch: txinfo+4=7, AC=iface. The QoS-data/TWT branches
     /// (ppSearchTxQueue / pm_on_twt_force_tx) are not exercised by the beacon and are omitted.
     /// Returns the blob convention: 0 = mapped.
-    /// ic_interface_enabled: the per-VIF enable check that gates ppTxPkt. This is now a direct call
-    /// to the ROM `ic_interface_enabled` (0x40000c10), exactly as the blob's own ppTxPkt invokes it.
-    /// A prior reimplementation guessed the mask byte at wDevCtrl+0x29 (0x408120b9); that address is
-    /// wrong on the 0.3.0 blob and read 0, so every frame was mis-classified as "interface disabled".
+    /// ic_interface_enabled: the per-VIF enable check that gates ppTxPkt, reimplemented in Rust as a
+    /// faithful port of the ROM function (which the blob's ppTxPkt jalrs). Validated against the ROM
+    /// at runtime: rust(0)==rom(0)==1, rust(1)==rom(1)==0. A prior reimpl guessed the mask byte at the
+    /// STATIC wDevCtrl+0x29 (0x408120b9); both the base (must come from the pointer, runtime 0x40812050
+    /// not the static 0x40812090) and the offset (+0x31, not +0x29) were wrong, so it read 0 on 0.3.0.
     pub fn cr_ic_interface_enabled(iface: u32) -> i32 {
-        // Call the ROM ic_interface_enabled (what the blob's own ppTxPkt calls): the previous
-        // reimplementation read a wrong 0.3.0 address and always returned 0 (interface disabled),
-        // which sent cr_ppTxPkt down the drop-path -- it recycled the eb, then cr_complete recycled
-        // it AGAIN -> double-free -> the layout-sensitive "hole list out of order" heap corruption.
-        unsafe { rom_ic_interface_enabled(iface as i32) }
+        // Faithful port of the ROM ic_interface_enabled (0x40012c34, the one the blob's ppTxPkt
+        // jalrs): base = *(wDevCtrl_ptr @ 0x4087ff68); mask = byte at base+0x31 (g_if_enabled_mask);
+        // return (mask >> iface) & 1. The earlier reimpl used the STATIC wDevCtrl (0x40812090) plus a
+        // wrong offset 0x29 (= 0x408120b9), which reads 0 on the 0.3.0 blob -> the double-free bug.
+        // Both the base-via-pointer and the +0x31 offset are verified against the 0.3.0 ROM disasm.
+        unsafe {
+            let wdevctrl = rd(0x4087_ff68);
+            let mask = core::ptr::read_volatile((wdevctrl + 0x31) as *const u8) as u32;
+            ((mask >> (iface & 0x1f)) & 1) as i32
+        }
     }
 
     /// Rust lmacIsLongFrame: MPDU length vs the RTS/long-frame threshold (lmacConfMib+0x16 on the
@@ -1543,6 +1544,7 @@ mod cleanroom_tx {
     pub fn alloc_eb(payload: &[u8]) -> u32 {
         unsafe { esf_buf_alloc(payload.as_ptr(), 1, payload.len() as u32) }
     }
+
 
     /// Fill the dma_desc + txinfo fields exactly like ieee80211_output_raw_process, minus
     /// the node/seq lookup and ppTxPkt. Re-run every iteration: the MAC clears the DMA owner
