@@ -366,3 +366,49 @@ done, but because cr_lmacTxFrame leaves our_instances[ac].state!=1 it takes the 
 AC (clears the completed bit + logs, no recycle). Our cr_complete owns the decode + recycle; allocfail
 stays 0 over sustained runs with no crash, proving exactly one recycle per frame (no ISR double-free).
 Replacing the shared MAC ISR itself was deemed unnecessary and risky (it also serves RX/beacon/timers).
+
+## Session 9g: env recovery (blob 0.3.0) + more leaves; pm_on_data_tx is the crown-jewel substrate
+
+Environment note: an esp-hal workspace update bumped esp-radio to esp-wifi-sys 0.3.0, whose libpp.a
+blob DIFFERS from the reversed one (git checkout 2ea8e3e; hal_mac_tx.o/lmac.o md5 differ). The build
+broke (esp_rtos::start API changed to one arg; and duplicate lmac symbols from the unpatched 0.3.0
+blob). Fixes (no tracked esp-hal source changed): esp_rtos::start(timg0.timer0); re-ran
+tools/patch_libpp.sh (BR=registry 0.3.0) -> 23 hal_mac_tx + 46 lmac cross-boundary symbols renamed
+to blob_ (SAME counts as 2ea8e3e -> module structure unchanged), copied the patched libpp.a over the
+build's out copy. VALIDATED the 0.3.0 blob is compatible with our reversed offsets: the whole Rust
+pipeline still arms (PLCP0_ENABLE latches 0xc067a6f0), completes, pool healthy (arms=latched=
+completed, allocfail=0) and radiates -- so all prior offsets/addresses hold on 0.3.0.
+
+New Rust this session:
+- pp_coex_tx_request -> Rust no-op. Proven a no-op on our path: skipping it keeps the MAC waking,
+  latching (0xc067a6f0) and radiating with a healthy pool (arms=latched=completed=96, allocfail=0).
+  Coex is signaling-only when coex is off; nothing on our beacon path depends on it.
+- cr_lmacSetTxFrame (Rust): the PPDU-build sequencing -- reduced to the raw-beacon path (no TXOP
+  aggregation, trc==0) with a fixed lifetime (the timeout is not the radiate gate, session 7); the
+  slot programming goes through our Rust hal (hal_mac_tx_config_timeout + hal_mac_tx_set_ppdu). With
+  it, cr_lmacTxFrame is now FULLY Rust. Health arms=latched=completed=96, allocfail=0; radiation
+  CR-RUST 11 vs CR-CTRL 21.
+
+CROWN JEWEL -- pm_on_data_tx STAYS BLOB (evidence-backed, as anticipated):
+- It is the essential per-frame PM-wake. DECISIVE test: replacing it with a Rust no-op ->
+  latched=0/128 (the launch bits NEVER latch), WDEV_PM_TXBLOCK_RETENTION stuck at 0x00ff1000
+  (blocked), zero radiation. With it -> block clears to 0, launch latches, radiates. So pm_on_data_tx
+  is what transitions the MAC to the active/TX-allowed state.
+- What it does (from the decompile) that we could not reproduce: a deep PM finite-state machine --
+  pm_check_state (modem sleep/dream state), and on the disconnected/awake path pm_disconnected_wake
+  (which calls wifi_rf_phy_enable(0) to re-enable the modem/PHY and pm_set_state), plus coex-slice
+  scheduling and active timers, all gated on a dozen PM-state globals (DAT_420824b1/b2/be,
+  420825d1, ...). The WDEV_PM_TXBLOCK_RETENTION block-clear is a CONSEQUENCE of this modem-wake, not
+  a single reproducible register write (no per-beacon CPU write clears the full 0x00ff1000). This is
+  substrate modem power-management, on par with PHY/clock init and the OS adapter that we
+  intentionally leave to the blob/esp-radio -- reimplementing it would mean reimplementing the modem
+  PM subsystem, with no RF benefit over the blob call. Kept as blob and validated it still wakes the
+  MAC on the 0.3.0 blob.
+
+Remaining blob leaves (final): pm_on_data_tx (the PM-wake, above), esf_buf_alloc/recycle (pool
+allocator substrate), ppProcTxSecFrame (real security-header length/seqno work), ppProcessWaitingQueue
+(hmac drain -- iterates pm_allow_tx/ppMapWaitTxq over interfaces; empty on our path but reads
+version-specific static index), and the trivial guards ic_interface_enabled / lmacIsLongFrame (ROM /
+uncertain runtime DAT addresses; always the beacon constant on our path). All are substrate/PM/pool
+or blob-version-address-dependent; the per-frame TX critical path (submit -> map -> pop -> arm ->
+complete) is Rust except for the pm_on_data_tx PM-wake.
