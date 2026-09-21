@@ -319,6 +319,124 @@ unsafe fn rd16(addr: u32) -> u16 {
 /// counters here; those extra bus accesses on this timing-sensitive TX-setup path stalled the TX
 /// queue (arm-without-complete), even when the register logic was byte-identical to the blob. So
 /// this body is kept minimal -- the same read/compute/write/protect shape and count as the blob.
+/// Rust mac_tx_get_rts_rate: pure rate -> RTS/response-rate lookup (faithful port of the blob's
+/// jump table). Our 1 Mbit DSSS beacon has rate 0 -> returns 0. No addresses, hardware-independent.
+fn cr_mac_tx_get_rts_rate(rate: i32) -> i32 {
+    let p = rate;
+    if (p.wrapping_sub(0x10) as u32) < 0x14 {
+        let mut b = p == 0x10;
+        if p > 0x19 {
+            b = p == 0x1a;
+        }
+        if b {
+            return 0xb;
+        }
+        let iv = if p < 0x1a { 0x12 } else { 0x1c };
+        if p <= iv {
+            return 10;
+        }
+        let b2 = if p < 0x1a { p < 0x13 } else { p < 0x1d };
+        if !b2 {
+            return 9;
+        }
+    } else if p < 8 {
+        if p == 0 {
+            return 0;
+        }
+    } else if (p.wrapping_sub(8) as u32) < 8 {
+        let u = 1u32 << ((p as u32).wrapping_sub(8) & 0x1f);
+        if u & 0x33 != 0 {
+            return 9;
+        }
+        if u & 0x88 != 0 {
+            return 0xb;
+        }
+        if u & 0x44 != 0 {
+            return 10;
+        }
+    }
+    if (p.wrapping_sub(1) as u32) < 3 {
+        return 1;
+    }
+    if (p.wrapping_sub(5) as u32) > 2 {
+        return 0;
+    }
+    5
+}
+
+/// Rust hal_he_set_tx_protection: CONF0 (0x600a4d60-slot*0x10) bit31 = protect-enable, and, when a
+/// threshold is set, the RTS/txop-dur threshold reg (0x600a548c-slot*0x74). Register writes only.
+#[allow(dead_code)]
+unsafe fn cr_hal_he_set_tx_protection(slot: i32, enable: i32, _p3: u32, threshold: i32, val: u32) {
+    unsafe {
+        let conf0 = 0x600a_4d60u32.wrapping_sub((slot as u32).wrapping_mul(0x10));
+        let mut v = rd(conf0);
+        if enable == 0 {
+            v &= 0x7fff_ffff;
+        } else {
+            v |= 0x8000_0000;
+        }
+        wr(conf0, v);
+        if threshold != 0 {
+            wr(
+                0x600a_548cu32.wrapping_sub((slot as u32).wrapping_mul(0x74)),
+                (val & 0xffff) | 0x1_0000,
+            );
+        }
+    }
+}
+
+/// Rust mac_tx_set_len: writes the slot RESP_DUR word (0x600a54bc-slot*0x74: response-rate bits6-13,
+/// cbw40 bit1, uVar5 bits22) and, for OFDM/HT rates, the TXLEN word (0x600a54b8-slot*0x74). For our
+/// legacy DSSS beacon (rate 0) only RESP_DUR is written (the TXLEN branch needs an OFDM rate).
+/// `param2` is the our_instances base (used only by the OFDM branches, not taken by the beacon).
+unsafe fn cr_mac_tx_set_len(ctx: *mut u8, param2: i32) {
+    unsafe {
+        let eb = core::ptr::read_unaligned(ctx as *const u32);
+        let txinfo = rd_at(eb + 0x34);
+        let frame = rd_at(rd_at(eb + 4) + 4); // dma_desc[1]
+        let rate = core::ptr::read_volatile((txinfo + 0xc) as *const u8) as i32;
+        let t10 = rd(txinfo + 0x10);
+        let rts = cr_mac_tx_get_rts_rate(rate) as u32;
+        let ac = (t10 >> 0x14) & 0xf;
+        let mut uvar5 = 1u32;
+        if (rate.wrapping_sub(0x10) as u32 & 0xff) < 0x14 {
+            uvar5 = (core::ptr::read_volatile(
+                (ac.wrapping_mul(0x34).wrapping_add(param2 as u32).wrapping_add(0x40)) as *const u8,
+            ) as u32)
+                & 3;
+        }
+        let slot = *ctx.add(4) as u32;
+        let resp_dur = 0x600a_54bcu32.wrapping_sub(slot.wrapping_mul(0x74));
+        wr(
+            resp_dur,
+            uvar5 << 0x16 | ((t10 & 0xf000) == 0x1000) as u32 * 2 | (rts & 0xff) << 6 | 4,
+        );
+        let flags = rd(txinfo);
+        if (flags as i32) >= 0 {
+            let r2 = core::ptr::read_volatile((txinfo + 0xc) as *const u8) as u32;
+            let mut uv3 = r2.wrapping_sub(0x10) & 0xff;
+            if uv3 < 0x14 {
+                let len = if flags & 0x40_0000 == 0 {
+                    rd(frame) & 0x3fff
+                } else {
+                    rd16(eb + 0x16) as u32 + rd16(eb + 0x14) as u32
+                };
+                if r2 > 0x19 {
+                    uv3 = r2 - 0x1a;
+                }
+                let txlen = 0x600a_54b8u32.wrapping_sub(slot.wrapping_mul(0x74));
+                let cbw = core::ptr::read_volatile(
+                    (param2 as u32).wrapping_add(ac.wrapping_mul(0x34)).wrapping_add(0x41)
+                        as *const u8,
+                ) as u32
+                    & 3;
+                wr(txlen, cbw << 0x16 | len | uv3 << 0x1c);
+            }
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
     unsafe {
@@ -353,6 +471,9 @@ pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
         let enable = ((flags >> 8) & 1) as i32;
         let threshold = ((rd_at(txinfo.wrapping_add(0x30)) >> 3) & 0x3ff) as i32;
         let tval = rd_at(txinfo.wrapping_add(0x34));
+        // hal_he_set_tx_protection stays BLOB: reimplementing it from the 2ea8e3e decompile (a
+        // conf0-bit31 write) reproducibly heap-panics on the 0.3.0 blob even with safe args
+        // (slot=0/enable=0/threshold=0), so the 0.3.0 version does more than the decompile shows.
         hal_he_set_tx_protection(slot as i32, enable, 0, threshold, tval);
     }
     0
@@ -674,7 +795,7 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
         wr(conf1, rd(conf1) & 0xffff_fff7); // clear bit3
         let txinfo = rd_at(eb.wrapping_add(0x34));
         let rate = *((txinfo.wrapping_add(0xc)) as usize as *const u8);
-        let rtsidx = mac_tx_get_rts_rate(rate) as u32;
+        let rtsidx = cr_mac_tx_get_rts_rate(rate as i32) as u32;
         let s2 = (pwr_byte(rtsidx.wrapping_mul(2)) << 16)
             | (pwr_byte(rtsidx.wrapping_mul(2).wrapping_add(1)) << 24);
         let s3 = rate.wrapping_sub(0x10) as u32; // (rate-0x10)&0xff
@@ -695,7 +816,7 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
             wr(plcp_rate_dur, ((c2 << 8) | (c1 | s2)) as u32);
         } else {
             // DSSS / legacy path (our beacon).
-            mac_tx_set_len(param_1, param_2);
+            cr_mac_tx_set_len(param_1, param_2);
             mac_tx_set_txop_q(param_1);
             let r = *((txinfo.wrapping_add(0xc)) as usize as *const u8) as u32;
             wr(plcp_rate_dur, (pwr_byte(r.wrapping_mul(2)) | s2) as u32);

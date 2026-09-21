@@ -479,3 +479,19 @@ FINAL blob-leaf list: pm_on_data_tx (PM-wake substrate), esf_buf_alloc/recycle (
 ppProcTxSecFrame (required security-header length work), plus the small hal_mac_tx.o register leaves
 (hal_he_set_tx_protection, mac_tx_get_rts_rate, mac_tx_set_len/pti) and the HE-only helpers. All the
 scheduling/queue LOGIC (submit, map, pop, arm, complete) and the guards are Rust.
+
+## Session 9i: hal_mac_tx.o register helpers in Rust (rts_rate, set_len; he_protection stays blob)
+
+- cr_mac_tx_get_rts_rate (Rust): pure rate -> RTS/response-rate jump table (faithful port; rate 0 ->
+  0 for our beacon). No addresses.
+- cr_mac_tx_set_len (Rust): writes the slot RESP_DUR word (0x600a54bc-slot*0x74: response-rate,
+  cbw40 bit1, uVar5 bits22) and, for OFDM/HT rates, the TXLEN word (0x600a54b8-slot*0x74). For our
+  DSSS beacon only RESP_DUR is written (the TXLEN + our_instances[AC]+0x40/0x41 reads are OFDM-only
+  and not taken). Calls cr_mac_tx_get_rts_rate. Health 32/32/32 allocfail=0; radiation CR-RUST 136
+  vs CR-CTRL 203 (ratio 0.67 = the 4:6 attempt ratio).
+- hal_he_set_tx_protection -> STAYS BLOB (evidence-backed). Reimplementing it from the 2ea8e3e
+  decompile -- a single CONF0 (0x600a4d60-slot*0x10) bit31 clear when threshold==0 -- REPRODUCIBLY
+  heap-panics (linked_list_allocator hole.rs) on the FIRST arm on the 0.3.0 blob, even with the
+  debugged-safe args slot=0/enable=0/threshold=0/val=0 (only a benign MMIO RMW). So the 0.3.0 blob's
+  hal_he_set_tx_protection does more than the 2ea8e3e decompile shows (a blob-version divergence);
+  keeping the blob call. This is a hal_mac_tx.o internal leaf, not on the frontier -- documented.
