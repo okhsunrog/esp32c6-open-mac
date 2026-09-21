@@ -1,12 +1,32 @@
-//! De-blob step 1 (SCRATCH — not tracked upstream): interpose our code between the
-//! blob pp/lmac scheduler and the blob `hal_mac_tx.o`.
+//! Pure-Rust ESP32-C6 Wi-Fi TX pipeline demonstrator, running on top of the esp-radio
+//! (esp-wifi-sys) blob substrate. It transmits a beacon (SSID "CR-RUST") whose whole
+//! per-frame TX path is driven by Rust on the REAL blob scheduler state, with only a
+//! minimal, documented set of blob leaves left (see the `blob` extern blocks).
 //!
-//! Phase 1 (this build): the 23 cross-boundary symbols of hal_mac_tx.o were renamed in
-//! libpp.a to `blob_<fn>`; the `global_asm!` block below re-provides `<fn>` as an
-//! ABI-perfect tail-call shim into `blob_<fn>`. So pp/lmac now call OUR symbols, which
-//! forward to the blob. If the normal blob beacon (send_raw_frame -> esp_wifi_80211_tx
-//! -> pp -> lmac -> hal_mac_tx) STILL radiates (SSID "DEBLOB-HAL"), the interposition
-//! wiring is proven and Phase 2 can replace each shim body with real Rust one at a time.
+//! Mechanism: the ESP32-C6 MAC holds an interlock, WDEV_PM_TXBLOCK_RETENTION @ 0x600a4ca8
+//! (0x00ff1000 = blocked, 0 = active); while blocked, the PLCP0_ENABLE launch bits
+//! (0xc0000000) never latch and nothing radiates. The blob `pm_on_data_tx` PM-wake FSM
+//! clears that interlock (a hardware consequence of the FSM reaching the wake state +
+//! wifi_rf_phy_enable, not a single register write). With the MAC active, our Rust drives
+//! the full pipeline on the blob's own scheduler state:
+//!   submit (cr_ppTxPkt) -> AC map + PM-wake (cr_ppMapTxQueue) -> enqueue onto the TxRxCxt
+//!   pending list -> pop (cr_ppGetTxframe) -> schedule (cr_ppProcessTxQ) -> arm
+//!   (cr_lmacTxFrame -> cr_lmacSetTxFrame -> Rust hal_mac_tx register ops) -> completion +
+//!   recycle (cr_complete). State lives in the blob globals: our_instances @ *0x4004ffe0
+//!   (per-AC lmac txq blocks, stride 0x34) and TxRxCxt pending @ *0x4087ff80.
+//!
+//! WARNING — blob-version-specific addresses. Every fixed address/offset that is NOT a
+//! hardware MMIO register is specific to the esp-wifi-sys 0.3.0 blob and MUST be re-derived
+//! per blob version from the linked-ELF / ROM disassembly: our_instances (*0x4004ffe0),
+//! TxRxCxt pending (*0x4087ff80), wDevCtrl_ptr (*0x4087ff68) + g_if_enabled_mask (+0x31),
+//! lmacConfMib, and the esf_buf pool list heads. A wrong base or offset does not fault
+//! loudly — it silently reads/writes the wrong memory. That is exactly the bug that bit us:
+//! a stale ic_interface_enabled mask address read 0, sent every frame down the drop path,
+//! and the resulting double-free of the eb corrupted the heap. Re-verify all of these
+//! against the disasm when bumping the blob.
+//!
+//! Full write-up (investigation, register/struct model, remaining blob surface):
+//! docs/cleanroom_tx.md in the esp32c6-open-mac repo.
 
 #![no_std]
 #![no_main]
@@ -28,6 +48,14 @@ use ieee80211::{
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
+// ============================================================================
+// SECTION 1 — Blob interposition shims
+// ============================================================================
+// The cross-boundary hal_mac_tx.o / lmac.o symbols were renamed in libpp.a to `blob_<fn>`.
+// The global_asm! block re-provides `<fn>` as an ABI-perfect tail-call into `blob_<fn>`, so
+// pp/lmac call OUR symbols; each `<fn>` we have reimplemented in Rust below simply omits its
+// shim (our strong def wins). The shims that remain are blob leaves we deliberately keep.
+//
 // ---- Phase 1 interposition shims: `<fn>` -> tail blob_<fn> (all 23 cross-boundary
 // symbols of hal_mac_tx.o). `tail` preserves every argument register, so this is a
 // perfectly transparent passthrough regardless of the real signature. ----
@@ -131,48 +159,7 @@ core::arch::global_asm!(
 // pre-relocation flash copies of these same fields). Only NON-ABS (interposable) lmac symbols are
 // reimplemented here; the ~15 ROM *ABS* ones (see the shim NOTE above) must stay shims. Full model
 // + blocker log: docs/deblob_progress.md in the research repo.
-#[allow(dead_code)]
 mod lmac_deblob {
-    unsafe extern "C" {
-        // Fixed pp/ROM pointer-table slot (0x4004ffe0) holding the base of the per-AC lmac txq
-        // instance array. Reading it yields the same base the blob's GetAccess computes.
-        #[link_name = "our_instances_ptr"]
-        static OUR_INSTANCES_PTR: u32;
-    }
-
-    /// Base of the `our_instances` per-AC lmac txq array = `*our_instances_ptr` (==
-    /// `GetAccess(0)`).
-    #[inline(always)]
-    fn our_instances() -> u32 {
-        unsafe { core::ptr::read_volatile(&OUR_INSTANCES_PTR as *const u32) }
-    }
-
-    /// `our_instances[ac]` = per-AC lmac TX control block (the blob's `GetAccess(ac)`).
-    #[inline(always)]
-    fn lmac_txq(ac: i32) -> u32 {
-        our_instances().wrapping_add((ac as u32).wrapping_mul(0x34))
-    }
-
-    /// Plain `lbu` load (matches the blob's byte reads; no bounds/align guard).
-    #[inline(always)]
-    unsafe fn lbu(addr: u32) -> u8 {
-        let v: u32;
-        unsafe {
-            core::arch::asm!("lbu {0}, 0({1})", out(reg) v, in(reg) addr, options(nostack, readonly))
-        };
-        v as u8
-    }
-    /// Plain `lw` load (matches the blob's word reads exactly; no compiler-inserted alignment
-    /// check/panic branch, unlike `read_volatile::<u32>` on a computed pointer).
-    #[inline(always)]
-    unsafe fn lw(addr: u32) -> u32 {
-        let v: u32;
-        unsafe {
-            core::arch::asm!("lw {0}, 0({1})", out(reg) v, in(reg) addr, options(nostack, readonly))
-        };
-        v
-    }
-
     /// blob `lmac_update_tx_statistic`: empty in the blob (just `ret`; blob_ at 0x42025b8c). Its
     /// address is installed into the wdev funcs pointer table by wdev_funcs_init and invoked
     /// indirectly. Reimplemented as a no-op (correct by inspection: the blob body is empty).
@@ -204,25 +191,32 @@ mod lmac_deblob {
 // steps DOWN by 0x10 (the blob's reversed slot numbering), so addr = 0x600a_4d6c - ac*0x10.
 mod blob {
     unsafe extern "C" {
-        pub fn blob_hal_mac_txq_enable(ac: i32);
+        // config_timeout: our Rust hal_mac_tx_config_timeout delegates the non-beacon (RTS/CTS)
+        // timeout programming to the blob; clr_mplen: aggregate mplen-bitmap teardown on completion.
         pub fn blob_hal_mac_tx_config_timeout(txq: *mut u8, param2: i32) -> u32;
         pub fn blob_hal_mac_tx_clr_mplen(param1: i32, q: i32);
     }
 }
 
-// hal_mac_tx.o helpers still called by our Rust `hal_mac_tx_set_ppdu`. plcp0/plcp1/txop_q are now
-// real Rust in this module; the rest are non-renamed blob leaves (RTS-rate lookup, legacy len,
-// HT/HE SIG, PTI).
+// hal_mac_tx.o leaves still called by our Rust `hal_mac_tx_set_ppdu`. plcp0/plcp1/txop_q/len/
+// rts_rate are Rust now; these four are HT/HE-SIG, coex-PTI and aggregate-TXOP leaves that the
+// legacy 1 Mbit DSSS beacon path calls but does not exercise (HE/AMPDU branches are not taken).
 unsafe extern "C" {
-    fn mac_tx_get_rts_rate(rate: u8) -> i32;
-    fn mac_tx_set_len(p: *mut u8, param2: i32);
-    fn mac_tx_set_pti(p: *mut u8);
-    fn mac_tx_set_hesig();
-    fn mac_tx_set_htsig(p: *mut u8, param2: i32);
-    // blob leaf: fill hardware TXOP fields for each MPDU of an aggregate (dead for single frames).
-    fn hal_mac_fill_hwtxop(eb: u32, depth: u32, idx: u32);
+    fn mac_tx_set_pti(p: *mut u8); // coex packet-traffic-indication (CONF-region writes)
+    fn mac_tx_set_hesig(); // HE-SIG field (not taken by a legacy beacon)
+    fn mac_tx_set_htsig(p: *mut u8, param2: i32); // HT-SIG field (not taken by a legacy beacon)
+    fn hal_mac_fill_hwtxop(eb: u32, depth: u32, idx: u32); // per-MPDU TXOP fill (dead for single frames)
 }
 
+// ============================================================================
+// SECTION 2 — Rust hal_mac_tx register ops
+// ============================================================================
+// The MAC TX register file (all real hardware MMIO). Queue index maps to slots in REVERSE
+// (queue 0 = highest slot); per-queue address = base - q*stride. These #[unsafe(no_mangle)]
+// functions replace the hal_mac_tx.o shims: the blob's lmac/pp calls them directly, and our
+// Rust PPDU path (cr_lmacSetTxFrame -> hal_mac_tx_set_ppdu -> set_plcp0/plcp1/txop_q/len)
+// calls them too. All addresses here are hardware registers (stable across blob versions).
+//
 // TXOP slot registers: RESP_DUR @0x600a54bc-slot*0x74, CONF0 @0x600a4d60-slot*0x10.
 const WDEV_TXQ0_RESP_DUR: u32 = 0x600a_54bc;
 const WDEV_TXQ0_CONF0: u32 = 0x600a_4d60;
@@ -300,12 +294,6 @@ pub extern "C" fn mac_tx_set_txop_q(param_1: *mut u8) -> u32 {
 // so v = base | 0x1000000 = dma | 0x1600000 (matches esp-wifi-hal wait_for_ack=false: ack_type=1).
 // arg2 = (flags>>8)&1, threshold = (txinfo+0x30 >>3)&0x3ff (0 for a beacon -> no threshold write).
 
-unsafe extern "C" {
-    // blob leaf (not renamed, single caller): (slot, protect_enable, unused, rts_threshold, val).
-    // Writes CONF0 (0x600a4d60-slot*0x10) bit31 = protect_enable and, when rts_threshold!=0,
-    // 0x600a548c-slot*0x74 = val|0x10000. Does NOT touch PLCP0_ENABLE's arm bits.
-    fn hal_he_set_tx_protection(slot: i32, enable: i32, p3: u32, threshold: i32, val: u32);
-}
 
 #[inline(always)]
 unsafe fn rd16(addr: u32) -> u16 {
@@ -471,9 +459,7 @@ pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
         let enable = ((flags >> 8) & 1) as i32;
         let threshold = ((rd_at(txinfo.wrapping_add(0x30)) >> 3) & 0x3ff) as i32;
         let tval = rd_at(txinfo.wrapping_add(0x34));
-        // PROOF the heap-corruption fix holds: the Rust reimpl that used to reliably panic here (via
-        // the double-free the wrong ic_interface_enabled address caused) now runs clean.
-        let _ = hal_he_set_tx_protection as usize;
+        // RTS/txop protection via the Rust cr_hal_he_set_tx_protection (CONF0 bit31 + threshold reg).
         cr_hal_he_set_tx_protection(slot as i32, enable, 0, threshold, tval);
     }
     0
@@ -629,27 +615,10 @@ fn txq_plcp0_enable_addr(ac: i32) -> *mut u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_txq_enable(ac: i32) {
     unsafe {
-        // ---- LEAD 2a(2): on alternate beacons, overwrite slot 0's programming with OUR frame
-        // BEFORE the arm write below, so the blob's own |=0xc0000000 launches OUR frame (CR-RUST)
-        // on the functional queue, in ppTask context. Even beacons keep the blob's own beacon
-        // (CR-CTRL) as the same-RF control. ac==0 is the beacon queue. ----
-        if ARM_INCTX_ENABLED.load(core::sync::atomic::Ordering::Relaxed) && ac == 0 {
-            let n = cleanroom_tx::CR_CALL.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-            // One-shot window (calls 40..60): arm OUR frame on slot 0 for ~20 beacons, then stop,
-            // to test radiation without the sustained-path destabilisation a per-beacon
-            // arm causes.
-            if (40..60).contains(&n) {
-                cleanroom_tx::arm_inctx();
-            }
-        }
         let addr = txq_plcp0_enable_addr(ac);
         core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) | 0xc000_0000);
-        let _ = blob::blob_hal_mac_txq_enable as usize;
     }
 }
-
-pub static ARM_INCTX_ENABLED: core::sync::atomic::AtomicBool =
-    core::sync::atomic::AtomicBool::new(false);
 
 /// blob `hal_mac_txq_disable`: clear slot_valid|slot_enabled.
 #[unsafe(no_mangle)]
@@ -948,84 +917,57 @@ pub extern "C" fn hal_attenna_init() {
 // then run: config_timeout -> set_ppdu (plcp0/1 + rate/dur/len/txop/pti) -> config_edca
 // -> txq_enable(slot). We never touch our_instances, so the blob's lmacProcessTxComplete
 // (guarded on state==1) skips our slot and never tries to recycle our eb.
+// ============================================================================
+// SECTION 3 — The cr_* pure-Rust TX pipeline
+// ============================================================================
+// Runs the blob's per-frame TX sequence in Rust on the REAL blob scheduler state:
+//   cr_ppTxPkt (submit + enable-gate + AC map/PM-wake + enqueue onto TxRxCxt pending)
+//   -> cr_ppProcessTxQ (pop) -> cr_lmacTxFrame/cr_lmacSetTxFrame (arm via the Rust hal)
+//   -> cr_complete (poll completion, read result, recycle the eb).
+// Fixed non-hardware addresses used here (ALL 0.3.0-blob-specific — re-derive per version):
+//   our_instances base   = *(u32*)0x4004ffe0   (per-AC lmac txq, +ac*0x34; state @+0x12,
+//                                                cur_eb @+0x00, cw @+0x08)
+//   TxRxCxt pending base  = *(u32*)0x4087ff80   (per-AC list, +ac*0x34; head @+0x20, tail @+0x24,
+//                                                threaded via eb+0x30)
+//   wDevCtrl base         = *(u32*)0x4087ff68   (g_if_enabled_mask byte @ +0x31)
+//   lmacConfMib           = 0x40811ca8          (RTS/long-frame threshold @ +0x16)
 mod cleanroom_tx {
-    use super::{
-        hal_mac_tx_config_edca,
-        hal_mac_tx_config_timeout,
-        hal_mac_tx_set_ppdu,
-        hal_mac_txq_disable,
-        hal_mac_txq_enable,
-        rd,
-        rd_at,
-        wr,
-    };
+    use super::{rd, rd_at, wr};
 
     // The C6 MAC only accepts register writes to a TX slot whose bank the scheduler has
     // activated; only slot 0 (the raw beacon's AC 0) is live. So we drive slot 0 ourselves,
     // time-multiplexed with a quiesced blob beacon.
     pub const MY_AC: i32 = 0;
 
+    /// Opt-in diagnostics. `DIAG` gates the boot slot-writability probe and the periodic [CR.H]
+    /// health / [CR.F] progress prints (out-of-band, never on the hot TX path). `CONTROL_BEACON`
+    /// gates the blob-scheduled CR-CTRL beacon that runs alongside CR-RUST as a same-RF reference.
+    /// Both default true so the reference build behaves exactly as verified. The sustained TX path
+    /// (alloc -> faithful_tx -> cr_complete) carries no diagnostics regardless.
+    pub const DIAG: bool = true;
+    pub const CONTROL_BEACON: bool = true;
+
+    // The minimal blob surface the live TX path still calls. Everything else on the per-frame path
+    // (submit/map/pop/enqueue/schedule/arm/complete + the hal register ops) is Rust below.
     unsafe extern "C" {
-        // libpp esf_buf pool alloc (type 1 = static TX). Copies `payload` in, sets eb sizes,
-        // returns the eb pointer (0 on pool-empty).
+        // esf_buf pool: a callback-mediated two-list eb pool (alloc pops one head, recycle pushes
+        // another; the OSI callbacks reconcile them). type 1 = static TX. See docs for why it stays.
         fn esf_buf_alloc(payload: *const u8, pool_type: i32, len: u32) -> u32;
-        fn hal_now() -> u32;
-        // coex medium request the blob issues (from ppProcessTxQ) right before lmacTxFrame.
-        fn pp_coex_tx_request(eb: u32);
-        // FAITHFUL reproduction: the blob's own submit + schedule, operating on REAL our_instances
-        // state. ppTxPkt(eb, kick): proto/sec/rate/map + enqueue onto our_instances[ac] pending;
-        // kick=0 skips pp_post so the blob's ppTask is NOT woken (we drive the schedule ourselves).
-        fn ppTxPkt(eb: u32, kick: i32) -> i32;
-        // ppProcessTxQ(ac): pop from pending + pp_coex_tx_request + lmacTxFrame (arm) on real
-        // state.
-        fn ppProcessTxQ(ac: i32) -> i32;
         fn esf_buf_recycle(eb: u32);
-        // leaf helpers kept as blob calls (next de-blob frontier):
-        fn ppSearchTxframe(ac: i32) -> u32; // pop eb from our_instances[ac] pending (ROM)
-        fn lmacAdjustTimestamp(); // beacon timestamp fixup on dequeue (blob shim leaf)
-        fn ppProcessWaitingQueue(); // drains the hmac waiting queue (blob leaf)
-        fn pm_on_data_tx(iface: u32, p2: i32) -> i32; // PM-wake -- the MAC-active ingredient
-        fn lmacTxFrame(eb: u32, ac: i32); // shim -> blob_lmacTxFrame (step 2 -> cr_lmacTxFrame)
-        fn ppTxProtoProc(eb: u32);
+        fn hal_now() -> u32; // WDEV TSF timer read (submit timestamp / EDCA backoff seed)
+        // modem-PM wake FSM: clears the WDEV_PM_TXBLOCK_RETENTION interlock so the MAC goes active
+        // (a hardware consequence of the g_pm FSM + wifi_rf_phy_enable, not a single register write).
+        fn pm_on_data_tx(iface: u32, p2: i32) -> i32;
+        // security-header handling: dual-descriptor (eb+8 vs eb+4) length adjustment, required for
+        // reliable emit (a no-op regresses the on-air frame).
         fn ppProcTxSecFrame(eb: u32) -> i32;
-        fn rcGetSched(trc: u32, txinfo: u32);
-        fn ppMapTxQueue(eb: u32) -> i32; // sets AC in txinfo AND runs pm_on_data_tx (PM-wake!)
-        fn ic_interface_enabled(iface: u32) -> i32;
-        fn lmacIsLongFrame(eb: u32) -> i32;
-        fn hal_random() -> u32;
-        fn lmacSetTxFrame(txq: u32, mode: i32); // shim -> blob (builds PPDU via our Rust hal)
     }
 
-    /// Rust reimplementation of ppTxPkt (submit) for the legacy beacon, kick=0. Keeps the blob leaf
-    /// helpers that carry the breakthrough ingredient: ppMapTxQueue runs pm_on_data_tx (the PM-wake
-    /// that makes the MAC active) and assigns the AC. The eb/pending enqueue onto the REAL
-    /// our_instances[ac] list (threaded via eb+0x30) is replicated in Rust. Returns the blob's
-    /// ppTxPkt convention: 0 = enqueued, 1 = discarded. The cat-sanity-check + g_lmac_cnt stats and
-    /// the kick/pp_post path are omitted (diagnostic / kick==0 only).
-    pub static CR_TXPKT_DBG: core::sync::atomic::AtomicBool =
-        core::sync::atomic::AtomicBool::new(false);
-
-    /// TEMP diagnostic: call the blob ppTxPkt and observe our_instances[0] head/tail before/after
-    /// to learn where the blob's enqueue actually lands.
-    pub fn cr_ppTxPkt_probe(eb: u32, kick: i32) -> i32 {
-        unsafe {
-            let base = rd(0x4004_ffe0);
-            let h0 = rd(base + 0x20);
-            let t0 = rd(base + 0x24);
-            let r = ppTxPkt(eb, kick);
-            let h1 = rd(base + 0x20);
-            let t1 = rd(base + 0x24);
-            let ti = rd_at(eb + 0x34);
-            let ac = (rd(ti + 0x10) >> 0x14) & 0xf;
-            if !CR_TXPKT_DBG.swap(true, core::sync::atomic::Ordering::Relaxed) {
-                super::println!(
-                    "[CR.txpkt] blob ppTxPkt ret={r} ac={ac} eb={eb:#010x} | our_inst[0] head {h0:#010x}->{h1:#010x} tail {t0:#010x}->{t1:#010x}"
-                );
-            }
-            r
-        }
-    }
-
+    /// Rust ppTxPkt (submit), kick=0. Gate on the per-VIF enable, run the blob security-header leaf,
+    /// map the AC (which runs pm_on_data_tx, the PM-wake), then enqueue the eb onto the REAL TxRxCxt
+    /// per-AC pending list (threaded via eb+0x30). Returns the blob convention: 0 = enqueued,
+    /// 1 = dropped+recycled. On any drop path the eb is recycled here, so the caller must NOT also
+    /// recycle it (doing both is a double-free -- the bug that the wrong ic_interface_enabled masked).
     pub fn cr_ppTxPkt(eb: u32, _kick: i32) -> i32 {
         unsafe {
             let txinfo = rd_at(eb + 0x34);
@@ -1346,35 +1288,6 @@ mod cleanroom_tx {
         }
     }
 
-    /// our_instances[ac] real lmac txq block (base = *(u32*)0x4004ffe0 + ac*0x34).
-    #[inline(always)]
-    unsafe fn our_txq(ac: i32) -> u32 {
-        unsafe { rd(0x4004_ffe0).wrapping_add((ac as u32).wrapping_mul(0x34)) }
-    }
-
-    /// After a faithful arm that did NOT complete (MAC never went active), the real
-    /// our_instances[ac] stays state==1 (armed) and would wedge the queue. If (after a settle)
-    /// state is still 1, reset it, disarm the slot, and recycle the leaked eb so the control
-    /// phase (and next round) work. Returns true if it had to clean up (i.e. the frame never
-    /// completed / did not radiate).
-    pub fn faithful_cleanup(ac: i32) -> bool {
-        unsafe {
-            let txq = our_txq(ac);
-            let state = core::ptr::read_volatile((txq + 0x12) as *const u8);
-            if state == 0 {
-                return false; // completed normally (MAC ISR handled it) -> radiated/consumed
-            }
-            let eb = rd(txq); // cur_eb
-            core::ptr::write_volatile((txq + 0x12) as *mut u8, 0); // state = idle
-            wr(txq, 0); // cur_eb = 0
-            super::hal_mac_txq_disable(ac);
-            if eb != 0 {
-                esf_buf_recycle(eb);
-            }
-            true
-        }
-    }
-
     /// FAITHFUL submit+schedule+arm on REAL scheduler state, from our task (blob pp idle).
     /// Returns (ac, txpkt_ret, blk_before, blk_after, plcp0_before, plcp0_after).
     pub fn faithful_tx(eb: u32, seq: u16) -> (i32, i32, u32, u32, u32, u32) {
@@ -1419,248 +1332,9 @@ mod cleanroom_tx {
         }
     }
 
-    /// Issue the coex TX request the blob does before arming (tests the coex-grant hypothesis).
-    pub fn coex_request(eb: u32) {
-        unsafe { pp_coex_tx_request(eb) }
-    }
-
-    /// Raw PLCP0_ENABLE read for a slot (for tight in-context arm-bit polling).
-    #[inline(always)]
-    pub fn raw_plcp0(slot: i32) -> u32 {
-        unsafe { rd(0x600a_4d6c - (slot as u32) * 0x10) }
-    }
-
-    // ---- LEAD 2a(2): arm OUR frame from ppTask context (called inside hal_mac_txq_enable) ----
-    // Proven: control-register writes + launch bits STICK when issued in this (MAC-active ppTask)
-    // context. We drive the full arm of our pre-built eb on an idle slot here, unblocking the
-    // queues first (that write also sticks in this context). Returns the PLCP0_ENABLE readback.
-    pub const MY_SLOT2: i32 = 1; // idle slot proven to latch launch bits from ppTask context
-    pub static CR_EB: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    pub static CR_SEQ: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    pub static CR_CALL: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    pub static CR_ARM_RB: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    static mut CR_CTX: [u8; 0x40] = [0u8; 0x40];
-
-    /// Reprogram slot 0 (the functional queue the blob just set up for its beacon) with OUR frame,
-    /// WITHOUT setting the arm bit — the blob's own `hal_mac_txq_enable` write that follows will
-    /// launch whatever is now in slot 0. Called in ppTask context before that arm write. Leaves
-    /// our_instances[0] (blob's cur_eb/state) intact so the blob's completion recycles ITS eb.
-    pub fn arm_inctx() {
-        use core::sync::atomic::Ordering::Relaxed;
-        let eb = CR_EB.load(Relaxed);
-        if eb == 0 {
-            return;
-        }
-        unsafe {
-            let seq = CR_SEQ.fetch_add(1, Relaxed) as u16;
-            prep_eb(eb, 0, 0, seq); // our frame, AC/slot 0
-            let ctx = core::ptr::addr_of_mut!(CR_CTX) as *mut u8;
-            core::ptr::write_unaligned(ctx as *mut u32, eb);
-            *ctx.add(4) = 0; // slot 0
-            *ctx.add(5) = 2;
-            *ctx.add(8) = 4;
-            *ctx.add(0x1c) = 0;
-            *ctx.add(0x1d) = 1;
-            let ours = rd(0x4004_ffe0);
-            super::hal_mac_tx_config_timeout(ctx, 0x200);
-            super::hal_mac_tx_set_ppdu(ctx, ours as i32); // overwrites slot-0 PLCP with our frame
-            let backoff = (hal_now() as u16) & 0x0f;
-            core::ptr::write_unaligned(ctx.add(6) as *mut u16, backoff);
-            super::hal_mac_tx_config_edca(ctx);
-            CR_ARM_RB.store(rd(0x600a_4d6c), Relaxed); // slot0 PLCP0_ENABLE (pre-arm)
-        }
-    }
-
-    #[inline(always)]
-    pub fn raw_txblock() -> u32 {
-        unsafe { rd(0x600a_4ca8) }
-    }
-
-    /// From OUR normal task: spin until the MAC is in the active window (block != 0x00ff1000, i.e.
-    /// the blob's just-submitted beacon is keying up), then test whether a CPU write to the block
-    /// register and to an idle slot's launch bits STICKS. Returns (bit0_stuck, block_val, launch).
-    /// This separates execution-context gating from MAC-active-state gating.
-    pub fn active_window_write_probe() -> (bool, u32, bool) {
-        unsafe {
-            let mut blk = 0x00ff_1000u32;
-            for _ in 0..200000 {
-                let b = rd(0x600a_4ca8);
-                if b != 0x00ff_1000 {
-                    blk = b;
-                    // MAC active: try the writes immediately.
-                    wr(0x600a_4ca8, b ^ 0x1);
-                    let stuck = (rd(0x600a_4ca8) & 1) != (b & 1);
-                    wr(0x600a_4ca8, b);
-                    let p = rd(0x600a_4d5c); // idle slot 1 launch
-                    wr(0x600a_4d5c, p | 0xc000_0000);
-                    let latched = rd(0x600a_4d5c) & 0xc000_0000 != 0;
-                    wr(0x600a_4d5c, p);
-                    return (stuck, blk, latched);
-                }
-            }
-            (false, blk, false)
-        }
-    }
-
-    /// One-time per-bit writability probe of WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8), run in the
-    /// SAME (test-phase) MAC state as our failing arm. Distinguishes "CPU write dropped" from
-    /// "write stuck then HW re-blocks".
-    pub fn txblock_write_probe() {
-        unsafe {
-            let v0 = rd(0x600a_4ca8);
-            wr(0x600a_4ca8, v0 | 0x0000_0001);
-            let set_b0 = rd(0x600a_4ca8);
-            wr(0x600a_4ca8, v0 | 0x0000_0400);
-            let set_b10 = rd(0x600a_4ca8);
-            wr(0x600a_4ca8, v0 & !0x0000_1000);
-            let clr_b12 = rd(0x600a_4ca8);
-            wr(0x600a_4ca8, 0);
-            let wr_zero = rd(0x600a_4ca8);
-            wr(0x600a_4ca8, v0); // restore
-            super::println!(
-                "[CR.wp] txblock={v0:#010x} |b0->{set_b0:#010x} |b10->{set_b10:#010x} &~b12->{clr_b12:#010x} =0->{wr_zero:#010x}"
-            );
-        }
-    }
-
-    #[inline(always)]
-    unsafe fn wr8(addr: u32, v: u8) {
-        unsafe { core::ptr::write_volatile(addr as *mut u8, v) }
-    }
-    #[inline(always)]
-    unsafe fn wr16(addr: u32, v: u16) {
-        unsafe { core::ptr::write_volatile(addr as *mut u16, v) }
-    }
-    #[inline(always)]
-    unsafe fn rd8(addr: u32) -> u8 {
-        unsafe { core::ptr::read_volatile(addr as *const u8) }
-    }
-    #[inline(always)]
-    unsafe fn rd16(addr: u32) -> u16 {
-        unsafe { core::ptr::read_volatile(addr as *const u16) }
-    }
-
     /// Allocate ONE eb from the live static-TX pool with our beacon payload copied in.
     pub fn alloc_eb(payload: &[u8]) -> u32 {
         unsafe { esf_buf_alloc(payload.as_ptr(), 1, payload.len() as u32) }
-    }
-
-    /// Fill the dma_desc + txinfo fields exactly like ieee80211_output_raw_process, minus
-    /// the node/seq lookup and ppTxPkt. Re-run every iteration: the MAC clears the DMA owner
-    /// bit after consuming the descriptor, so it must be re-armed, and we bump the seqno/tsf.
-    pub fn prep_eb(eb: u32, iface: u32, my_ac: u32, seq: u16) {
-        unsafe {
-            let dma = rd_at(eb + 4); // dma_desc
-            let frame = rd_at(dma + 4); // dma_desc[1] = on-air frame bytes
-            wr16(eb + 0x14, 0); // header-len part = 0 (total len comes from eb+0x16)
-            let l14 = rd16(eb + 0x14) as u32;
-            let l16 = rd16(eb + 0x16) as u32;
-            // dma_desc[0]: owner | eof | (clear 29) | length(bits14-27)
-            let mut w0 = rd(dma);
-            w0 |= 0x8000_0000;
-            w0 |= 0x4000_0000;
-            w0 &= 0xdfff_ffff;
-            w0 = (((l16 + l14) & 0x3fff) << 0xe) | (w0 & 0xf000_3fff);
-            wr(dma, w0);
-            let txinfo = rd_at(eb + 0x34);
-            wr8(txinfo + 4, 7); // cat/AC group = 7 (mgmt)
-            wr(txinfo + 0x18, hal_now()); // tsf submit time
-            // txinfo+0x10: iface bit19 + AC bits20-23 (ppMapTxQueue would set the AC; we set ours)
-            let mut w10 = rd(txinfo + 0x10);
-            w10 = (w10 & 0xfff7_ffff) | ((iface & 1) << 0x13);
-            w10 = (w10 & 0xff0f_ffff) | ((my_ac & 0xf) << 0x14);
-            wr(txinfo + 0x10, w10);
-            // flags word: clear discard/HE/AMPDU; broadcast addr1 -> |=0x402; match live beacon
-            // 0x6xxx
-            let mut fl = rd(txinfo);
-            fl &= !(0x0001_0000u32 | 0x8000_0000 | 0x0040_0000);
-            fl &= !0x40; // ensure bit6 clear so (flags & 0xc0) == 0x80
-            fl |= 0x80; // set bit7: mac_tx_set_txop_q keeps PLCP0_ENABLE bit22 (descriptor base)
-            if (rd8(frame + 4) & 1) != 0 {
-                fl |= 0x402;
-            }
-            fl |= 0x6000;
-            wr(txinfo, fl);
-            wr8(txinfo + 0xc, 0); // rate idx 0 = 1 Mbit/s DSSS (legacy beacon)
-            wr8(txinfo + 0x20, 0); // pti
-            wr16(txinfo + 0x22, 0);
-            wr(txinfo + 0x40, 0); // lifetime fields (config_timeout floors via param2)
-            wr(txinfo + 0x44, 0);
-            wr16(frame + 0x16, seq << 4); // 802.11 sequence control
-        }
-    }
-
-    /// The clean-room ARM: our own copy of the lmacSetTxFrame + lmacTxFrame essentials,
-    /// driving the proven Rust hal functions. `ctx` is a private 0x40-byte fake txq context;
-    /// only the fields the hal functions read are filled. No our_instances write.
-    pub fn arm(ctx: *mut u8, eb: u32, slot: i32) -> u32 {
-        unsafe {
-            // fake txq context fields the hal fns read:
-            core::ptr::write_unaligned(ctx as *mut u32, eb); // [0..4] eb ptr
-            *ctx.add(4) = slot as u8; // [4] slot/AC
-            *ctx.add(5) = 2; // [5] aifsn
-            *ctx.add(8) = 4; // [8] CW exponent (backoff mask)
-            *ctx.add(0x1c) = 0; // [0x1c] txop s3
-            *ctx.add(0x1d) = 1; // [0x1d] txop depth
-            let ours = rd(0x4004_ffe0); // our_instances base (set_ppdu param2)
-            // lmacSetTxFrame essentials: lifetime timeout, then the PPDU/slot programming.
-            hal_mac_tx_config_timeout(ctx, 0x200);
-            hal_mac_tx_set_ppdu(ctx, ours as i32);
-            // lmacTxFrame essentials: random EDCA backoff (masked by CW), config_edca, arm.
-            let backoff = (hal_now() as u16) & !(0xffffu16 << (*ctx.add(8) & 0x1f));
-            core::ptr::write_unaligned(ctx.add(6) as *mut u16, backoff & 0x3ff);
-            hal_mac_tx_config_edca(ctx);
-            // CANDIDATE STROBE (lead 1): unblock TX in WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8)
-            // exactly as hal_mac_init + hal_pm_unblock_txq do, right before the launch write.
-            let txblock_before = rd(0x600a_4ca8);
-            if UNBLOCK_TX {
-                wr(
-                    0x600a_4ca8,
-                    txblock_before & !(0x00ff_0000 | 0x1000 | 0x000e_0000),
-                );
-            }
-            let txblock_after = rd(0x600a_4ca8); // did the unblock write stick?
-            hal_mac_txq_enable(slot);
-            // Immediate readback of PLCP0_ENABLE (arm bits are 0xc0000000). Returns whether the
-            // valid|enable latched at all, the very first bus cycle after the enable write.
-            let rb = rd(0x600a_4d6c - (slot as u32) * 0x10);
-            LAST_TXBLOCK.store(txblock_before, core::sync::atomic::Ordering::Relaxed);
-            LAST_TXBLOCK_AFTER.store(txblock_after, core::sync::atomic::Ordering::Relaxed);
-            rb
-        }
-    }
-
-    /// Toggle for the candidate unblock strobe.
-    pub const UNBLOCK_TX: bool = true;
-    pub static LAST_TXBLOCK: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    pub static LAST_TXBLOCK_AFTER: core::sync::atomic::AtomicU32 =
-        core::sync::atomic::AtomicU32::new(0);
-
-    /// Disarm our slot and clear its completed-state bit, so the next arm starts clean and the
-    /// blob's TX-complete scan sees no stale bit for our slot.
-    pub fn disarm(slot: i32) {
-        unsafe {
-            hal_mac_txq_disable(slot);
-            wr(0x600a_4cac, 1u32 << slot); // clr state A bit for our slot (write-1-to-clear)
-        }
-    }
-
-    /// Out-of-band diagnostic snapshot (called rarely, never on the hot path): the arm bits of
-    /// all 8 slots, our slot's raw PLCP0_ENABLE, EDCA-conf (0x4d68), and PMD completion word.
-    pub fn snapshot(slot: i32) -> (u32, u32, u32, u32) {
-        unsafe {
-            let mut arms = 0u32;
-            for s in 0..8u32 {
-                let plcp0 = rd(0x600a_4d6c - s * 0x10);
-                if (plcp0 & 0xc000_0000) != 0 {
-                    arms |= 1 << s;
-                }
-            }
-            let plcp0 = rd(0x600a_4d6c - (slot as u32) * 0x10);
-            let edca = rd(0x600a_4d68 - (slot as u32) * 0x10);
-            let pmd = rd(0x600a_54e8 - (slot as u32) * 0x74);
-            (arms, plcp0, edca, pmd)
-        }
     }
 
     /// One-time write/read probe across all 8 slots: which slot config banks are writable?
@@ -1689,6 +1363,9 @@ mod cleanroom_tx {
     }
 }
 
+// ============================================================================
+// SECTION 4 — Beacon payloads
+// ============================================================================
 const SSID_CTRL: &str = "CR-CTRL";
 const SSID_RUST: &str = "CR-RUST";
 const MAC_CTRL: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0xda, 0xb0];
@@ -1727,6 +1404,9 @@ fn build_beacon(buf: &mut [u8], ssid: &str, mac: [u8; 6]) -> usize {
     .unwrap()
 }
 
+// ============================================================================
+// SECTION 5 — main: bring-up + the sustained pure-Rust TX loop
+// ============================================================================
 #[esp_hal::main]
 async fn main(_spawner: embassy_executor::Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
@@ -1761,35 +1441,29 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     );
 
     // Let the blob bring-up settle and prove RF with a few control beacons first.
-    for _ in 0..10 {
-        let _ = sniffer.send_raw_frame(true, ctrl, false);
-        delay.delay(Duration::from_millis(100));
+    if cleanroom_tx::CONTROL_BEACON {
+        for _ in 0..10 {
+            let _ = sniffer.send_raw_frame(true, ctrl, false);
+            delay.delay(Duration::from_millis(100));
+        }
     }
 
-    // Allocate our eb ONCE from the live static-TX pool (payload copied in). Reused forever.
-    let eb = cleanroom_tx::alloc_eb(&rust_buf[..rust_len]);
-    println!("[CR] esf_buf_alloc(type=1, len={rust_len}) -> eb={eb:#010x}");
-    cleanroom_tx::probe();
-    let mut ctx = [0u8; 0x40];
-    let ctx_ptr = ctx.as_mut_ptr();
+    // Which TX slot config banks the scheduler has activated (diagnostic).
+    if cleanroom_tx::DIAG {
+        cleanroom_tx::probe();
+    }
 
-    // The intrusive in-context arm (lead 2a(2)) is disabled for the faithful reproduction.
-    ARM_INCTX_ENABLED.store(false, core::sync::atomic::Ordering::Relaxed);
-    let _ = eb;
-    let _ = ctx_ptr;
-
-    // ================= FAITHFUL REPRODUCTION (session 9d) =================
-    // Reproduce the blob's submit->schedule->arm on the REAL our_instances state, from our task,
-    // with the blob pp idle (no send_raw_frame during the faithful phase). Oracle: does the MAC go
-    // active (0x600a4ca8: 0x00ff1000 -> 0x00002000) and PLCP0_ENABLE latch (0xc.......)?
-    println!("[CR.F] faithful reproduction: ppTxPkt(eb,0) + ppProcessTxQ(ac) on real state");
+    // Sustained pure-Rust TX: each round allocates a fresh eb, runs the full Rust submit->schedule
+    // ->arm on the REAL blob scheduler state (blob pp idle), then Rust completion+recycle. The
+    // [CR.H] oracle (out-of-band) should read arms==latched==completed, allocfail==0, and
+    // last_plcp0==0xc067a6f0 (our frame armed on slot 0).
+    println!("[CR.F] pure-Rust TX pipeline on real scheduler state (submit/schedule/arm/complete)");
     let mut round: u32 = 0;
     let mut seq: u16 = 0;
     let (mut n_arm, mut n_latch, mut n_done, mut n_allocfail) = (0u32, 0u32, 0u32, 0u32);
     let mut last_pa: u32 = 0;
     loop {
-        // ----- FAITHFUL PHASE: one full submit+schedule+arm per iteration (NO send_raw_frame)
-        // -----
+        // ----- TX phase: one full submit+schedule+arm+complete per iteration (no send_raw_frame).
         for _ in 0..4u32 {
             let feb = cleanroom_tx::alloc_eb(&rust_buf[..rust_len]);
             if feb == 0 {
@@ -1803,7 +1477,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
                 }
                 last_pa = pa;
                 delay.delay(Duration::from_millis(40)); // let the frame win the medium + TX + complete
-                // PART B: Rust-driven completion + recycle (not the blob ISR).
+                // Rust-driven completion + recycle (single owner of the eb).
                 let (completed, _status) = cleanroom_tx::cr_complete(ac, feb);
                 if completed {
                     n_done += 1;
@@ -1812,22 +1486,24 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
             delay.delay(Duration::from_millis(60));
         }
 
-        // ----- CONTROL PHASE: a few blob beacons (separate, confirm RF/capture health) -----
-        for _ in 0..6 {
-            let _ = sniffer.send_raw_frame(true, ctrl, false);
-            delay.delay(Duration::from_millis(100));
+        // ----- Control phase: a few blob-scheduled CR-CTRL beacons as a same-RF reference.
+        if cleanroom_tx::CONTROL_BEACON {
+            for _ in 0..6 {
+                let _ = sniffer.send_raw_frame(true, ctrl, false);
+                delay.delay(Duration::from_millis(100));
+            }
         }
         round += 1;
         // Periodic health + oracle summary (out-of-band; catchable in any monitor window).
-        if round % 8 == 0 {
+        if cleanroom_tx::DIAG && round % 8 == 0 {
             let pmblk = cleanroom_tx::PM_BLK.load(core::sync::atomic::Ordering::Relaxed);
             println!(
                 "[CR.H] rounds={round} arms={n_arm} latched={n_latch} completed={n_done} allocfail={n_allocfail} last_plcp0={last_pa:#010x} pm_blk={:#06x}->{:#06x}",
                 pmblk >> 16, pmblk & 0xffff
             );
         }
-        if round % 5 == 0 {
-            println!("[CR.F] completed {round} faithful+control rounds");
+        if cleanroom_tx::DIAG && round % 5 == 0 {
+            println!("[CR.F] completed {round} rounds");
         }
     }
 }
