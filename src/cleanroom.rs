@@ -1545,7 +1545,6 @@ mod cleanroom_tx {
         unsafe { esf_buf_alloc(payload.as_ptr(), 1, payload.len() as u32) }
     }
 
-
     /// Fill the dma_desc + txinfo fields exactly like ieee80211_output_raw_process, minus
     /// the node/seq lookup and ppTxPkt. Re-run every iteration: the MAC clears the DMA owner
     /// bit after consuming the descriptor, so it must be re-armed, and we bump the seqno/tsf.

@@ -600,3 +600,53 @@ static 0x40812090), mask@+0x31 = 0x01.
 Method note (the lesson that bit us): every fixed address/offset must be verified against the 0.3.0
 linked ELF / ROM disasm, INCLUDING the base-vs-pointer distinction -- a control block reached through a
 runtime pointer (0x4087ff68 -> 0x40812050) is not the same as its static link address (0x40812090).
+
+## Session 9k Part 2: substrate frontier -- esf_buf pool and pm_on_data_tx both stay blob, characterized
+
+Attempted the two substrate leaves. Both are kept blob with precise, evidence-backed reasons; radiation
+stays healthy from fresh flash (rounds=24 arms=96 latched=87 completed=96 allocfail=0
+last_plcp0=0xc067a6f0, no panic).
+
+esf_buf_alloc / esf_buf_recycle -- KEPT BLOB (attempted a Rust recycle; found a callback-mediated,
+two-list pool that a bare freelist reimpl cannot feed):
+- The pool is NOT a single freelist. From the 0.3.0 disasm: esf_buf_alloc pops the per-type head at
+  0x40811b90 + type*0x14, while esf_buf_recycle pushes to a DIFFERENT per-type head, g_eb_list_desc =
+  0x40811bc8 + type*0x14 (the two are +0x38 apart). Both alloc and recycle invoke OSI callbacks at
+  *(0x4087ff6c)+0x54 and +0x58 (a lock + a "buffer-count-changed -> run TX scheduler" hook); the pool
+  buffers themselves are malloc'd at init by esf_buf_setup_static/esf_buf_setup.
+- Experiment: a faithful Rust esf_buf_recycle (type-1 field resets + freelist push + free-counter,
+  OMITTING the two OSI callbacks) RADIATES and LATCHES fine (latched==arms, no panic) -- so the
+  callbacks are NOT on the latching path (that was the ic_interface_enabled bug, now fixed). BUT the
+  pool DRAINS: after ~31 buffers, every alloc fails (arms stall at 31, allocfail climbs to 65+),
+  whether the push targets the recycle head (0x40811bc8) OR the alloc head (0x40811b90). The blob
+  esf_buf_recycle holds allocfail=0 forever. So the buffer RETURN depends on the callback-mediated
+  reconciliation between the two lists, not a simple push -- reimplementing it means replicating the
+  OSI buffer-accounting subsystem. Kept blob.
+
+pm_on_data_tx -- KEPT BLOB (the crown-jewel wake; precise characterization of the blob-free gap):
+- pm_on_data_tx (0x4080f30c) tail-jumps to pm_tx_data_process (0x4080f08e), a PM FSM over g_pm
+  (0x4081ea98). Path for our disconnected beacon (iface 0): guards on g_pm[2]==iface, TWT, and flags at
+  0x40812160/g_pm[0xe]; calls pm_check_state; then for the sleep-pending state (g_pm[0x121]==3) calls
+  pm_disconnected_wake (0x42020838).
+- pm_disconnected_wake, when g_pm[0x121]==3 and *(0x40812160)==0: calls wifi_rf_phy_enable(0)
+  (0x40000ba8, RF/PHY on), sets g_pm[0x121]=2, calls pm_set_state (0x4202040a), then three coex/slice
+  calls, and pm_send_nullfunc. It also compares TSF/slice-threshold accumulators (g_pm+0x70/0x74/
+  0x1b0/0x1b4) and calls func-ptrs in *(0x4087ff6c) (+0xe4/+0xf0/+0x108/+0x198).
+- The precise wake mechanism / blob-free gap: WDEV_PM_TXBLOCK_RETENTION (0x600a4ca8) is only ever
+  SET (|= 0xe0000) by the PM code (three sites: 0x42020ad6, 0x420213ac, 0x42021478 -- all sleep/block
+  transitions). There is NO CPU store that CLEARS 0x00ff1000->0 in the PM FSM: the block clears as a
+  HARDWARE consequence of wifi_rf_phy_enable + the FSM reaching the wake state. So the wake is not a
+  register write we can replay -- it needs the g_pm state machine (the ~a-dozen g_pm bytes incl. the
+  [0x121] state var and the TSF/slice accumulators), pm_set_state's FSM body, wifi_rf_phy_enable
+  (exists in esp-phy/esp-wifi-hal), and the coex-slice/nullfunc calls, all in the right order. A clean
+  Rust reimpl would have to reproduce that FSM + PHY-enable to make the hardware drop the block; a bare
+  0x600a4ca8 write does not (the earlier UNBLOCK_TX strobe confirmed this). Kept blob, characterized.
+
+Remaining blob leaves after this session (the fully-blob-free frontier):
+- SUBSTRATE: pm_on_data_tx (modem-PM wake FSM; the hardware block-clear needs the FSM+PHY-enable, not a
+  register write), esf_buf_alloc/recycle (callback-mediated two-list pool).
+- hal_mac_tx.o: ppProcTxSecFrame (security-header work, required), plus HE-only helpers never hit by
+  the DSSS beacon (mac_tx_set_hesig/htsig, hal_mac_fill_hwtxop).
+- lmac.o: the ~15 ROM *ABS* symbols (not interposable) + the placement-locked libpp lmac copies.
+Everything else on the per-frame TX path (submit/map/pop/arm/complete + guards + rts_rate/set_len +
+ic_interface_enabled) is Rust; hal_he_set_tx_protection is now Rust too (session 9j/9k).
