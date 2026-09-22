@@ -189,14 +189,6 @@ mod lmac_deblob {
 // Each replaces its global_asm shim above. Verified against the blob decompilation.
 // PLCP0_ENABLE for blob queue 0 (highest slot) is 0x600a_4d6c; higher queue index
 // steps DOWN by 0x10 (the blob's reversed slot numbering), so addr = 0x600a_4d6c - ac*0x10.
-mod blob {
-    unsafe extern "C" {
-        // config_timeout: our Rust hal_mac_tx_config_timeout delegates the non-beacon (RTS/CTS)
-        // timeout programming to the blob; clr_mplen: aggregate mplen-bitmap teardown on completion.
-        pub fn blob_hal_mac_tx_config_timeout(txq: *mut u8, param2: i32) -> u32;
-        pub fn blob_hal_mac_tx_clr_mplen(param1: i32, q: i32);
-    }
-}
 
 // hal_mac_tx.o leaves still called by our Rust `hal_mac_tx_set_ppdu`. plcp0/plcp1/txop_q/len/
 // rts_rate are Rust now; these four are HT/HE-SIG, coex-PTI and aggregate-TXOP leaves that the
@@ -724,8 +716,6 @@ pub extern "C" fn hal_set_tx_min_pwr(pwr: u32) {
     }
 }
 
-// esp_test_is_disable_edca[]: per-AC test flag array in blob flash (memory-mapped, readable).
-const ESP_TEST_IS_DISABLE_EDCA: u32 = 0x4208_318c;
 // _LANCHOR0: baked TX-power table in blob flash (signed bytes, stride 2), read by hal_get_tx_pwr.
 const TX_PWR_TABLE: u32 = 0x4208_3134;
 // Real conf1 register (slot base + 4); clr_mplen's HE-TB mplen-valid bit is bit 3.
@@ -795,18 +785,13 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
     0
 }
 
-/// blob `hal_mac_tx_clr_mplen`: for legacy frames (conf1 bit3 clear) this is a no-op; the
-/// HE-TB mplen-bitmap teardown (bit3 set) is delegated to the blob (TODO: reimplement when
-/// HE-TB support is added — it touches _LANCHOR8/9 he bitmap state).
+/// blob `hal_mac_tx_clr_mplen`: the blob reads CONF1 (0x600a4d64 - q*0x10) and, only if bit3 is set
+/// (an HE-TB aggregate), tears down the HE mplen bitmap. For a legacy frame (bit3 clear) it is a
+/// no-op. Our DSSS beacon never builds an HE PPDU, so bit3 is never set and this is always the
+/// no-op path -- fully Rust. The HE-TB teardown is intentionally not implemented (unexercised).
+/// Verified against the 0.3.0 disasm of blob_hal_mac_tx_clr_mplen.
 #[unsafe(no_mangle)]
-pub extern "C" fn hal_mac_tx_clr_mplen(param1: i32, q: i32) {
-    let conf1 = TXQ_CONF1_REAL_Q0.wrapping_sub((q as u32).wrapping_mul(0x10));
-    unsafe {
-        if rd(conf1) & 8 != 0 {
-            blob::blob_hal_mac_tx_clr_mplen(param1, q);
-        }
-    }
-}
+pub extern "C" fn hal_mac_tx_clr_mplen(_param1: i32, _q: i32) {}
 
 #[inline(always)]
 unsafe fn rd_at(addr: u32) -> u32 {
@@ -834,15 +819,14 @@ pub extern "C" fn hal_mac_tx_config_edca(txq: *mut u8) -> u32 {
 }
 
 /// blob `hal_mac_tx_config_timeout`: program the slot's CONF1 low-12 lifetime/timeout field
-/// from the txinfo (+0x40/+0x44), clamped and floored by `param2`. Delegates to the blob only
-/// when the per-AC EDCA test bypass is active (never in normal operation).
+/// (0x600a4d68 - ac*0x10) from the txinfo (+0x40/+0x44), clamped to 0xfff and floored by `param2`.
+/// Fully Rust: the blob's only other path is the `esp_test` per-AC EDCA-disable bypass
+/// (test_disable_edca_tx), which is never enabled in normal operation -- the blob itself takes this
+/// register-write path. Verified against the 0.3.0 disasm of blob_hal_mac_tx_config_timeout.
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_config_timeout(txq: *mut u8, param2: i32) -> u32 {
     unsafe {
         let ac = *txq.add(4) as u32;
-        if *((ESP_TEST_IS_DISABLE_EDCA + ac) as usize as *const u8) != 0 {
-            return blob::blob_hal_mac_tx_config_timeout(txq, param2);
-        }
         let conf1 = TXQ_CONF1_Q0.wrapping_sub(ac.wrapping_mul(0x10));
         let eb = core::ptr::read_unaligned(txq as *const u32);
         let txinfo = rd_at(eb.wrapping_add(0x34));
@@ -954,13 +938,20 @@ mod cleanroom_tx {
         // another; the OSI callbacks reconcile them). type 1 = static TX. See docs for why it stays.
         fn esf_buf_alloc(payload: *const u8, pool_type: i32, len: u32) -> u32;
         fn esf_buf_recycle(eb: u32);
-        fn hal_now() -> u32; // WDEV TSF timer read (submit timestamp / EDCA backoff seed)
         // modem-PM wake FSM: clears the WDEV_PM_TXBLOCK_RETENTION interlock so the MAC goes active
         // (a hardware consequence of the g_pm FSM + wifi_rf_phy_enable, not a single register write).
         fn pm_on_data_tx(iface: u32, p2: i32) -> i32;
         // security-header handling: dual-descriptor (eb+8 vs eb+4) length adjustment, required for
         // reliable emit (a no-op regresses the on-air frame).
         fn ppProcTxSecFrame(eb: u32) -> i32;
+    }
+
+    /// Rust `hal_now`: the blob reads the free-running WDEV system timer at 0x600ad000 (a single
+    /// `lw`, verified against the 0.3.0 disasm of hal_now @0x4202c6e2). We use it only as the TX
+    /// submit timestamp (txinfo+0x18); a direct volatile read reproduces it exactly.
+    #[inline(always)]
+    pub fn cr_hal_now() -> u32 {
+        unsafe { rd(0x600a_d000) }
     }
 
     /// Rust ppTxPkt (submit), kick=0. Gate on the per-VIF enable, run the blob security-header leaf,
@@ -990,7 +981,7 @@ mod cleanroom_tx {
             let map = cr_ppMapTxQueue(eb); // Rust AC mapping; keeps blob pm_on_data_tx (PM-wake)
             if map == 0 {
                 let ti = rd_at(eb + 0x34);
-                wr(ti + 0x18, hal_now()); // tsf submit stamp (blob: _WDEV_TSF0_TIMER_LO)
+                wr(ti + 0x18, cr_hal_now()); // tsf submit stamp (blob: _WDEV_TSF0_TIMER_LO)
                 // Pending-list base is pTxRx (TxRxCxt), *(0x4087ff80) -- per-AC lists at +ac*0x34,
                 // head +0x20 / tail +0x24 (threaded via eb+0x30). Verified from the linked ppTxPkt
                 // disasm (`lui 0x40880; lw -0x80` = *(0x4087ff80)). NOT our_instances (0x4087f840).
@@ -1383,7 +1374,7 @@ mod cleanroom_tx {
             wr(dma, w0);
             let txinfo = rd_at(eb + 0x34);
             core::ptr::write_volatile((txinfo + 4) as *mut u8, 7); // cat = mgmt
-            wr(txinfo + 0x18, hal_now());
+            wr(txinfo + 0x18, cr_hal_now());
             let mut w10 = rd(txinfo + 0x10);
             w10 &= 0xfff7_ffff; // iface 0
             wr(txinfo + 0x10, w10);

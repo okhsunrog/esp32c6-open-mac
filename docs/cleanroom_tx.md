@@ -185,11 +185,16 @@ lmac.o: the ~15 ROM *ABS* lmac symbols are not interposable, and the libpp lmac 
 placement-locked (a byte-identical copy at a different address stalls TX); only the empty
 `lmac_update_tx_statistic` is safely reimplemented (as a no-op). See the appendix.
 
-`hal_now` (WDEV TSF timer read) is the one remaining trivial blob/ROM helper on the hot path. Two
-Rust hal ops also still delegate a config path to the blob (`blob_hal_mac_tx_config_timeout` for the
-non-beacon timeout case, `blob_hal_mac_tx_clr_mplen` for the mplen-bitmap teardown); the beacon path
-itself is Rust. Everything else on the per-frame TX path — submit, AC-map, enqueue/pop, schedule,
-arm (plcp0/plcp1/txop_q/rts_rate/set_len/he_protection), and completion — is Rust.
+`hal_now` is now Rust: the blob reads the free-running WDEV system timer at 0x600ad000 (a single
+`lw`, verified against the 0.3.0 disasm of hal_now @0x4202c6e2); `cr_hal_now` is a direct volatile
+read used as the TX submit timestamp. The two former hal config delegations are also gone:
+`hal_mac_tx_config_timeout` no longer branches to the blob (its only other path is the `esp_test`
+EDCA-disable bypass, never enabled — the blob itself takes the register-write path our Rust
+reproduces; the old code even read a wrong 0.3.0 address, 0x4208318c vs the blob's 0x408216c8, for
+that dead check), and `hal_mac_tx_clr_mplen` is a pure no-op for legacy frames (the blob only acts
+when CONF1 bit3 = HE-TB, which our DSSS beacon never sets). Everything else on the per-frame TX path —
+submit, AC-map, enqueue/pop, schedule, arm (plcp0/plcp1/txop_q/rts_rate/set_len/he_protection), and
+completion — is Rust.
 
 ## Appendix — session log
 
@@ -202,6 +207,9 @@ Condensed timeline of the investigation (full blow-by-blow is in git history):
 - 9h: guard leaves in Rust; ppProcTxSecFrame confirmed required (must stay blob).
 - 9i: hal register helpers (rts_rate, set_len) in Rust; he_protection/pti deferred.
 - 9j: root-caused + fixed the layout-sensitive heap corruption (the ic_interface_enabled double-free).
+- 9n: hal_now + the two hal config delegations (config_timeout esp_test branch, clr_mplen HE-TB
+  branch) reimplemented/removed in Rust; OTA-confirmed. Exercised-path blob now pm_on_data_tx (+ the
+  still-blob mac_tx_set_pti coex leaf).
 - 9m: ppProcTxSecFrame reimplemented in Rust (open/no-key beacon path, memset resolved); OTA-confirmed
   to emit as reliably as the blob.
 - 9l: esf_buf de-blobbed — an independent Rust eb pool (own free-list, blob esf_buf untouched on the
