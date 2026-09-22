@@ -955,9 +955,20 @@ mod cleanroom_tx {
 
     /// Opt-in diagnostics. `DIAG` gates the boot slot-writability probe and the periodic [CR.H]
     /// health / [CR.F] progress prints (out-of-band, never on the hot TX path). `CONTROL_BEACON`
-    /// gates the blob-scheduled CR-CTRL beacon that runs alongside CR-RUST as a same-RF reference.
-    /// Both default true so the reference build behaves exactly as verified. The sustained TX path
-    /// (alloc -> faithful_tx -> cr_complete) carries no diagnostics regardless.
+    /// gates the 10 blob-scheduled CR-CTRL beacons emitted ONCE at boot (before our loop, so they do
+    /// not contend) as an RF baseline. The sustained TX path (alloc -> faithful_tx -> cr_complete)
+    /// carries no diagnostics regardless.
+    ///
+    /// SLOT-0 CONTENTION (root cause of the weak/erratic TX): `faithful_tx` drives AC0/slot0
+    /// directly on the assumption that the blob pp/ppTask is idle. A `send_raw_frame` (the CR-CTRL
+    /// beacon) KICKS the blob ppTask, which then also schedules onto slot 0 and races our direct arm
+    /// + completion on the same slot and shared TxRxCxt pending list -- collapsing BOTH CR-RUST and
+    /// CR-CTRL to near-zero (measured: our pipeline alone 131 frames/39s @ -70 dBm; the blob beacon
+    /// alone 96-146 frames @ -68 dBm; the two interleaved every round -> 1-3 frames each). It also
+    /// arms the blob's disconnected-sleep timer, thrashing the modem sleep/wake per round. So the
+    /// per-round CR-CTRL burst is NOT interleaved by default; a continuous same-RF CR-CTRL reference
+    /// requires `CR_TX_MODE=1` (control-only: our pipeline off, blob beacon only), and `CR_BURST=1`
+    /// re-enables the interleaved burst only for the deliberately-contended wake A/B.
     pub const DIAG: bool = true;
     pub const CONTROL_BEACON: bool = true;
 
@@ -985,7 +996,11 @@ mod cleanroom_tx {
             None => 0,
         }
     }
-    pub const CONTROL_BURST: bool = env_digit(option_env!("CR_NO_BURST")) == 0;
+    // Per-round CR-CTRL burst: OFF by default (it contends with our slot-0 pipeline, see
+    // CONTROL_BEACON). CR_BURST=1 re-enables it for the contended wake A/B; CR_TX_MODE=1
+    // (control-only) is the non-contended way to run a continuous blob reference.
+    pub const CONTROL_BURST: bool =
+        env_digit(option_env!("CR_BURST")) == 1 || env_digit(option_env!("CR_AB")) != 0;
     pub const PM_WAKE_EXPERIMENT: u8 = env_digit(option_env!("CR_PM_EXP"));
     //   CR_AB=1         : same-RF A/B -- alternate the wake per round (even rounds Rust, odd rounds
     //                     blob), so the two variants can be compared by round parity (seq/4) inside
@@ -993,6 +1008,32 @@ mod cleanroom_tx {
     pub const AB_WAKE: bool = env_digit(option_env!("CR_AB")) != 0;
     pub static AB_USE_BLOB: core::sync::atomic::AtomicBool =
         core::sync::atomic::AtomicBool::new(false);
+    //   CR_TX_MODE=1    : control-only -- skip the Rust faithful_tx pipeline entirely and emit only
+    //                     the blob CR-CTRL beacon (send_raw_frame), so the firmware behaves like the
+    //                     pure-blob example. Isolates whether our Rust TX path degrades the shared
+    //                     modem/slot vs a device-state effect that also hits the blob.
+    pub const TX_MODE_CONTROL_ONLY: bool = env_digit(option_env!("CR_TX_MODE")) == 1;
+
+    /// One-shot dump of the PHY TX-power / gain-mem state (out of band). 0x600a4400 min-pwr
+    /// (hal_get_tx_min_pwr), the gain-mem words 0x600a08c8..d4 (set_tx_gain_mem; verified to change
+    /// during TX in prior sessions), 0x600a0910 / 0x600a00c0 FE config, 0x600a7030 BB. Comparing
+    /// the post-init dump (== the blob's, since both run the same WifiController::new) against a
+    /// post-loop dump shows whether our path lowers TX power/gain over a run.
+    pub fn pwr_dump(tag: &str) {
+        unsafe {
+            super::println!(
+                "[CR.PWR] {tag} minpwr={:#010x} gain[c8/cc/d0/d4]={:#010x} {:#010x} {:#010x} {:#010x} fe0910={:#010x} fe00c0={:#010x} bb7030={:#010x}",
+                rd(0x600a_4400),
+                rd(0x600a_08c8),
+                rd(0x600a_08cc),
+                rd(0x600a_08d0),
+                rd(0x600a_08d4),
+                rd(0x600a_0910),
+                rd(0x600a_00c0),
+                rd(0x600a_7030),
+            );
+        }
+    }
     /// Experiment-only readback of the block register right after the hal_mac_init store (and, for
     /// the clock-gated variant, whether that store stuck). Not read on the production build.
     pub static PM_BLK_AFTER_STORE: core::sync::atomic::AtomicU32 =
@@ -1998,6 +2039,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     if cleanroom_tx::DIAG {
         cleanroom_tx::probe();
         cleanroom_tx::pm_snapshot();
+        cleanroom_tx::pwr_dump("post-init");
     }
     // Initialise the independent Rust eb pool (no blob esf_buf in the hot path).
     cleanroom_tx::cr_pool_init(&rust_buf[..rust_len]);
@@ -2017,6 +2059,9 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
         }
         // ----- TX phase: one full submit+schedule+arm+complete per iteration (no send_raw_frame).
         for _ in 0..4u32 {
+            if cleanroom_tx::TX_MODE_CONTROL_ONLY {
+                break; // control-only: emit only the blob CR-CTRL beacon below
+            }
             let feb = if cleanroom_tx::CR_POOL_ENABLED {
                 cleanroom_tx::cr_pool_alloc(&rust_buf[..rust_len])
             } else {
@@ -2050,6 +2095,9 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
             }
         }
         round += 1;
+        if cleanroom_tx::DIAG && round == 8 {
+            cleanroom_tx::pwr_dump("post-loop");
+        }
         // Periodic health + oracle summary (out-of-band; catchable in any monitor window).
         if cleanroom_tx::DIAG && round % 8 == 0 {
             use core::sync::atomic::Ordering::Relaxed;

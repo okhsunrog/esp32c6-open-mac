@@ -258,6 +258,39 @@ back-to-back fresh-flash runs in this session while the third-party AP reference
 -53..-56 dBm and the blob's CR-CTRL path was hit identically — treat absolute counts across runs as
 noise and compare only inside one capture (CR-CTRL reference or the per-round A/B).
 
+## Slot-0 contention: why the CR-CTRL beacon must not be interleaved
+
+`faithful_tx` drives AC0/slot0 directly (arm + own completion) on the assumption that the blob
+pp/`ppTask` is idle. That assumption holds only while nothing else submits to the blob TX path. A
+`send_raw_frame` — which is exactly what the `CR-CTRL` reference beacon is — KICKS the blob `ppTask`,
+which then also schedules onto slot 0 and races our direct arm + completion on the same slot and the
+same shared `TxRxCxt` pending list. The result collapses BOTH beacons.
+
+Measured (same RF, same session, device confirmed healthy — pure blob 146 frames/20s @ -68 dBm):
+- our Rust pipeline alone (no interleaved CR-CTRL): **131–236 frames @ -69 dBm, steady** — matches
+  the blob.
+- the blob CR-CTRL beacon alone (`CR_TX_MODE=1` control-only, our pipeline off): 96 frames @ -69 dBm.
+- the two interleaved every round (the old default): **1–3 frames each @ -82 dBm** — both collapse.
+- the collapse is independent of our PM wake (it happens with `CR_BLOB_WAKE=1` too), so it is the
+  slot-0 / ppTask race, not the wake. The interleaving also arms the blob's disconnected-sleep timer,
+  so the modem additionally thrashes sleep/wake every round (`pm_wakes == rounds`), whereas with the
+  pipeline exclusive the modem wakes once and stays awake (`pm_wakes == 1`, block stays 0).
+
+This was the "weak and erratic TX" symptom (our firmware transmitting at -81 dBm / 2-3 frames while
+the pure blob was healthy): it was NOT device state and NOT TX power — both firmwares run the same
+`WifiController::new` (which ends with `esp_wifi_set_max_tx_power(20)`), so the PHY TX-power/gain
+state is identical, and the on-device oracle showed `arms == latched == completed` at full rate
+throughout (the modem was never rate-collapsing). It was our own pipeline contending with the
+interleaved blob beacon on slot 0.
+
+Fix: the per-round CR-CTRL burst is OFF by default — the 10 CR-CTRL beacons are emitted only once at
+boot, before our loop starts (so `ppTask` has gone idle by the time we drive slot 0), as an RF
+baseline. A continuous same-RF blob reference is fundamentally incompatible with our direct-slot
+pipeline (they share slot 0), so it is available only as `CR_TX_MODE=1` (control-only: our pipeline
+disabled, blob beacon only) for a clean blob-vs-blob RF check, or `CR_BURST=1` / `CR_AB=1` for the
+deliberately-contended wake A/B. Default validated from a fresh flash: 236 CR-RUST frames over 58 s
+at -69.3 dBm, present in every 10 s bin, `pm_wakes=1`, `arms==latched==completed`, no collapse.
+
 ## Minimal remaining blob surface
 
 The exercised per-frame TX path is entirely Rust. Everything below is either Rust now, kept blob
