@@ -144,23 +144,14 @@ core::arch::global_asm!(
 // pointer lives in the fixed pp/ROM pointer-table slot `our_instances_ptr` (address 0x4004ffe0 in
 // the linked firmware). The blob materialises the base with `lui a5,0x40050; lw a5,-0x20(a5)`
 // (verified in the LINKED blob_GetAccess @0x40805126), i.e. base = `*(u32*)0x4004ffe0`, then
-// indexes `our_instances[ac] = base + ac*0x34` (5 ACs, stride 0x34). We reference the exported
-// `our_instances_ptr` symbol and read it the same way (in the Ghidra analysis elf this symbol
-// relocated to address 0, which is why the decompiler renders the base as `iRam00000000`).
+// indexes `our_instances[ac] = base + ac*0x34` (5 ACs, stride 0x34). See `blob_layout::LmacTxq`.
 //
-// lmac_txq_c6 block layout (base + ac*0x34), from GetAccess/txsm_map + disasm:
-//   +0x00 cur_eb (armed frame ptr)      +0x05 aifsn        +0x08 cw (clamped)
-//   +0x09 cwmin  +0x0a cwmax            +0x12 state{0 idle,1 armed,5 success,6 error}
-//   +0x18 rate2ampdu (i16)             +0x1d txop_depth
-//   +0x20 pending_head  +0x24 pending_tail   +0x2d.. completion result
-//
-// lmac config globals live in the exported `lmacConfMib` .data object (0x40811b68 in this
-// link). Verified from the LINKED firmware disasm of blob_lmacIsLongFrame/Reach*Limit:
+// lmac config globals live in the exported `lmacConfMib` .data object. Verified from the LINKED
+// firmware disasm of blob_lmacIsLongFrame/Reach*Limit:
 //   lmacConfMib[0x14] = u8 long-retry-limit   lmacConfMib[0x15] = u8 short-retry-limit
 //   lmacConfMib[0x16] = u16 RTS / long-frame threshold (read via `lhu`)
 // We reference the `lmacConfMib` symbol (+offset) so the read is link-stable and sees the same
-// runtime value the blob's lmacInit/config wrote (Ghidra's analysis-elf DAT_ram_42080dd0.. are the
-// pre-relocation flash copies of these same fields). Only NON-ABS (interposable) lmac symbols are
+// runtime value the blob's lmacInit/config wrote. Only NON-ABS (interposable) lmac symbols are
 // reimplemented here; the ~15 ROM *ABS* ones (see the shim NOTE above) must stay shims. Full model
 // + blocker log: docs/deblob_progress.md in the research repo.
 mod lmac_deblob {
@@ -189,11 +180,6 @@ mod lmac_deblob {
 // via symbol interposition beyond this no-op. Full analysis + reproduction:
 // docs/deblob_progress.md.
 
-// ---- Phase 2: real Rust reimplementations of hal_mac_tx.o functions ----
-// Each replaces its global_asm shim above. Verified against the blob decompilation.
-// PLCP0_ENABLE for blob queue 0 (highest slot) is 0x600a_4d6c; higher queue index
-// steps DOWN by 0x10 (the blob's reversed slot numbering), so addr = 0x600a_4d6c - ac*0x10.
-
 // hal_mac_tx.o leaves still called by our Rust `hal_mac_tx_set_ppdu`. plcp0/plcp1/txop_q/len/
 // rts_rate are Rust now; these four are HT/HE-SIG, coex-PTI and aggregate-TXOP leaves that the
 // legacy 1 Mbit DSSS beacon path calls but does not exercise (HE/AMPDU branches are not taken).
@@ -201,6 +187,32 @@ unsafe extern "C" {
     fn mac_tx_set_hesig(); // HE-SIG field (not taken by a legacy beacon)
     fn mac_tx_set_htsig(p: *mut u8, param2: i32); // HT-SIG field (not taken by a legacy beacon)
     fn hal_mac_fill_hwtxop(eb: u32, depth: u32, idx: u32); // per-MPDU TXOP fill (dead for single frames)
+}
+
+// ---- raw MMIO / memory helpers (this bin can't use esp-wifi-hal; esp-radio owns WIFI) ----
+#[inline(always)]
+unsafe fn rd(addr: u32) -> u32 {
+    unsafe { core::ptr::read_volatile(addr as usize as *const u32) }
+}
+#[inline(always)]
+unsafe fn wr(addr: u32, val: u32) {
+    unsafe { core::ptr::write_volatile(addr as usize as *mut u32, val) }
+}
+#[inline(always)]
+unsafe fn rd16(addr: u32) -> u16 {
+    unsafe { core::ptr::read_volatile(addr as usize as *const u16) }
+}
+#[inline(always)]
+unsafe fn wr16(addr: u32, val: u16) {
+    unsafe { core::ptr::write_volatile(addr as usize as *mut u16, val) }
+}
+#[inline(always)]
+unsafe fn rd8(addr: u32) -> u8 {
+    unsafe { core::ptr::read_volatile(addr as usize as *const u8) }
+}
+#[inline(always)]
+unsafe fn wr8(addr: u32, val: u8) {
+    unsafe { core::ptr::write_volatile(addr as usize as *mut u8, val) }
 }
 
 // ============================================================================
@@ -215,7 +227,7 @@ unsafe extern "C" {
 // Typed MMIO register layer. Per-slot registers live in two blocks and the queue index maps to
 // slots in REVERSE (queue 0 = highest slot), so the address for slot `s` is `base - s*stride`:
 // `CONF_STRIDE` (0x10) is the per-slot config block at 0x600a4d6x, `SLOT_STRIDE` (0x74) the
-// completion/TXOP block at 0x600a54xx. The `*(slot)` fns compute those addresses; `rd`/`wr` below
+// completion/TXOP block at 0x600a54xx. The `*(slot)` fns compute those addresses; `rd`/`wr` above
 // do the actual MMIO. All addresses are real hardware registers (stable across blob versions).
 mod mac_reg {
     /// stride between adjacent slots in the 0x600a4d6x config block.
@@ -327,50 +339,450 @@ mod mac_reg {
     }
 }
 
+// ============================================================================
+// SECTION 2b — Typed views over the blob's TX data structures
+// ============================================================================
+// Thin newtypes over a base address. Every accessor is one volatile load/store at
+// `base + OFFSET`, so the access pattern is exactly the raw `*(base+0x..)` it replaces -- only the
+// names are new. The layouts were reversed from the 0.3.0 blob / C6 ROM and a live eb dump
+// (docs/cleanroom_tx.md, docs/deblob_progress.md); all offsets are blob-version-specific.
+mod blob_layout {
+    use super::{rd, rd8, rd16, wr, wr8, wr16};
+
+    // -- ROM interface cells (fixed by the C6 ROM, stable across blob versions) --
+    /// `our_instances_ptr`: -> the lmac per-AC TX control array (`LmacTxq`, stride 0x34).
+    pub const OUR_INSTANCES_PTR: u32 = 0x4004_ffe0;
+    /// `pTxRx` (TxRxCxt): -> the per-AC pending lists (`PendingQ`, stride 0x34).
+    pub const TXRXCXT_PTR: u32 = 0x4087_ff80;
+    /// `wDevCtrl_ptr`: -> wDevCtrl; `g_if_enabled_mask` byte at +0x31 (ROM ic_interface_enabled).
+    pub const WDEVCTRL_PTR: u32 = 0x4087_ff68;
+    const WDEVCTRL_IF_ENABLED_MASK: u32 = 0x31;
+    /// stride of both per-AC arrays (our_instances and TxRxCxt).
+    pub const AC_STRIDE: u32 = 0x34;
+
+    #[inline(always)]
+    pub fn our_instances_base() -> u32 {
+        unsafe { rd(OUR_INSTANCES_PTR) }
+    }
+    /// ROM `ic_interface_enabled` source byte: `*(wDevCtrl_ptr) + 0x31`.
+    #[inline(always)]
+    pub fn if_enabled_mask() -> u8 {
+        unsafe { rd8(rd(WDEVCTRL_PTR) + WDEVCTRL_IF_ENABLED_MASK) }
+    }
+
+    /// A TX DMA descriptor: `[size|ctrl, frame_ptr, next]`. `ctrl` packs the buffer size (bits 0-13),
+    /// the length (bits 14-27), and owner/eof/link bits (31/30/29).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct DmaDesc(pub u32);
+    impl DmaDesc {
+        pub const CTRL_LEN_SHIFT: u32 = 0xe;
+        pub const CTRL_LEN_MASK: u32 = 0x3fff;
+        /// bits 0-13 (buffer size) + 28-31 (owner/eof/...) -- everything but the length field.
+        pub const CTRL_KEEP_MASK: u32 = 0xf000_3fff;
+        pub const CTRL_OWNER: u32 = 0x8000_0000;
+        pub const CTRL_EOF: u32 = 0x4000_0000;
+        pub const CTRL_BIT29_CLEAR: u32 = 0xdfff_ffff;
+
+        #[inline(always)]
+        pub fn ctrl(self) -> u32 {
+            unsafe { rd(self.0) }
+        }
+        #[inline(always)]
+        pub fn set_ctrl(self, v: u32) {
+            unsafe { wr(self.0, v) }
+        }
+        #[inline(always)]
+        pub fn frame_ptr(self) -> u32 {
+            unsafe { rd(self.0 + 4) }
+        }
+        #[inline(always)]
+        pub fn set_frame_ptr(self, v: u32) {
+            unsafe { wr(self.0 + 4, v) }
+        }
+        #[inline(always)]
+        pub fn set_next(self, v: u32) {
+            unsafe { wr(self.0 + 8, v) }
+        }
+        /// length field (bits 14-27) += delta, keeping bits 0-13 and 28-31 (owner/eof/size).
+        #[inline(always)]
+        pub fn add_len(self, delta: u32) {
+            let w = self.ctrl();
+            let len = ((w >> Self::CTRL_LEN_SHIFT) & Self::CTRL_LEN_MASK).wrapping_add(delta)
+                & Self::CTRL_LEN_MASK;
+            self.set_ctrl((len << Self::CTRL_LEN_SHIFT) | (w & Self::CTRL_KEEP_MASK));
+        }
+    }
+
+    /// The per-frame TX descriptor the blob calls `txinfo` (`*(eb+0x34)`, 0x48 bytes).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct TxInfo(pub u32);
+    impl TxInfo {
+        /// +0x00: flags word (bit1 no-ack/broadcast, bit3 data, bit8 RTS, bit10, bit11 QoS-null,
+        /// bit12/13 (0x2102 group), bit16 discard, bit19 ack-type, bit20, bit22 AMPDU, bit27,
+        /// bit30 HE-ext, bit31 HE).
+        pub const FLAGS: u32 = 0x00;
+        /// +0x04: frame category (byte; 7 = mgmt) / QoS class nibble (bits 4-7).
+        pub const CAT: u32 = 0x04;
+        /// +0x0c: rate index (byte; 0 = 1 Mbit DSSS).
+        pub const RATE: u32 = 0x0c;
+        /// +0x10: keyslot (bits 0-7), key type (bits 8-11), bit18, iface (bit19), AC (bits 20-23).
+        pub const WORD10: u32 = 0x10;
+        /// +0x18: submit timestamp (hal_now).
+        pub const TIMESTAMP: u32 = 0x18;
+        /// +0x20: coex PTI (byte); +0x22: PTI high field (u16).
+        pub const PTI: u32 = 0x20;
+        pub const PTI_HI: u32 = 0x22;
+        /// +0x30: protection word (bits 3-12 = RTS/txop threshold, bit17).
+        pub const WORD30: u32 = 0x30;
+        /// +0x34: protection value passed to hal_he_set_tx_protection.
+        pub const WORD34: u32 = 0x34;
+        /// +0x40/+0x44: lifetime / timeout (config_timeout).
+        pub const LIFETIME_LO: u32 = 0x40;
+        pub const LIFETIME_HI: u32 = 0x44;
+
+        pub const WORD10_IFACE_SHIFT: u32 = 0x13;
+        pub const WORD10_AC_SHIFT: u32 = 0x14;
+        pub const WORD10_AC_CLEAR: u32 = 0xff0f_ffff;
+
+        #[inline(always)]
+        pub fn flags(self) -> u32 {
+            unsafe { rd(self.0 + Self::FLAGS) }
+        }
+        #[inline(always)]
+        pub fn set_flags(self, v: u32) {
+            unsafe { wr(self.0 + Self::FLAGS, v) }
+        }
+        #[inline(always)]
+        pub fn cat_word(self) -> u32 {
+            unsafe { rd(self.0 + Self::CAT) }
+        }
+        #[inline(always)]
+        pub fn set_cat(self, v: u8) {
+            unsafe { wr8(self.0 + Self::CAT, v) }
+        }
+        #[inline(always)]
+        pub fn rate(self) -> u8 {
+            unsafe { rd8(self.0 + Self::RATE) }
+        }
+        #[inline(always)]
+        pub fn set_rate(self, v: u8) {
+            unsafe { wr8(self.0 + Self::RATE, v) }
+        }
+        #[inline(always)]
+        pub fn word10(self) -> u32 {
+            unsafe { rd(self.0 + Self::WORD10) }
+        }
+        #[inline(always)]
+        pub fn set_word10(self, v: u32) {
+            unsafe { wr(self.0 + Self::WORD10, v) }
+        }
+        /// keyslot byte = low byte of WORD10.
+        #[inline(always)]
+        pub fn keyslot(self) -> u8 {
+            unsafe { rd8(self.0 + Self::WORD10) }
+        }
+        #[inline(always)]
+        pub fn iface(self) -> u32 {
+            (self.word10() >> Self::WORD10_IFACE_SHIFT) & 1
+        }
+        #[inline(always)]
+        pub fn ac(self) -> u32 {
+            (self.word10() >> Self::WORD10_AC_SHIFT) & 0xf
+        }
+        #[inline(always)]
+        pub fn set_timestamp(self, v: u32) {
+            unsafe { wr(self.0 + Self::TIMESTAMP, v) }
+        }
+        #[inline(always)]
+        pub fn pti(self) -> u8 {
+            unsafe { rd8(self.0 + Self::PTI) }
+        }
+        #[inline(always)]
+        pub fn pti_hi(self) -> u16 {
+            unsafe { core::ptr::read_unaligned((self.0 + Self::PTI_HI) as *const u16) }
+        }
+        #[inline(always)]
+        pub fn word30(self) -> u32 {
+            unsafe { rd(self.0 + Self::WORD30) }
+        }
+        #[inline(always)]
+        pub fn word34(self) -> u32 {
+            unsafe { rd(self.0 + Self::WORD34) }
+        }
+        #[inline(always)]
+        pub fn lifetime_lo(self) -> u32 {
+            unsafe { rd(self.0 + Self::LIFETIME_LO) }
+        }
+        #[inline(always)]
+        pub fn lifetime_hi(self) -> u32 {
+            unsafe { rd(self.0 + Self::LIFETIME_HI) }
+        }
+    }
+
+    /// An `esf_buf` (eb) packet buffer, the unit the pp/lmac scheduler passes around.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct Eb(pub u32);
+    impl Eb {
+        /// +0x04 / +0x08: two pointers to the (single) TX DMA descriptor.
+        pub const DMA_DESC: u32 = 0x04;
+        pub const SEC_DESC: u32 = 0x08;
+        /// +0x14: u16 bytes prepended in front of the payload (security header shift).
+        pub const PREFIX_LEN: u32 = 0x14;
+        /// +0x16: u16 payload length.
+        pub const PAYLOAD_LEN: u32 = 0x16;
+        /// +0x24: u16 flags; bit13 = header already shifted (set by ppProcTxSecFrame).
+        pub const FLAGS16: u32 = 0x24;
+        pub const FLAG16_HDR_SHIFTED: u16 = 0x2000;
+        /// +0x2c: rate-control context (trc); NULL for a raw frame.
+        pub const TRC: u32 = 0x2c;
+        /// +0x30: pending-list next link (also the aggregate MPDU chain).
+        pub const PENDING_NEXT: u32 = 0x30;
+        /// +0x34: -> `TxInfo`.
+        pub const TXINFO: u32 = 0x34;
+
+        #[inline(always)]
+        pub fn addr(self) -> u32 {
+            self.0
+        }
+        #[inline(always)]
+        pub fn dma_desc(self) -> DmaDesc {
+            DmaDesc(unsafe { rd(self.0 + Self::DMA_DESC) })
+        }
+        #[inline(always)]
+        pub fn sec_desc(self) -> DmaDesc {
+            DmaDesc(unsafe { rd(self.0 + Self::SEC_DESC) })
+        }
+        #[inline(always)]
+        pub fn prefix_len(self) -> u16 {
+            unsafe { rd16(self.0 + Self::PREFIX_LEN) }
+        }
+        #[inline(always)]
+        pub fn set_prefix_len(self, v: u16) {
+            unsafe { wr16(self.0 + Self::PREFIX_LEN, v) }
+        }
+        #[inline(always)]
+        pub fn payload_len(self) -> u16 {
+            unsafe { rd16(self.0 + Self::PAYLOAD_LEN) }
+        }
+        #[inline(always)]
+        pub fn set_payload_len(self, v: u16) {
+            unsafe { wr16(self.0 + Self::PAYLOAD_LEN, v) }
+        }
+        #[inline(always)]
+        pub fn flags16(self) -> u16 {
+            unsafe { rd16(self.0 + Self::FLAGS16) }
+        }
+        #[inline(always)]
+        pub fn set_flags16(self, v: u16) {
+            unsafe { wr16(self.0 + Self::FLAGS16, v) }
+        }
+        #[inline(always)]
+        pub fn trc(self) -> u32 {
+            unsafe { rd(self.0 + Self::TRC) }
+        }
+        #[inline(always)]
+        pub fn set_trc(self, v: u32) {
+            unsafe { wr(self.0 + Self::TRC, v) }
+        }
+        #[inline(always)]
+        pub fn pending_next(self) -> u32 {
+            unsafe { rd(self.0 + Self::PENDING_NEXT) }
+        }
+        #[inline(always)]
+        pub fn set_pending_next(self, v: u32) {
+            unsafe { wr(self.0 + Self::PENDING_NEXT, v) }
+        }
+        /// address of the next-link field (the pending list's tail points here).
+        #[inline(always)]
+        pub fn pending_next_addr(self) -> u32 {
+            self.0 + Self::PENDING_NEXT
+        }
+        #[inline(always)]
+        pub fn txinfo(self) -> TxInfo {
+            TxInfo(unsafe { rd(self.0 + Self::TXINFO) })
+        }
+    }
+
+    /// One `our_instances[ac]` lmac TX control block (stride 0x34). Also the `ctx` argument of the
+    /// hal_mac_tx.o functions (`*ctx` = cur_eb, ctx+4 = slot).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct LmacTxq(pub u32);
+    impl LmacTxq {
+        pub const CUR_EB: u32 = 0x00; // armed frame ptr
+        pub const SLOT: u32 = 0x04; // hardware slot / queue index (byte)
+        pub const AIFSN: u32 = 0x05; // byte, low nibble
+        pub const BACKOFF: u32 = 0x06; // u16 random backoff (masked to CW)
+        pub const CW: u32 = 0x08; // byte, CW exponent
+        pub const STATE: u32 = 0x12; // 0 idle / 1 armed / 3 / 5 success / 6 error
+        pub const TXOP_COUNT: u32 = 0x1c; // TXOP burst count
+        pub const TXOP_DEPTH: u32 = 0x1d; // TXOP burst depth
+        pub const SKIP_FLAGS: u32 = 0x28; // byte; bit2 = skip clr_mplen in get_txq_complete
+        /// +0x40/+0x41: OFDM/HT channel-width fields read by mac_tx_set_len (relative to the
+        /// txq of the frame's AC inside the our_instances array).
+        pub const TXLEN_CBW_SEL: u32 = 0x40;
+        pub const TXLEN_CBW: u32 = 0x41;
+
+        #[inline(always)]
+        pub fn for_ac(ac: u32) -> Self {
+            Self::in_array(our_instances_base(), ac)
+        }
+        #[inline(always)]
+        pub fn in_array(base: u32, ac: u32) -> Self {
+            LmacTxq(base.wrapping_add(ac.wrapping_mul(AC_STRIDE)))
+        }
+        #[inline(always)]
+        pub fn from_ctx(ctx: *mut u8) -> Self {
+            LmacTxq(ctx as u32)
+        }
+        #[inline(always)]
+        pub fn ptr(self) -> *mut u8 {
+            self.0 as usize as *mut u8
+        }
+        #[inline(always)]
+        pub fn cur_eb(self) -> Eb {
+            Eb(unsafe { rd(self.0 + Self::CUR_EB) })
+        }
+        #[inline(always)]
+        pub fn set_cur_eb(self, eb: Eb) {
+            unsafe { wr(self.0 + Self::CUR_EB, eb.0) }
+        }
+        #[inline(always)]
+        pub fn slot(self) -> u32 {
+            unsafe { rd8(self.0 + Self::SLOT) as u32 }
+        }
+        #[inline(always)]
+        pub fn aifsn(self) -> u8 {
+            unsafe { rd8(self.0 + Self::AIFSN) }
+        }
+        #[inline(always)]
+        pub fn backoff(self) -> u16 {
+            unsafe { core::ptr::read_unaligned((self.0 + Self::BACKOFF) as *const u16) }
+        }
+        #[inline(always)]
+        pub fn set_backoff(self, v: u16) {
+            unsafe { core::ptr::write_unaligned((self.0 + Self::BACKOFF) as *mut u16, v) }
+        }
+        #[inline(always)]
+        pub fn cw(self) -> u8 {
+            unsafe { rd8(self.0 + Self::CW) }
+        }
+        #[inline(always)]
+        pub fn state(self) -> u8 {
+            unsafe { rd8(self.0 + Self::STATE) }
+        }
+        #[inline(always)]
+        pub fn txop_count(self) -> u32 {
+            unsafe { rd8(self.0 + Self::TXOP_COUNT) as u32 }
+        }
+        #[inline(always)]
+        pub fn txop_depth(self) -> u32 {
+            unsafe { rd8(self.0 + Self::TXOP_DEPTH) as u32 }
+        }
+        #[inline(always)]
+        pub fn skip_flags(self) -> u8 {
+            unsafe { rd8(self.0 + Self::SKIP_FLAGS) }
+        }
+        #[inline(always)]
+        pub fn txlen_cbw_sel(self) -> u32 {
+            unsafe { rd8(self.0 + Self::TXLEN_CBW_SEL) as u32 }
+        }
+        #[inline(always)]
+        pub fn txlen_cbw(self) -> u32 {
+            unsafe { rd8(self.0 + Self::TXLEN_CBW) as u32 }
+        }
+    }
+
+    /// One TxRxCxt per-AC pending list (stride 0x34): a singly-linked eb list threaded through
+    /// `Eb::PENDING_NEXT`; `tail` points at the link field to fill next (== &head when empty).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct PendingQ(pub u32);
+    impl PendingQ {
+        pub const HEAD: u32 = 0x20;
+        pub const TAIL: u32 = 0x24;
+        pub const GUARD_BYTE: u32 = 0x29; // ppGetTxframe: must be 0
+        pub const GUARD_WORD: u32 = 0x34; // ppGetTxframe: must be 0
+
+        #[inline(always)]
+        pub fn for_ac(ac: u32) -> Self {
+            PendingQ(unsafe { rd(TXRXCXT_PTR) }.wrapping_add(ac.wrapping_mul(AC_STRIDE)))
+        }
+        #[inline(always)]
+        pub fn head(self) -> u32 {
+            unsafe { rd(self.0 + Self::HEAD) }
+        }
+        #[inline(always)]
+        pub fn set_head(self, v: u32) {
+            unsafe { wr(self.0 + Self::HEAD, v) }
+        }
+        #[inline(always)]
+        pub fn head_addr(self) -> u32 {
+            self.0 + Self::HEAD
+        }
+        #[inline(always)]
+        pub fn tail(self) -> u32 {
+            unsafe { rd(self.0 + Self::TAIL) }
+        }
+        #[inline(always)]
+        pub fn set_tail(self, v: u32) {
+            unsafe { wr(self.0 + Self::TAIL, v) }
+        }
+        #[inline(always)]
+        pub fn guard_byte(self) -> u8 {
+            unsafe { rd8(self.0 + Self::GUARD_BYTE) }
+        }
+        #[inline(always)]
+        pub fn guard_word(self) -> u32 {
+            unsafe { rd(self.0 + Self::GUARD_WORD) }
+        }
+    }
+}
+use blob_layout::{DmaDesc, Eb, LmacTxq, PendingQ, TxInfo};
+
 /// blob `mac_tx_set_txop_q`: program the slot's TXOP burst fields. For depth>2 it just clears
 /// the RESP_DUR txop nibble; otherwise it sets RESP_DUR depth/count, CONF0 txop-valid bit
 /// (per txinfo bit8), PLCP0_ENABLE bit22 (per txinfo bits6-7==0x80), and fills each chained
-/// MPDU (dead for a single beacon: eb+0x30 chain is empty).
+/// MPDU (dead for a single beacon: the eb+0x30 chain is empty).
 #[unsafe(no_mangle)]
 pub extern "C" fn mac_tx_set_txop_q(param_1: *mut u8) -> u32 {
     unsafe {
-        let slot = *param_1.add(4) as u32;
-        let eb = core::ptr::read_unaligned(param_1 as *const u32);
-        let depth = *param_1.add(0x1d) as u32;
+        let txq = LmacTxq::from_ctx(param_1);
+        let slot = txq.slot();
+        let eb = txq.cur_eb();
+        let depth = txq.txop_depth();
         let resp_dur = mac_reg::resp_dur(slot);
-        let txinfo = rd_at(eb.wrapping_add(0x34));
+        let txinfo = eb.txinfo();
         if depth > 2 {
             wr(resp_dur, rd(resp_dur) & 0xf0ff_ffff);
             return 0;
         }
-        let s3 = *param_1.add(0x1c) as u32;
+        let count = txq.txop_count();
         wr(
             resp_dur,
-            (rd(resp_dur) & 0xf0ff_ffff) | ((s3 << 0x18) & 0xf000_0000),
+            (rd(resp_dur) & 0xf0ff_ffff) | ((count << 0x18) & 0xf000_0000),
         );
         wr(resp_dur, (rd(resp_dur) & 0xcfff_ffff) | (depth << 0x1c));
         let conf0 = mac_reg::conf0(slot);
-        if (rd_at(txinfo) & 0x100) != 0 {
+        if (txinfo.flags() & 0x100) != 0 {
             wr(conf0, rd(conf0) | mac_reg::CONF0_BIT31);
         } else {
             wr(conf0, rd(conf0) & !mac_reg::CONF0_BIT31);
         }
         let plcp0 = mac_reg::plcp0_enable(slot);
-        if (rd_at(txinfo) & 0xc0) == 0x80 {
+        if (txinfo.flags() & 0xc0) == 0x80 {
             wr(plcp0, rd(plcp0) | mac_reg::PLCP0_TXOP);
         } else {
             wr(plcp0, rd(plcp0) & !mac_reg::PLCP0_TXOP);
         }
         // Aggregate chain: fill each MPDU's HW TXOP. Empty for single frames.
-        let mut s2 = rd_at(eb.wrapping_add(0x30));
-        let mut s1: u32 = 1;
-        while s2 != 0 {
-            hal_mac_fill_hwtxop(s2, *param_1.add(0x1d) as u32, s1);
-            if s3 == s1 {
+        let mut mpdu = eb.pending_next();
+        let mut idx: u32 = 1;
+        while mpdu != 0 {
+            hal_mac_fill_hwtxop(mpdu, txq.txop_depth(), idx);
+            if count == idx {
                 break;
             }
-            s1 = (s1 + 1) & 0xff;
-            s2 = rd_at(s2.wrapping_add(0x30));
+            idx = (idx + 1) & 0xff;
+            mpdu = Eb(mpdu).pending_next();
         }
     }
     0
@@ -398,19 +810,6 @@ pub extern "C" fn mac_tx_set_txop_q(param_1: *mut u8) -> u32 {
 // so v = base | 0x1000000 = dma | 0x1600000 (matches esp-wifi-hal wait_for_ack=false: ack_type=1).
 // arg2 = (flags>>8)&1, threshold = (txinfo+0x30 >>3)&0x3ff (0 for a beacon -> no threshold write).
 
-
-#[inline(always)]
-unsafe fn rd16(addr: u32) -> u16 {
-    unsafe { core::ptr::read_volatile(addr as usize as *const u16) }
-}
-
-/// blob `mac_tx_set_plcp0`: program the slot's PLCP0_ENABLE dma/length/format word, then set
-/// RTS/txop protection via the blob leaf. See the block comment above for the decomp.
-///
-/// NOTE ON INSTRUMENTATION: an earlier bring-up added per-call volatile-MMIO readbacks + atomic
-/// counters here; those extra bus accesses on this timing-sensitive TX-setup path stalled the TX
-/// queue (arm-without-complete), even when the register logic was byte-identical to the blob. So
-/// this body is kept minimal -- the same read/compute/write/protect shape and count as the blob.
 /// Rust mac_tx_get_rts_rate: pure rate -> RTS/response-rate lookup (faithful port of the blob's
 /// jump table). Our 1 Mbit DSSS beacon has rate 0 -> returns 0. No addresses, hardware-independent.
 fn cr_mac_tx_get_rts_rate(rate: i32) -> i32 {
@@ -458,7 +857,6 @@ fn cr_mac_tx_get_rts_rate(rate: i32) -> i32 {
 
 /// Rust hal_he_set_tx_protection: CONF0 (0x600a4d60-slot*0x10) bit31 = protect-enable, and, when a
 /// threshold is set, the RTS/txop-dur threshold reg (0x600a548c-slot*0x74). Register writes only.
-#[allow(dead_code)]
 unsafe fn cr_hal_he_set_tx_protection(slot: i32, enable: i32, _p3: u32, threshold: i32, val: u32) {
     unsafe {
         let conf0 = mac_reg::conf0(slot as u32);
@@ -481,58 +879,61 @@ unsafe fn cr_hal_he_set_tx_protection(slot: i32, enable: i32, _p3: u32, threshol
 /// `param2` is the our_instances base (used only by the OFDM branches, not taken by the beacon).
 unsafe fn cr_mac_tx_set_len(ctx: *mut u8, param2: i32) {
     unsafe {
-        let eb = core::ptr::read_unaligned(ctx as *const u32);
-        let txinfo = rd_at(eb + 0x34);
-        let frame = rd_at(rd_at(eb + 4) + 4); // dma_desc[1]
-        let rate = core::ptr::read_volatile((txinfo + 0xc) as *const u8) as i32;
-        let t10 = rd(txinfo + 0x10);
+        let txq = LmacTxq::from_ctx(ctx);
+        let eb = txq.cur_eb();
+        let txinfo = eb.txinfo();
+        let frame = eb.dma_desc().frame_ptr();
+        let rate = txinfo.rate() as i32;
+        let t10 = txinfo.word10();
         let rts = cr_mac_tx_get_rts_rate(rate) as u32;
-        let ac = (t10 >> 0x14) & 0xf;
+        let ac = (t10 >> TxInfo::WORD10_AC_SHIFT) & 0xf;
+        let ac_txq = LmacTxq::in_array(param2 as u32, ac);
         let mut uvar5 = 1u32;
         if (rate.wrapping_sub(0x10) as u32 & 0xff) < 0x14 {
-            uvar5 = (core::ptr::read_volatile(
-                (ac.wrapping_mul(0x34).wrapping_add(param2 as u32).wrapping_add(0x40)) as *const u8,
-            ) as u32)
-                & 3;
+            uvar5 = ac_txq.txlen_cbw_sel() & 3;
         }
-        let slot = *ctx.add(4) as u32;
+        let slot = txq.slot();
         let resp_dur = mac_reg::resp_dur(slot);
         wr(
             resp_dur,
             uvar5 << 0x16 | ((t10 & 0xf000) == 0x1000) as u32 * 2 | (rts & 0xff) << 6 | 4,
         );
-        let flags = rd(txinfo);
+        let flags = txinfo.flags();
         if (flags as i32) >= 0 {
-            let r2 = core::ptr::read_volatile((txinfo + 0xc) as *const u8) as u32;
+            let r2 = txinfo.rate() as u32;
             let mut uv3 = r2.wrapping_sub(0x10) & 0xff;
             if uv3 < 0x14 {
                 let len = if flags & 0x40_0000 == 0 {
                     rd(frame) & 0x3fff
                 } else {
-                    rd16(eb + 0x16) as u32 + rd16(eb + 0x14) as u32
+                    eb.payload_len() as u32 + eb.prefix_len() as u32
                 };
                 if r2 > 0x19 {
                     uv3 = r2 - 0x1a;
                 }
                 let txlen = mac_reg::txlen(slot);
-                let cbw = core::ptr::read_volatile(
-                    (param2 as u32).wrapping_add(ac.wrapping_mul(0x34)).wrapping_add(0x41)
-                        as *const u8,
-                ) as u32
-                    & 3;
+                let cbw = ac_txq.txlen_cbw() & 3;
                 wr(txlen, cbw << 0x16 | len | uv3 << 0x1c);
             }
         }
     }
 }
 
+/// blob `mac_tx_set_plcp0`: program the slot's PLCP0_ENABLE dma/length/format word, then set
+/// RTS/txop protection via the Rust `cr_hal_he_set_tx_protection`. See the block comment above.
+///
+/// NOTE ON INSTRUMENTATION: an earlier bring-up added per-call volatile-MMIO readbacks + atomic
+/// counters here; those extra bus accesses on this timing-sensitive TX-setup path stalled the TX
+/// queue (arm-without-complete), even when the register logic was byte-identical to the blob. So
+/// this body is kept minimal -- the same read/compute/write/protect shape and count as the blob.
 #[unsafe(no_mangle)]
 pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
     unsafe {
-        let eb = core::ptr::read_unaligned(param_1 as *const u32);
-        let u1 = rd_at(eb.wrapping_add(4));
-        let txinfo = rd_at(eb.wrapping_add(0x34));
-        let flags = rd_at(txinfo);
+        let txq = LmacTxq::from_ctx(param_1);
+        let eb = txq.cur_eb();
+        let u1 = eb.dma_desc().0;
+        let txinfo = eb.txinfo();
+        let flags = txinfo.flags();
         let base = (u1 & 0xfffff) | 0x60_0000;
         let mut v = base;
         if (flags & 0x402) == 0 && (flags & 0x4048_0000) != 0x40_0000 {
@@ -542,11 +943,7 @@ pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
                     if (flags & 0x4000_0000) == 0 {
                         v = (u1 & 0xfffff) | 0x260_0000;
                     } else {
-                        let iv: u32 = if (rd16(eb.wrapping_add(0x24)) & 0x1000) == 0 {
-                            1
-                        } else {
-                            5
-                        };
+                        let iv: u32 = if (eb.flags16() & 0x1000) == 0 { 1 } else { 5 };
                         v = base | (iv << 0x18);
                     }
                 }
@@ -554,13 +951,12 @@ pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
                 v = (u1 & 0xfffff) | 0x360_0000;
             }
         }
-        let slot = *param_1.add(4) as u32;
+        let slot = txq.slot();
         wr(mac_reg::plcp0_enable(slot), v);
         // RTS/txop protection, exactly as the blob leaf is called.
         let enable = ((flags >> 8) & 1) as i32;
-        let threshold = ((rd_at(txinfo.wrapping_add(0x30)) >> 3) & 0x3ff) as i32;
-        let tval = rd_at(txinfo.wrapping_add(0x34));
-        // RTS/txop protection via the Rust cr_hal_he_set_tx_protection (CONF0 bit31 + threshold reg).
+        let threshold = ((txinfo.word30() >> 3) & 0x3ff) as i32;
+        let tval = txinfo.word34();
         cr_hal_he_set_tx_protection(slot as i32, enable, 0, threshold, tval);
     }
     0
@@ -602,7 +998,7 @@ pub extern "C" fn hal_mac_get_txq_complete(
     param_3: *mut u8,
     param_4: *mut u32,
 ) -> u32 {
-    let off = (param_2 as u32).wrapping_mul(0x74);
+    let off = (param_2 as u32).wrapping_mul(mac_reg::SLOT_STRIDE);
     unsafe {
         // memset(param_3, 0, 6)
         core::ptr::write_bytes(param_3, 0, 6);
@@ -652,7 +1048,7 @@ pub extern "C" fn hal_mac_get_txq_complete(
 
         // Tail: honor the "skip" flag, else tear down the mplen bitmap for this frame.
         if !param_1.is_null() {
-            if (*(param_1 as *const u8).add(0x28) & 4) != 0 {
+            if (*(param_1 as *const u8).add(LmacTxq::SKIP_FLAGS as usize) & 4) != 0 {
                 return 0;
             }
             if eb != 0 {
@@ -668,11 +1064,12 @@ pub extern "C" fn hal_mac_get_txq_complete(
 #[unsafe(no_mangle)]
 pub extern "C" fn mac_tx_set_plcp1(param_1: *mut u8) -> u32 {
     unsafe {
-        let eb = core::ptr::read_unaligned(param_1 as *const u32);
-        let txinfo = rd_at(eb.wrapping_add(0x34));
-        let lensrc = rd_at(rd_at(eb.wrapping_add(4)).wrapping_add(4));
-        let rate = *((txinfo.wrapping_add(0xc)) as usize as *const u8) as u32;
-        let flags = rd_at(txinfo);
+        let txq = LmacTxq::from_ctx(param_1);
+        let eb = txq.cur_eb();
+        let txinfo = eb.txinfo();
+        let lensrc = eb.dma_desc().frame_ptr();
+        let rate = txinfo.rate() as u32;
+        let flags = txinfo.flags();
         let uv3 = rate.wrapping_sub(0x10) & 0xff;
         let mut v: u32 = 0;
         if uv3 <= 0x13 {
@@ -682,28 +1079,20 @@ pub extern "C" fn mac_tx_set_plcp1(param_1: *mut u8) -> u32 {
                 0x200_0000
             };
         }
-        let keyslot = *((txinfo.wrapping_add(0x10)) as usize as *const u8) as u32;
+        let keyslot = txinfo.keyslot() as u32;
         v = (v & 0xfe01_ffff) | (keyslot << 0x11);
         let ratefield = if rate > 0x28 { uv3 & 0x1f } else { rate & 0x1f };
         v = (v & 0xfffe_0fff) | (ratefield << 0xc);
         if uv3 > 0x13 {
-            v = (v & 0xffff_f000) | (rd_at(lensrc) & 0xfff);
+            v = (v & 0xffff_f000) | (rd(lensrc) & 0xfff);
         }
-        if (flags & 0x4000) != 0
-            && (rd_at(txinfo.wrapping_add(0x10)) & 0x40000) != 0
-            && (flags as i32) >= 0
-        {
+        if (flags & 0x4000) != 0 && (txinfo.word10() & 0x40000) != 0 && (flags as i32) >= 0 {
             v |= 0x2000_0000;
         }
-        let slot = *param_1.add(4) as u32;
+        let slot = txq.slot();
         wr(mac_reg::plcp1(slot), v);
     }
     0
-}
-
-#[inline(always)]
-fn txq_plcp0_enable_addr(ac: i32) -> *mut u32 {
-    mac_reg::plcp0_enable(ac as u32) as usize as *mut u32
 }
 
 /// blob `hal_mac_txq_enable`: arm the slot (slot_valid|slot_enabled = 0xc000_0000).
@@ -713,8 +1102,8 @@ fn txq_plcp0_enable_addr(ac: i32) -> *mut u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_txq_enable(ac: i32) {
     unsafe {
-        let addr = txq_plcp0_enable_addr(ac);
-        core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) | mac_reg::SLOT_ARM);
+        let addr = mac_reg::plcp0_enable(ac as u32);
+        wr(addr, rd(addr) | mac_reg::SLOT_ARM);
     }
 }
 
@@ -722,21 +1111,10 @@ pub extern "C" fn hal_mac_txq_enable(ac: i32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_txq_disable(ac: i32) {
     unsafe {
-        let addr = txq_plcp0_enable_addr(ac);
-        core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) & mac_reg::SLOT_ARM_CLEAR);
+        let addr = mac_reg::plcp0_enable(ac as u32);
+        wr(addr, rd(addr) & mac_reg::SLOT_ARM_CLEAR);
     }
 }
-
-// ---- raw MMIO helpers (deblob bin can't use esp-wifi-hal; esp-radio owns WIFI) ----
-#[inline(always)]
-unsafe fn rd(addr: u32) -> u32 {
-    unsafe { core::ptr::read_volatile(addr as usize as *const u32) }
-}
-#[inline(always)]
-unsafe fn wr(addr: u32, val: u32) {
-    unsafe { core::ptr::write_volatile(addr as usize as *mut u32, val) }
-}
-
 
 /// blob `hal_mac_rate_autoack_init`: empty in the blob (no-op).
 #[unsafe(no_mangle)]
@@ -785,7 +1163,7 @@ pub extern "C" fn hal_mac_tx_is_cbw40(q: i32) -> bool {
 /// `out` points to caller-provided storage: [+0]=u8 frag, [+2]=u16 seq, [+4]=u32, [+8]=u32.
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_get_blockack(q: i32, out: *mut u8) -> u32 {
-    let off = (q as u32).wrapping_mul(0x74);
+    let off = (q as u32).wrapping_mul(mac_reg::SLOT_STRIDE);
     unsafe {
         let hdr = rd(mac_reg::BA_BITMAP.wrapping_add(8).wrapping_sub(off)); // 0x600a54dc - off
         core::ptr::write_unaligned(out.add(2) as *mut u16, (hdr as u16) >> 4);
@@ -833,15 +1211,16 @@ unsafe fn pwr_byte(off: u32) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
     unsafe {
-        let eb = core::ptr::read_unaligned(param_1 as *const u32);
+        let txq = LmacTxq::from_ctx(param_1);
+        let eb = txq.cur_eb();
         // (blob's `*(*(eb+4)+4) & 3` wifi_log debug branch omitted.)
         mac_tx_set_plcp0(param_1);
         mac_tx_set_plcp1(param_1);
-        let slot = *param_1.add(4) as u32;
+        let slot = txq.slot();
         let conf1 = mac_reg::conf1_real(slot);
         wr(conf1, rd(conf1) & 0xffff_fff7); // clear bit3
-        let txinfo = rd_at(eb.wrapping_add(0x34));
-        let rate = *((txinfo.wrapping_add(0xc)) as usize as *const u8);
+        let txinfo = eb.txinfo();
+        let rate = txinfo.rate();
         let rtsidx = cr_mac_tx_get_rts_rate(rate as i32) as u32;
         let s2 = (pwr_byte(rtsidx.wrapping_mul(2)) << 16)
             | (pwr_byte(rtsidx.wrapping_mul(2).wrapping_add(1)) << 24);
@@ -849,14 +1228,13 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
         let plcp_rate_dur = mac_reg::plcp_rate_dur(slot);
         if s3 <= 0x13 {
             // OFDM/HT/HE rate. HT/HE SIG programming delegated to the blob leaves.
-            let flags0 = rd_at(txinfo);
+            let flags0 = txinfo.flags();
             if (flags0 as i32) < 0 {
                 mac_tx_set_hesig();
             } else {
                 mac_tx_set_htsig(param_1, param_2);
             }
-            let r2 =
-                *((rd_at(eb.wrapping_add(0x34)).wrapping_add(0xc)) as usize as *const u8) as u32;
+            let r2 = eb.txinfo().rate() as u32;
             let idx = if r2 > 0x19 { r2 - 0xa } else { r2 };
             let c1 = pwr_byte(idx.wrapping_mul(2));
             let c2 = pwr_byte(idx.wrapping_mul(2).wrapping_add(1));
@@ -865,7 +1243,7 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
             // DSSS / legacy path (our beacon).
             cr_mac_tx_set_len(param_1, param_2);
             mac_tx_set_txop_q(param_1);
-            let r = *((txinfo.wrapping_add(0xc)) as usize as *const u8) as u32;
+            let r = txinfo.rate() as u32;
             wr(plcp_rate_dur, (pwr_byte(r.wrapping_mul(2)) | s2) as u32);
         }
         cr_mac_tx_set_pti(param_1);
@@ -883,11 +1261,11 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
 /// the 0.3.0 disasm.
 unsafe fn cr_mac_tx_set_pti(ctx: *mut u8) {
     unsafe {
-        let eb = core::ptr::read_unaligned(ctx as *const u32);
-        let txinfo = rd_at(eb.wrapping_add(0x34));
-        let pti = *((txinfo.wrapping_add(0x20)) as *const u8) as u32;
-        let hw22 = core::ptr::read_unaligned((txinfo.wrapping_add(0x22)) as *const u16) as u32;
-        let slot = *ctx.add(4) as u32;
+        let txq = LmacTxq::from_ctx(ctx);
+        let txinfo = txq.cur_eb().txinfo();
+        let pti = txinfo.pti() as u32;
+        let hw22 = txinfo.pti_hi() as u32;
+        let slot = txq.slot();
         let a1 = pti; // coex clamp skipped (no BT); min(pti, coex_demand) == pti here
         let conf1 = mac_reg::conf1(slot);
         wr(conf1, (rd(conf1) & 0x0fff_ffff) | (a1 << 0x1c));
@@ -908,26 +1286,20 @@ unsafe fn cr_mac_tx_set_pti(ctx: *mut u8) {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_clr_mplen(_param1: i32, _q: i32) {}
 
-#[inline(always)]
-unsafe fn rd_at(addr: u32) -> u32 {
-    unsafe { core::ptr::read_volatile(addr as usize as *const u32) }
-}
-
 /// blob `hal_mac_tx_config_edca`: program the slot's CONF1 EDCA parameters (AIFSN, CW,
 /// iface bit) from the txq[ac] context. `txq` is the g_ic.txq[ac] entry.
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_config_edca(txq: *mut u8) -> u32 {
     unsafe {
-        let ac = *txq.add(4) as u32;
+        let txq = LmacTxq::from_ctx(txq);
+        let ac = txq.slot();
         let conf1 = mac_reg::conf1(ac);
-        let aifsn = (*txq.add(5) & 0xf) as u32;
+        let aifsn = (txq.aifsn() & 0xf) as u32;
         wr(conf1, (rd(conf1) & 0xf0ff_ffff) | (aifsn << 24));
-        let cw = (core::ptr::read_unaligned(txq.add(6) as *const u16) & 0x3ff) as u32;
+        let cw = (txq.backoff() & 0x3ff) as u32;
         wr(conf1, (rd(conf1) & 0xffc0_0fff) | (cw << 12));
         // iface bit: txq[0]=eb ptr -> eb+0x34 = txinfo -> txinfo+0x10 word, bit 19.
-        let eb = core::ptr::read_unaligned(txq as *const u32);
-        let txinfo = rd_at(eb.wrapping_add(0x34));
-        let ifb = (rd_at(txinfo.wrapping_add(0x10)) >> 0x13) & 1;
+        let ifb = txq.cur_eb().txinfo().iface();
         wr(conf1, (rd(conf1) & 0xff3f_ffff) | (ifb << 0x16));
     }
     0
@@ -941,12 +1313,12 @@ pub extern "C" fn hal_mac_tx_config_edca(txq: *mut u8) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_config_timeout(txq: *mut u8, param2: i32) -> u32 {
     unsafe {
-        let ac = *txq.add(4) as u32;
+        let txq = LmacTxq::from_ctx(txq);
+        let ac = txq.slot();
         let conf1 = mac_reg::conf1(ac);
-        let eb = core::ptr::read_unaligned(txq as *const u32);
-        let txinfo = rd_at(eb.wrapping_add(0x34));
-        let u1 = rd_at(txinfo.wrapping_add(0x44));
-        let mut v3 = (rd_at(txinfo.wrapping_add(0x40)) >> 10) | (u1 << 0x16);
+        let txinfo = txq.cur_eb().txinfo();
+        let u1 = txinfo.lifetime_hi();
+        let mut v3 = (txinfo.lifetime_lo() >> 10) | (u1 << 0x16);
         if (u1 >> 10) != 0 || v3 > 0xfff {
             v3 = 0xfff;
         }
@@ -1004,37 +1376,17 @@ pub extern "C" fn hal_attenna_init() {
 }
 
 // ============================================================================
-// CLEAN-ROOM Rust TX arm path (session 9).
-// ============================================================================
-// Goal: drive the full lmacTxFrame-equivalent ARM sequence from OUR OWN code on a
-// DEDICATED slot, reusing the proven Rust hal_mac_tx functions above, rather than
-// interposing into the blob's ppProcessTxQ->lmacTxFrame call graph (which failed).
-//
-// The blob control beacon (send_raw_frame, SSID CR-CTRL) still runs on the blob
-// scheduler's slot (AC 0 per ppMapTxQueue) as a same-RF positive control. Our frame
-// goes on AC/slot MY_AC. We obtain a correctly DMA-placed eb from the live libpp pool
-// via esf_buf_alloc (resolves to libpp 0x4080acf4 in this link, NOT ROM), then fill
-// the dma_desc + txinfo fields EXACTLY as ieee80211_output_raw_process does (minus the
-// ppTxPkt submit), so our eb is structurally identical to a blob-built beacon eb. We
-// then run: config_timeout -> set_ppdu (plcp0/1 + rate/dur/len/txop/pti) -> config_edca
-// -> txq_enable(slot). We never touch our_instances, so the blob's lmacProcessTxComplete
-// (guarded on state==1) skips our slot and never tries to recycle our eb.
-// ============================================================================
 // SECTION 3 — The cr_* pure-Rust TX pipeline
 // ============================================================================
 // Runs the blob's per-frame TX sequence in Rust on the REAL blob scheduler state:
 //   cr_ppTxPkt (submit + enable-gate + AC map/PM-wake + enqueue onto TxRxCxt pending)
 //   -> cr_ppProcessTxQ (pop) -> cr_lmacTxFrame/cr_lmacSetTxFrame (arm via the Rust hal)
 //   -> cr_complete (poll completion, read result, recycle the eb).
-// Fixed non-hardware addresses used here (ALL 0.3.0-blob-specific — re-derive per version):
-//   our_instances base   = *(u32*)0x4004ffe0   (per-AC lmac txq, +ac*0x34; state @+0x12,
-//                                                cur_eb @+0x00, cw @+0x08)
-//   TxRxCxt pending base  = *(u32*)0x4087ff80   (per-AC list, +ac*0x34; head @+0x20, tail @+0x24,
-//                                                threaded via eb+0x30)
-//   wDevCtrl base         = *(u32*)0x4087ff68   (g_if_enabled_mask byte @ +0x31)
-//   lmacConfMib           = 0x40811ca8          (RTS/long-frame threshold @ +0x16)
+// The scheduler structures are the typed views in `blob_layout` (`LmacTxq` = our_instances[ac],
+// `PendingQ` = TxRxCxt[ac], `Eb`/`TxInfo`/`DmaDesc` = the packet buffer). All of those offsets
+// are 0.3.0-blob-specific -- re-derive per version.
 mod cleanroom_tx {
-    use super::{rd, rd_at, wr};
+    use super::{rd, wr, DmaDesc, Eb, LmacTxq, PendingQ, TxInfo, blob_layout, mac_reg};
 
     // The C6 MAC only accepts register writes to a TX slot whose bank the scheduler has
     // activated; only slot 0 (the raw beacon's AC 0) is live. So we drive slot 0 ourselves,
@@ -1062,13 +1414,10 @@ mod cleanroom_tx {
 
     // Compile-time experiment selectors (env at build time; unset == the production reference
     // build). They exist so the PM-wake characterization runs below are reproducible from source.
-    //   CR_NO_BURST=1   : skip the per-round CR-CTRL burst (keep only the 10 boot beacons). The blob
-    //                     then never re-sleeps the modem (its sleep timer is armed from ITS tx-done),
-    //                     so the Rust wake runs exactly once per boot -- which makes omitting a wake
-    //                     step safe against esp-radio's clock/PHY refcounts (no later blob disable).
     //   CR_PM_EXP=<n>   : bitmask applied inside cr_wifi_rf_phy_enable:
     //                     1 = skip _wifi_clock_enable, 2 = skip _phy_enable,
-    //                     4 = skip the hal_mac_init store (the WDEV_PM_TXBLOCK_RETENTION clear).
+    //                     4 = skip the hal_mac_init store (the WDEV_PM_TXBLOCK_RETENTION clear),
+    //                     8 = call the ROM wifi_rf_phy_enable, 16 = call the blob pm_disconnected_wake.
     const fn env_digit(v: Option<&'static str>) -> u8 {
         match v {
             Some(s) => {
@@ -1111,14 +1460,14 @@ mod cleanroom_tx {
         unsafe {
             super::println!(
                 "[CR.PWR] {tag} minpwr={:#010x} gain[c8/cc/d0/d4]={:#010x} {:#010x} {:#010x} {:#010x} fe0910={:#010x} fe00c0={:#010x} bb7030={:#010x}",
-                rd(super::mac_reg::TX_MIN_PWR),
-                rd(super::mac_reg::GAIN_MEM_C8),
-                rd(super::mac_reg::GAIN_MEM_CC),
-                rd(super::mac_reg::GAIN_MEM_D0),
-                rd(super::mac_reg::GAIN_MEM_D4),
-                rd(super::mac_reg::FE_0910),
-                rd(super::mac_reg::FE_00C0),
-                rd(super::mac_reg::BB_7030),
+                rd(mac_reg::TX_MIN_PWR),
+                rd(mac_reg::GAIN_MEM_C8),
+                rd(mac_reg::GAIN_MEM_CC),
+                rd(mac_reg::GAIN_MEM_D0),
+                rd(mac_reg::GAIN_MEM_D4),
+                rd(mac_reg::FE_0910),
+                rd(mac_reg::FE_00C0),
+                rd(mac_reg::BB_7030),
             );
         }
     }
@@ -1150,52 +1499,50 @@ mod cleanroom_tx {
     /// submit timestamp (txinfo+0x18); a direct volatile read reproduces it exactly.
     #[inline(always)]
     pub fn cr_hal_now() -> u32 {
-        unsafe { rd(super::mac_reg::SYS_TIMER) }
+        unsafe { rd(mac_reg::SYS_TIMER) }
     }
 
-    /// Rust ppTxPkt (submit), kick=0. Gate on the per-VIF enable, run the blob security-header leaf,
-    /// map the AC (which runs pm_on_data_tx, the PM-wake), then enqueue the eb onto the REAL TxRxCxt
-    /// per-AC pending list (threaded via eb+0x30). Returns the blob convention: 0 = enqueued,
+    /// Rust ppTxPkt (submit), kick=0. Gate on the per-VIF enable, run the security-header step,
+    /// map the AC (which runs the PM-wake), then enqueue the eb onto the REAL TxRxCxt per-AC
+    /// pending list (threaded via eb+0x30). Returns the blob convention: 0 = enqueued,
     /// 1 = dropped+recycled. On any drop path the eb is recycled here, so the caller must NOT also
     /// recycle it (doing both is a double-free -- the bug that the wrong ic_interface_enabled masked).
-    pub fn cr_ppTxPkt(eb: u32, _kick: i32) -> i32 {
+    pub fn cr_ppTxPkt(eb: Eb, _kick: i32) -> i32 {
         unsafe {
-            let txinfo = rd_at(eb + 0x34);
-            let iface = (rd(txinfo + 0x10) >> 0x13) & 1;
+            let txinfo = eb.txinfo();
+            let iface = txinfo.iface();
             if cr_ic_interface_enabled(iface) == 0 {
-                esf_buf_recycle(eb);
+                esf_buf_recycle(eb.0);
                 return 1;
             }
             cr_ppTxProtoProc(eb);
             let sec = if CR_SECFRAME {
                 cr_ppProcTxSecFrame(eb)
             } else {
-                ppProcTxSecFrame(eb)
+                ppProcTxSecFrame(eb.0)
             };
             if sec == 1 {
-                esf_buf_recycle(eb);
+                esf_buf_recycle(eb.0);
                 return 1;
             }
-            cr_rcGetSched(rd(eb + 0x2c), rd_at(eb + 0x34)); // trc==0 -> no-op for raw beacon
-            let map = cr_ppMapTxQueue(eb); // Rust AC mapping; keeps blob pm_on_data_tx (PM-wake)
+            cr_rcGetSched(eb.trc(), eb.txinfo()); // trc==0 -> no-op for raw beacon
+            let map = cr_ppMapTxQueue(eb); // Rust AC mapping + PM-wake
             if map == 0 {
-                let ti = rd_at(eb + 0x34);
-                wr(ti + 0x18, cr_hal_now()); // tsf submit stamp (blob: _WDEV_TSF0_TIMER_LO)
-                // Pending-list base is pTxRx (TxRxCxt), *(0x4087ff80) -- per-AC lists at +ac*0x34,
-                // head +0x20 / tail +0x24 (threaded via eb+0x30). Verified from the linked ppTxPkt
-                // disasm (`lui 0x40880; lw -0x80` = *(0x4087ff80)). NOT our_instances (0x4087f840).
-                let pend = rd(0x4087_ff80);
-                let ac = (rd(ti + 0x10) >> 0x14) & 0xf;
-                let q = pend.wrapping_add(ac.wrapping_mul(0x34));
-                wr(eb + 0x30, 0); // next-link = NULL
-                let tail = rd(q + 0x24); // pending tail = pointer to the slot to fill
-                wr(tail, eb); // *(tail) = eb
-                wr(q + 0x24, eb + 0x30); // tail = &eb.next
+                let ti = eb.txinfo();
+                ti.set_timestamp(cr_hal_now()); // tsf submit stamp (blob: _WDEV_TSF0_TIMER_LO)
+                // Pending-list base is pTxRx (TxRxCxt) -- per-AC lists at +ac*0x34, head +0x20 /
+                // tail +0x24 (threaded via eb+0x30). Verified from the linked ppTxPkt disasm
+                // (`lui 0x40880; lw -0x80` = *(0x4087ff80)). NOT our_instances.
+                let q = PendingQ::for_ac(ti.ac());
+                eb.set_pending_next(0); // next-link = NULL
+                let tail = q.tail(); // pending tail = pointer to the slot to fill
+                wr(tail, eb.0); // *(tail) = eb
+                q.set_tail(eb.pending_next_addr()); // tail = &eb.next
                 // kick==0: the blob would pp_post(ac) here if idle; we drive the schedule
                 // ourselves.
                 0
             } else {
-                esf_buf_recycle(eb); // map fail / deferred-to-hmac not expected for our beacon
+                esf_buf_recycle(eb.0); // map fail / deferred-to-hmac not expected for our beacon
                 1
             }
         }
@@ -1205,30 +1552,30 @@ mod cleanroom_tx {
     /// flags. For a broadcast mgmt beacon (FC 0x80, addr1[0]&1) only txinfo bit1 (0x2) is set; the
     /// data (FC&0xc==8) and null/QoS (FC&0xf0 0x50/0x40) branches are faithfully replicated but not
     /// taken by the beacon.
-    pub fn cr_ppTxProtoProc(eb: u32) {
+    pub fn cr_ppTxProtoProc(eb: Eb) {
         unsafe {
-            let mut frame = rd_at(rd_at(eb + 4) + 4); // dma_desc[1]
-            if (core::ptr::read_volatile((eb + 0x24) as *const u16) & 0x2000) != 0 {
+            let mut frame = eb.dma_desc().frame_ptr();
+            if (eb.flags16() & Eb::FLAG16_HDR_SHIFTED) != 0 {
                 frame += 8; // FTM offset (not our beacon)
             }
-            let txinfo = rd_at(eb + 0x34);
-            if (core::ptr::read_volatile((frame + 4) as *const u8) & 1) != 0 {
-                wr(txinfo, rd(txinfo) | 2); // broadcast/multicast -> no-ack
+            let txinfo = eb.txinfo();
+            if (super::rd8(frame + 4) & 1) != 0 {
+                txinfo.set_flags(txinfo.flags() | 2); // broadcast/multicast -> no-ack
             }
-            let fc = core::ptr::read_volatile(frame as *const u8);
+            let fc = super::rd8(frame);
             if (fc & 0xc) == 8 {
-                let f = rd(txinfo);
-                wr(txinfo, f | 8);
-                if (rd(txinfo + 0x30) & 0x2_0000) == 0 && (fc & 0x70) == 0x40 {
-                    wr(txinfo, rd(txinfo) & 0xffff_fff7);
+                let f = txinfo.flags();
+                txinfo.set_flags(f | 8);
+                if (txinfo.word30() & 0x2_0000) == 0 && (fc & 0x70) == 0x40 {
+                    txinfo.set_flags(txinfo.flags() & 0xffff_fff7);
                 }
             } else if (fc & 0xc) == 0 {
                 if (fc & 0xf0) == 0x50 {
-                    if (rd(txinfo) & 2) == 0 {
-                        wr(txinfo, rd(txinfo) | 0x800_0000);
+                    if (txinfo.flags() & 2) == 0 {
+                        txinfo.set_flags(txinfo.flags() | 0x800_0000);
                     }
-                } else if (fc & 0xf0) == 0x40 && (rd(txinfo) & 2) == 0 {
-                    wr(txinfo, rd(txinfo) | 0x800);
+                } else if (fc & 0xf0) == 0x40 && (txinfo.flags() & 2) == 0 {
+                    txinfo.set_flags(txinfo.flags() | 0x800);
                 }
             }
         }
@@ -1236,15 +1583,6 @@ mod cleanroom_tx {
 
     /// When true, use the Rust ppProcTxSecFrame (open/no-key beacon path); else the blob.
     pub const CR_SECFRAME: bool = true;
-    /// dma_desc[0] length field (bits 14-27) += delta, keeping bits 0-13 and 28-31 (owner/eof/size).
-    #[inline(always)]
-    unsafe fn dma_len_add(dma: u32, delta: u32) {
-        unsafe {
-            let w = rd(dma);
-            let len = ((w >> 0xe) & 0x3fff).wrapping_add(delta) & 0x3fff;
-            wr(dma, (len << 0xe) | (w & 0xf000_3fff));
-        }
-    }
 
     /// Rust ppProcTxSecFrame, OPEN (no-key) broadcast-beacon path only -- a faithful port of the
     /// 0.3.0 blob ppProcTxSecFrame (0x40804cd0), verified byte-for-byte against the disasm. It
@@ -1257,69 +1595,56 @@ mod cleanroom_tx {
     ///   (eb+0x14 + eb+0x16 - 8) & 0x3fff into that first word (a length the MAC reads).
     /// eb+4 and eb+8 are the SAME descriptor. HE (flags bit31) / AMPDU-CCMP (flags & 0x1040000)
     /// branches are not our path and are skipped. Returns 0 (proceed; the blob returns non-1 here).
-    pub fn cr_ppProcTxSecFrame(eb: u32) -> i32 {
+    pub fn cr_ppProcTxSecFrame(eb: Eb) -> i32 {
         unsafe {
-            let txinfo = rd(eb + 0x34);
+            let txinfo = eb.txinfo();
             // key-type -> sec-hdr length (open/no-key => 4; blob table _LANCHOR32 @ 0x4200b100).
-            let ktype = ((rd(txinfo + 0x10) >> 8) & 0xf).wrapping_sub(1) & 0xff;
+            let ktype = ((txinfo.word10() >> 8) & 0xf).wrapping_sub(1) & 0xff;
             let seclen: u32 = if ktype <= 8 {
-                core::ptr::read_volatile((0x4200_b100u32 + ktype) as *const u8) as u32
+                super::rd8(0x4200_b100u32 + ktype) as u32
             } else {
                 4
             };
             // eb+0x16 += seclen ; dma length += seclen
-            let v16 = core::ptr::read_volatile((eb + 0x16) as *const u16) as u32 + seclen;
-            core::ptr::write_volatile((eb + 0x16) as *mut u16, v16 as u16);
-            let dma = rd(eb + 8);
-            dma_len_add(dma, seclen);
-            let flags = rd(txinfo);
+            let v16 = eb.payload_len() as u32 + seclen;
+            eb.set_payload_len(v16 as u16);
+            let dma = eb.sec_desc();
+            dma.add_len(seclen);
+            let flags = txinfo.flags();
             // HE / AMPDU-CCMP are separate blob branches; the open beacon has neither.
             if (flags & 0x8000_0000) != 0 || (flags & 0x0104_0000) != 0 {
                 return 0;
             }
-            wr(dma, rd(dma) | 0x4000_0000); // eof
-            let dma4 = rd(eb + 4); // same descriptor as eb+8
-            if (core::ptr::read_volatile((eb + 0x24) as *const u16) & 0x2000) == 0 {
-                wr(dma4 + 4, rd(dma4 + 4).wrapping_sub(8)); // frame ptr -= 8
-                let v14 = core::ptr::read_volatile((eb + 0x14) as *const u16) as u32 + 8;
-                core::ptr::write_volatile((eb + 0x14) as *mut u16, v14 as u16);
-                let v24 = core::ptr::read_volatile((eb + 0x24) as *const u16) | 0x2000;
-                core::ptr::write_volatile((eb + 0x24) as *mut u16, v24);
-                dma_len_add(dma4, 8);
+            dma.set_ctrl(dma.ctrl() | DmaDesc::CTRL_EOF); // eof
+            let dma4 = eb.dma_desc(); // same descriptor as eb+8
+            if (eb.flags16() & Eb::FLAG16_HDR_SHIFTED) == 0 {
+                dma4.set_frame_ptr(dma4.frame_ptr().wrapping_sub(8)); // frame ptr -= 8
+                let v14 = eb.prefix_len() as u32 + 8;
+                eb.set_prefix_len(v14 as u16);
+                eb.set_flags16(eb.flags16() | Eb::FLAG16_HDR_SHIFTED);
+                dma4.add_len(8);
             }
             // zero the 8 reserved header bytes at the shifted frame ptr, then write the length word.
-            let hdr = rd(dma4 + 4);
+            let hdr = dma4.frame_ptr();
             core::ptr::write_bytes(hdr as *mut u8, 0, 8);
-            let l14 = core::ptr::read_volatile((eb + 0x14) as *const u16) as u32;
-            let l16 = core::ptr::read_volatile((eb + 0x16) as *const u16) as u32;
+            let l14 = eb.prefix_len() as u32;
+            let l16 = eb.payload_len() as u32;
             let lenword = (l14 + l16 - 8) & 0x3fff;
             wr(hdr, lenword | (rd(hdr) & 0xffff_c000));
             0
         }
     }
 
-    /// Rust ppMapTxQueue for the legacy beacon: choose the EDCA AC and write it into txinfo+0x10
-    /// bits20-23, keeping the blob pm_on_data_tx (the PM-wake that makes the MAC active -- the
-    /// breakthrough ingredient) and ppProcessWaitingQueue (hmac drain). For our raw beacon trc==0,
-    /// so it takes the simple branch: txinfo+4=7, AC=iface. The QoS-data/TWT branches
-    /// (ppSearchTxQueue / pm_on_twt_force_tx) are not exercised by the beacon and are omitted.
-    /// Returns the blob convention: 0 = mapped.
     /// ic_interface_enabled: the per-VIF enable check that gates ppTxPkt, reimplemented in Rust as a
     /// faithful port of the ROM function (which the blob's ppTxPkt jalrs). Validated against the ROM
     /// at runtime: rust(0)==rom(0)==1, rust(1)==rom(1)==0. A prior reimpl guessed the mask byte at the
     /// STATIC wDevCtrl+0x29 (0x408120b9); both the base (must come from the pointer, runtime 0x40812050
     /// not the static 0x40812090) and the offset (+0x31, not +0x29) were wrong, so it read 0 on 0.3.0.
     pub fn cr_ic_interface_enabled(iface: u32) -> i32 {
-        // Faithful port of the ROM ic_interface_enabled (0x40012c34, the one the blob's ppTxPkt
-        // jalrs): base = *(wDevCtrl_ptr @ 0x4087ff68); mask = byte at base+0x31 (g_if_enabled_mask);
-        // return (mask >> iface) & 1. The earlier reimpl used the STATIC wDevCtrl (0x40812090) plus a
-        // wrong offset 0x29 (= 0x408120b9), which reads 0 on the 0.3.0 blob -> the double-free bug.
-        // Both the base-via-pointer and the +0x31 offset are verified against the 0.3.0 ROM disasm.
-        unsafe {
-            let wdevctrl = rd(0x4087_ff68);
-            let mask = core::ptr::read_volatile((wdevctrl + 0x31) as *const u8) as u32;
-            ((mask >> (iface & 0x1f)) & 1) as i32
-        }
+        // Faithful port of the ROM ic_interface_enabled (0x40012c34): base = *(wDevCtrl_ptr @
+        // 0x4087ff68); mask = byte at base+0x31 (g_if_enabled_mask); return (mask >> iface) & 1.
+        let mask = blob_layout::if_enabled_mask() as u32;
+        ((mask >> (iface & 0x1f)) & 1) as i32
     }
 
     /// Rust lmacIsLongFrame: MPDU length vs the RTS/long-frame threshold (lmacConfMib+0x16 on the
@@ -1328,15 +1653,15 @@ mod cleanroom_tx {
     /// our short broadcast beacon this is false; and in cr_lmacTxFrame the RTS it would gate is
     /// additionally suppressed by txinfo bit1 (broadcast), so the result is not on the beacon's
     /// critical path.
-    pub fn cr_lmacIsLongFrame(eb: u32) -> i32 {
+    pub fn cr_lmacIsLongFrame(eb: Eb) -> i32 {
         unsafe extern "C" {
             static mut lmacConfMib: u8;
         }
+        const LMACCONFMIB_LONG_FRAME_THRESHOLD: u32 = 0x16;
         unsafe {
             let mib = core::ptr::addr_of_mut!(lmacConfMib) as u32;
-            let threshold = core::ptr::read_volatile((mib + 0x16) as *const u16) as i32;
-            let len = core::ptr::read_volatile((eb + 0x14) as *const u16) as i32
-                + core::ptr::read_volatile((eb + 0x16) as *const u16) as i32;
+            let threshold = super::rd16(mib + LMACCONFMIB_LONG_FRAME_THRESHOLD) as i32;
+            let len = eb.prefix_len() as i32 + eb.payload_len() as i32;
             (threshold < len) as i32
         }
     }
@@ -1407,7 +1732,7 @@ mod cleanroom_tx {
     const G_OSI_FUNCS_P: u32 = 0x4087_ff6c; // ROM cell -> esp-radio's wifi_osi_funcs_t
     const G_IC_PTR: u32 = 0x4087_ffa0; // ROM cell -> g_ic; rf_phy_enabled_mask byte @ +0x24e
     const G_MAC_SLEEP_EN_PTR: u32 = 0x4087_ff00; // ROM cell -> &g_mac_sleep_en (0x4081f0dc)
-    const WDEV_PM_TXBLOCK_RETENTION: u32 = 0x600a_4ca8;
+    const WDEV_PM_TXBLOCK_RETENTION: u32 = mac_reg::PM_TXBLOCK_RETENTION;
     const OSI_ENV_IS_CHIP: u32 = 0x004;
     const OSI_WIFI_PM_SLEEP_LOCK_ACQUIRE: u32 = 0x0c8;
     const OSI_PHY_ENABLE: u32 = 0x0d4;
@@ -1428,11 +1753,11 @@ mod cleanroom_tx {
 
     #[inline(always)]
     unsafe fn pm_u8(off: u32) -> u8 {
-        unsafe { core::ptr::read_volatile((g_pm_base() + off) as *const u8) }
+        unsafe { super::rd8(g_pm_base() + off) }
     }
     #[inline(always)]
     unsafe fn pm_set_u8(off: u32, v: u8) {
-        unsafe { core::ptr::write_volatile((g_pm_base() + off) as *mut u8, v) }
+        unsafe { super::wr8(g_pm_base() + off, v) }
     }
     #[inline(always)]
     unsafe fn pm_u32(off: u32) -> u32 {
@@ -1440,7 +1765,7 @@ mod cleanroom_tx {
     }
     #[inline(always)]
     unsafe fn mesh_started() -> bool {
-        unsafe { core::ptr::read_volatile(g_mesh_is_started_addr() as *const u8) != 0 }
+        unsafe { super::rd8(g_mesh_is_started_addr()) != 0 }
     }
     #[inline(always)]
     unsafe fn osi_slot(off: u32) -> u32 {
@@ -1481,8 +1806,8 @@ mod cleanroom_tx {
     /// Rust wifi_rf_phy_enable(mode) -- the ROM dispatcher @0x40016a68, 1:1.
     pub unsafe fn cr_wifi_rf_phy_enable(mode: u32) {
         unsafe {
-            let maskp = (rd(G_IC_PTR) + 0x24e) as *mut u8;
-            if core::ptr::read_volatile(maskp) == 0 {
+            let maskp = rd(G_IC_PTR) + 0x24e;
+            if super::rd8(maskp) == 0 {
                 let lock: extern "C" fn() =
                     core::mem::transmute(osi_slot(OSI_WIFI_PM_SLEEP_LOCK_ACQUIRE));
                 lock(); // esp-radio: no-op
@@ -1491,7 +1816,7 @@ mod cleanroom_tx {
                         core::mem::transmute(osi_slot(OSI_WIFI_CLOCK_ENABLE));
                     clk_en(); // esp-radio radio_clocks::enable_wifi(true): MODEM_SYSCON/LPCON gates
                 }
-                if core::ptr::read_volatile(rd(G_MAC_SLEEP_EN_PTR) as *const u8) != 0 {
+                if super::rd8(rd(G_MAC_SLEEP_EN_PTR)) != 0 {
                     // g_mac_sleep_en (modem-sleep MAC retention) is never set in this build
                     // (set_power_saving(None)); pm_mac_wakeup is not modelled.
                     odd();
@@ -1511,7 +1836,7 @@ mod cleanroom_tx {
                     );
                 }
             }
-            core::ptr::write_volatile(maskp, core::ptr::read_volatile(maskp) | (1u8 << mode));
+            super::wr8(maskp, super::rd8(maskp) | (1u8 << mode));
         }
     }
 
@@ -1617,29 +1942,34 @@ mod cleanroom_tx {
                 pm_u8(0x2e4),
                 mesh_started() as u8,
                 rd(G_OSI_FUNCS_P),
-                core::ptr::read_volatile((ic + 0x24e) as *const u8),
-                core::ptr::read_volatile(rd(G_MAC_SLEEP_EN_PTR) as *const u8),
+                super::rd8(ic + 0x24e),
+                super::rd8(rd(G_MAC_SLEEP_EN_PTR)),
                 rd(WDEV_PM_TXBLOCK_RETENTION)
             );
         }
     }
-    pub fn cr_ppMapTxQueue(eb: u32) -> i32 {
+
+    /// Rust ppMapTxQueue for the legacy beacon: choose the EDCA AC and write it into txinfo+0x10
+    /// bits20-23, then run the PM-wake (the ingredient that makes the MAC active). For our raw beacon
+    /// trc==0, so it takes the simple branch: txinfo+4=7, AC=iface. The QoS-data/TWT branches
+    /// (ppSearchTxQueue / pm_on_twt_force_tx) are not exercised by the beacon and are omitted.
+    /// ppProcessWaitingQueue (the per-iface hmac WAITING-queue drain) is a no-op on our path: our
+    /// beacon is submitted straight to the pending list (proven: skipping it radiates with a healthy
+    /// pool). Returns the blob convention: 0 = mapped.
+    pub fn cr_ppMapTxQueue(eb: Eb) -> i32 {
         unsafe {
-            // ppProcessWaitingQueue drains the per-iface hmac WAITING queue (frames deferred to the
-            // mgmt queue). Our beacon is submitted straight to the pending list, so there is nothing
-            // to drain -> Rust no-op on our path (proven: skipping it radiates with a healthy pool).
-            let txinfo = rd_at(eb + 0x34);
-            let t4 = rd(txinfo + 4);
+            let txinfo = eb.txinfo();
+            let t4 = txinfo.cat_word();
             if (t4 & 0xf0) == 0x40 {
-                wr(txinfo + 0x10, (rd(txinfo + 0x10) & 0xff0f_ffff) | 0x20_0000);
+                txinfo.set_word10((txinfo.word10() & TxInfo::WORD10_AC_CLEAR) | 0x20_0000);
             } else {
-                let iface = (rd(txinfo + 0x10) >> 0x13) & 1;
-                let trc = rd(eb + 0x2c);
-                if trc == 0 || (core::ptr::read_volatile((trc + 0xc) as *const u16) & 0x80) != 0 {
-                    core::ptr::write_volatile((txinfo + 4) as *mut u8, 7);
-                    wr(
-                        txinfo + 0x10,
-                        (rd(txinfo + 0x10) & 0xff0f_ffff) | (iface << 0x14),
+                let iface = txinfo.iface();
+                let trc = eb.trc();
+                if trc == 0 || (super::rd16(trc + 0xc) & 0x80) != 0 {
+                    txinfo.set_cat(7);
+                    txinfo.set_word10(
+                        (txinfo.word10() & TxInfo::WORD10_AC_CLEAR)
+                            | (iface << TxInfo::WORD10_AC_SHIFT),
                     );
                     let blk_pre = rd(WDEV_PM_TXBLOCK_RETENTION);
                     if PM_ON_DATA_TX {
@@ -1667,57 +1997,53 @@ mod cleanroom_tx {
         }
     }
 
-    /// Rust ppGetTxframe: pop the head eb from the per-AC pending list in TxRxCxt (*0x4087ff80),
-    /// faithful to the blob (head +0x20, tail +0x24, threaded via eb+0x30; empty -> tail=&head),
-    /// with the blob's guard (+0x29==0 && +0x34==0) and the lmacAdjustTimestamp fixup. Our single
-    /// beacon is enqueued to this AC, so this directly dequeues it (the blob's multi-queue
-    /// ppSearchTxframe selection/bitmap is unnecessary for our controlled single-AC submit).
-    pub fn cr_ppGetTxframe(ac: i32) -> u32 {
-        unsafe {
-            let base = rd(0x4087_ff80);
-            let q = base.wrapping_add((ac as u32).wrapping_mul(0x34));
-            if core::ptr::read_volatile((q + 0x29) as *const u8) == 0 && rd(q + 0x34) == 0 {
-                let head = rd(q + 0x20);
-                if head != 0 {
-                    let next = rd(head + 0x30);
-                    wr(q + 0x20, next);
-                    if next == 0 {
-                        wr(q + 0x24, q + 0x20); // empty -> tail = &head
-                    }
-                    wr(head + 0x30, 0);
-                    // (blob calls lmacAdjustTimestamp() here -- a beacon-timestamp fixup that
-                    // derefs an AP/beacon context null in our raw path; our
-                    // beacon uses timestamp=0 so it is unnecessary and
-                    // omitted.)
-                    return head;
+    /// Rust ppGetTxframe: pop the head eb from the per-AC pending list in TxRxCxt, faithful to the
+    /// blob (head +0x20, tail +0x24, threaded via eb+0x30; empty -> tail=&head), with the blob's
+    /// guard (+0x29==0 && +0x34==0). Our single beacon is enqueued to this AC, so this directly
+    /// dequeues it (the blob's multi-queue ppSearchTxframe selection/bitmap is unnecessary for our
+    /// controlled single-AC submit). Returns Eb(0) when empty.
+    pub fn cr_ppGetTxframe(ac: i32) -> Eb {
+        let q = PendingQ::for_ac(ac as u32);
+        if q.guard_byte() == 0 && q.guard_word() == 0 {
+            let head = Eb(q.head());
+            if head.0 != 0 {
+                let next = head.pending_next();
+                q.set_head(next);
+                if next == 0 {
+                    q.set_tail(q.head_addr()); // empty -> tail = &head
                 }
+                head.set_pending_next(0);
+                // (blob calls lmacAdjustTimestamp() here -- a beacon-timestamp fixup that
+                // derefs an AP/beacon context null in our raw path; our
+                // beacon uses timestamp=0 so it is unnecessary and
+                // omitted.)
+                return head;
             }
-            0
         }
+        Eb(0)
     }
 
     /// Rust completion (PART B): the lmacProcessTxComplete + lmacTxDone essentials, driven from our
     /// own loop (NOT the blob ISR / NOT symbol interposition). The MAC clears PLCP0_ENABLE's arm
     /// bits when the TX finishes; we poll that (bounded, out-of-band), read the completion
-    /// result via our Rust hal_mac_get_txq_complete, clear the txq_state bit, disarm the slot,
-    /// and recycle the eb (esf_buf_recycle -- the pool allocator stays blob). Returns
-    /// (completed, status_nibble).
-    pub fn cr_complete(ac: i32, eb: u32) -> (bool, u8) {
+    /// result via our Rust hal_mac_get_txq_complete, clear the txq_state bit, and recycle the eb.
+    /// Returns (completed, status_nibble).
+    pub fn cr_complete(ac: i32, eb: Eb) -> (bool, u8) {
         unsafe {
-            let a = super::mac_reg::plcp0_enable(ac as u32);
+            let a = mac_reg::plcp0_enable(ac as u32);
             let mut done = false;
             for _ in 0..4000 {
-                if (rd(a) & super::mac_reg::SLOT_ARM) == 0 {
+                if (rd(a) & mac_reg::SLOT_ARM) == 0 {
                     done = true;
                     break;
                 }
             }
             // lmacProcessTxComplete-equivalent read of the completion result for our AC.
-            let txq = rd(0x4004_ffe0).wrapping_add((ac as u32).wrapping_mul(0x34));
+            let txq = LmacTxq::for_ac(ac as u32);
             let mut res6 = [0u8; 8];
             let mut aux8 = [0u32; 2];
             super::hal_mac_get_txq_complete(
-                txq as *mut i32,
+                txq.ptr() as *mut i32,
                 ac,
                 res6.as_mut_ptr(),
                 aux8.as_mut_ptr(),
@@ -1731,20 +2057,14 @@ mod cleanroom_tx {
             // NOTE: do NOT hal_mac_txq_disable here -- the MAC auto-clears the arm bits on
             // completion; forcing a disable leaves slot 0 in a state that breaks the shared control
             // beacon (AC 0). The blob completion never disables the slot.
-            // eb ownership: with cr_ic_interface_enabled fixed (ROM call), cr_ppTxPkt no longer
-            // takes its drop-path (which recycled the eb), so this is the SINGLE recycle of the eb
-            // -- one alloc_eb per iteration, one recycle here. (Before the fix, cr_ppTxPkt's wrong
-            // interface-disabled path recycled the eb first, and this line double-freed it, which
-            // corrupted the LLA heap backing the esf_buf pool -> "hole list out of order".) Verified
-            // over sustained runs: recycles==arms, dblfree==0, allocfail==0.
-            let _txq = txq;
-            // Single recycle of the eb. With the independent Rust pool, return it there; otherwise
-            // to the blob pool. (No double-free: cr_ppTxPkt's drop-path is not taken, and the blob
-            // MAC-complete ISR skips our AC because we never set our_instances[ac].state=1.)
+            // Single recycle of the eb: cr_ppTxPkt's drop-path is not taken (the ic_interface_enabled
+            // fix), and the blob MAC-complete ISR skips our AC because we never set
+            // our_instances[ac].state=1. (Before the fix this line double-freed the eb and corrupted
+            // the heap.) Verified over sustained runs: recycles==arms, dblfree==0, allocfail==0.
             if CR_POOL_ENABLED {
                 cr_pool_recycle(eb);
             } else {
-                esf_buf_recycle(eb);
+                esf_buf_recycle(eb.0);
             }
             (done, status)
         }
@@ -1766,47 +2086,44 @@ mod cleanroom_tx {
     /// Rust rcGetSched: for raw frames trc==NULL the blob returns immediately (rate comes from the
     /// descriptor). Our beacon always has trc==0, so this is a no-op. (trc!=0 rate-control
     /// selection is not exercised by the legacy beacon and stays unimplemented.)
-    pub fn cr_rcGetSched(trc: u32, _txinfo: u32) {
+    pub fn cr_rcGetSched(trc: u32, _txinfo: TxInfo) {
         if trc == 0 {
             return;
         }
     }
 
-    /// Rust reimplementation of lmacTxFrame (the ARM) for the legacy DSSS beacon, on the REAL
-    /// our_instances[ac] state. lmacSetTxFrame (PPDU build) stays the blob shim, which itself
-    /// routes through our proven Rust hal (config_timeout/set_ppdu). The arm sequencing +
-    /// real-state bookkeeping (cur_eb, random backoff, config_edca, state=ARMED, txq_enable) is
-    /// Rust here.
     /// Rust lmacSetTxFrame (PPDU build) for the raw beacon. The TXOP-queue request + TSF-lifetime
     /// sequencing is reduced to the beacon path: no aggregation (trc==0), and a fixed lifetime (the
     /// timeout is not the radiate gate). The actual slot programming goes through our Rust hal
-    /// (hal_mac_tx_config_timeout + hal_mac_tx_set_ppdu, both already Rust).
-    pub fn cr_lmacSetTxFrame(txq: u32) {
+    /// (hal_mac_tx_config_timeout + hal_mac_tx_set_ppdu).
+    pub fn cr_lmacSetTxFrame(txq: LmacTxq) {
         unsafe {
-            let _cur_eb = rd(txq); // mode 0 -> eb = *txq (cur_eb)
-            let ours = rd(0x4004_ffe0); // our_instances base (hal_mac_tx_set_ppdu param2)
-            super::hal_mac_tx_config_timeout(txq as *mut u8, 0x7ff);
-            super::hal_mac_tx_set_ppdu(txq as *mut u8, ours as i32);
+            let _cur_eb = txq.cur_eb(); // mode 0 -> eb = *txq (cur_eb)
+            let ours = blob_layout::our_instances_base(); // hal_mac_tx_set_ppdu param2
+            super::hal_mac_tx_config_timeout(txq.ptr(), 0x7ff);
+            super::hal_mac_tx_set_ppdu(txq.ptr(), ours as i32);
         }
     }
 
-    pub fn cr_lmacTxFrame(eb: u32, ac: i32) {
+    /// Rust lmacTxFrame (the ARM) for the legacy DSSS beacon, on the REAL our_instances[ac] state:
+    /// cur_eb, long-frame RTS flag, PPDU build (cr_lmacSetTxFrame), random EDCA backoff,
+    /// config_edca, and the slot arm (txq_enable).
+    pub fn cr_lmacTxFrame(eb: Eb, ac: i32) {
         unsafe {
-            let base = rd(0x4004_ffe0);
-            let txq = base.wrapping_add((ac as u32).wrapping_mul(0x34));
-            let txinfo = rd_at(eb + 0x34);
-            let flags = rd(txinfo);
+            let txq = LmacTxq::for_ac(ac as u32);
+            let txinfo = eb.txinfo();
+            let flags = txinfo.flags();
             // Discard path (txinfo bit16 & !offchan) is not taken by a normal beacon -> omitted.
-            let state = core::ptr::read_volatile((txq + 0x12) as *const u8);
+            let state = txq.state();
             if state == 0 || state == 3 {
-                core::ptr::write_volatile(txq as *mut u32, eb); // cur_eb
+                txq.set_cur_eb(eb);
                 if (flags & 0x2102) == 0x2000 {
-                    wr(txinfo, flags | 0x1000);
+                    txinfo.set_flags(flags | 0x1000);
                 }
                 // long-frame -> RTS (beacon is short; lmacIsLongFrame returns 0 -> no-op, but
                 // faithful)
-                if cr_lmacIsLongFrame(eb) != 0 && (rd(txinfo) & 2) == 0 {
-                    wr(txinfo, (rd(txinfo) & 0xffff_efff) | 0x100);
+                if cr_lmacIsLongFrame(eb) != 0 && (txinfo.flags() & 2) == 0 {
+                    txinfo.set_flags((txinfo.flags() & 0xffff_efff) | 0x100);
                 }
                 // state==3 retry-RTS and FTM (0x20000000) branches skipped (not taken by the
                 // beacon).
@@ -1814,93 +2131,89 @@ mod cleanroom_tx {
             }
             // EDCA random backoff masked by CW exponent at txq+8, exactly as the blob.
             let r = cr_hal_random();
-            let cw = core::ptr::read_volatile((txq + 8) as *const u8) as u32;
+            let cw = txq.cw() as u32;
             let backoff = (!(0xffff_ffffu32 << (cw & 0x1f)) & r) as u16;
-            core::ptr::write_unaligned((txq + 6) as *mut u16, backoff);
-            super::hal_mac_tx_config_edca(txq as *mut u8);
+            txq.set_backoff(backoff);
+            super::hal_mac_tx_config_edca(txq.ptr());
             // NOTE: we deliberately do NOT set our_instances[ac].state(+0x12)=1 here. With state!=1
             // the blob MAC ISR's lmacProcessTxComplete skips our AC (only clears the completed
             // bit), so it does NOT recycle our eb -- our Rust cr_complete() owns the
             // completion + recycle.
-            super::hal_mac_txq_enable(core::ptr::read_volatile((txq + 4) as *const u8) as i32);
+            super::hal_mac_txq_enable(txq.slot() as i32);
         }
     }
 
-    /// Rust reimplementation of ppProcessTxQ for the legacy DSSS beacon path, operating on the REAL
-    /// our_instances[ac] state. Called DIRECTLY by faithful_tx (NOT symbol interposition), so the
-    /// lmac placement/timing wall does not apply. Leaf helpers (ppSearchTxframe/pp_coex_tx_request)
-    /// stay blob for now.
+    /// Rust ppProcessTxQ for the legacy DSSS beacon path, operating on the REAL our_instances[ac]
+    /// state. Called DIRECTLY by faithful_tx (NOT symbol interposition), so the lmac
+    /// placement/timing wall does not apply.
     pub fn cr_ppProcessTxQ(ac: i32) -> i32 {
-        unsafe {
-            let base = rd(0x4004_ffe0);
-            let txq = base.wrapping_add((ac as u32).wrapping_mul(0x34));
-            // lmacIsIdle(ac): our_instances[ac].state(+0x12) must be 0 (idle). pm/twt/mesh guards
-            // are permissive for a non-connected beacon-only build -> skipped.
-            if core::ptr::read_volatile((txq + 0x12) as *const u8) != 0 {
-                return -1;
-            }
-            let eb = cr_ppGetTxframe(ac); // Rust pop from the real TxRxCxt pending list
-            if eb == 0 {
-                return -2;
-            }
-            // Legacy DSSS beacon: txinfo flags have no HE(bit31)/AMPDU(0x400000)/0x1040000 bit and
-            // trc(eb+0x2c)==0, so the blob's AMPDU-reorder and RTS/fragment branches are NOT taken
-            // (verified against the decompile) -> go straight to the coex request + arm.
-            // pp_coex_tx_request is a coex-signaling no-op on our path (proven: skipping it keeps the
-            // MAC waking, latching and radiating with a healthy pool) -> reimplemented as a Rust no-op.
-            let _ = eb; // (coex request would classify the frame + call the coex OSI cbs; none needed)
-            cr_lmacTxFrame(eb, ac);
-            0
+        let txq = LmacTxq::for_ac(ac as u32);
+        // lmacIsIdle(ac): our_instances[ac].state(+0x12) must be 0 (idle). pm/twt/mesh guards
+        // are permissive for a non-connected beacon-only build -> skipped.
+        if txq.state() != 0 {
+            return -1;
         }
+        let eb = cr_ppGetTxframe(ac); // Rust pop from the real TxRxCxt pending list
+        if eb.0 == 0 {
+            return -2;
+        }
+        // Legacy DSSS beacon: txinfo flags have no HE(bit31)/AMPDU(0x400000)/0x1040000 bit and
+        // trc(eb+0x2c)==0, so the blob's AMPDU-reorder and RTS/fragment branches are NOT taken
+        // (verified against the decompile) -> go straight to the arm. pp_coex_tx_request is a
+        // coex-signaling no-op on our path (proven: skipping it keeps the MAC waking, latching and
+        // radiating with a healthy pool) -> Rust no-op.
+        cr_lmacTxFrame(eb, ac);
+        0
     }
 
     /// FAITHFUL submit+schedule+arm on REAL scheduler state, from our task (blob pp idle).
     /// Returns (ac, txpkt_ret, blk_before, blk_after, plcp0_before, plcp0_after).
-    pub fn faithful_tx(eb: u32, seq: u16) -> (i32, i32, u32, u32, u32, u32) {
+    pub fn faithful_tx(eb: Eb, seq: u16) -> (i32, i32, u32, u32, u32, u32) {
         unsafe {
             // Mirror ieee80211_output_raw_process's eb/dma/txinfo setup BEFORE ppTxPkt (the fields
-            // the blob's raw-submit fills), then let the blob's real ppTxPkt do proto/sec/rate/map/
-            // enqueue with kick=0. ppMapTxQueue will set the AC; do NOT pre-set AC bits here.
-            let dma = rd_at(eb + 4);
-            let frame = rd_at(dma + 4);
-            core::ptr::write_volatile((eb + 0x14) as *mut u16, 0);
-            let l16 = core::ptr::read_volatile((eb + 0x16) as *const u16) as u32;
-            let mut w0 = rd(dma);
-            w0 |= 0x8000_0000;
-            w0 |= 0x4000_0000;
-            w0 &= 0xdfff_ffff;
-            w0 = ((l16 & 0x3fff) << 0xe) | (w0 & 0xf000_3fff);
-            wr(dma, w0);
-            let txinfo = rd_at(eb + 0x34);
-            core::ptr::write_volatile((txinfo + 4) as *mut u8, 7); // cat = mgmt
-            wr(txinfo + 0x18, cr_hal_now());
-            let mut w10 = rd(txinfo + 0x10);
+            // the blob's raw-submit fills), then run the Rust ppTxPkt (proto/sec/rate/map/enqueue,
+            // kick=0). ppMapTxQueue will set the AC; do NOT pre-set AC bits here.
+            let dma = eb.dma_desc();
+            let frame = dma.frame_ptr();
+            eb.set_prefix_len(0);
+            let l16 = eb.payload_len() as u32;
+            let mut w0 = dma.ctrl();
+            w0 |= DmaDesc::CTRL_OWNER;
+            w0 |= DmaDesc::CTRL_EOF;
+            w0 &= DmaDesc::CTRL_BIT29_CLEAR;
+            w0 = ((l16 & DmaDesc::CTRL_LEN_MASK) << DmaDesc::CTRL_LEN_SHIFT)
+                | (w0 & DmaDesc::CTRL_KEEP_MASK);
+            dma.set_ctrl(w0);
+            let txinfo = eb.txinfo();
+            txinfo.set_cat(7); // cat = mgmt
+            txinfo.set_timestamp(cr_hal_now());
+            let mut w10 = txinfo.word10();
             w10 &= 0xfff7_ffff; // iface 0
-            wr(txinfo + 0x10, w10);
-            if (core::ptr::read_volatile((frame + 4) as *const u8) & 1) != 0 {
-                wr(txinfo, rd(txinfo) | 0x402);
+            txinfo.set_word10(w10);
+            if (super::rd8(frame + 4) & 1) != 0 {
+                txinfo.set_flags(txinfo.flags() | 0x402);
             }
-            core::ptr::write_volatile((txinfo + 0xc) as *mut u8, 0); // rate 1M DSSS
-            core::ptr::write_volatile((frame + 0x16) as *mut u16, seq << 4); // seq ctrl
-            wr(eb + 0x2c, 0); // trc = NULL (raw frame -> rcGetSched no-op)
+            txinfo.set_rate(0); // rate 1M DSSS
+            super::wr16(frame + 0x16, seq << 4); // seq ctrl
+            eb.set_trc(0); // trc = NULL (raw frame -> rcGetSched no-op)
 
-            // Faithful submit onto REAL our_instances pending (no kick).
+            // Faithful submit onto the REAL pending list (no kick).
             let ret = cr_ppTxPkt(eb, 0);
             // AC that ppMapTxQueue assigned into txinfo+0x10 bits 20-23.
-            let ac = ((rd(txinfo + 0x10) >> 0x14) & 0xf) as i32;
-            let blk_before = rd(super::mac_reg::PM_TXBLOCK_RETENTION);
-            let plcp0_before = rd(super::mac_reg::plcp0_enable(ac as u32));
-            // Faithful schedule + arm on real state (pop + coex + lmacTxFrame -> our Rust hal).
+            let ac = txinfo.ac() as i32;
+            let blk_before = rd(mac_reg::PM_TXBLOCK_RETENTION);
+            let plcp0_before = rd(mac_reg::plcp0_enable(ac as u32));
+            // Faithful schedule + arm on real state (pop + lmacTxFrame -> our Rust hal).
             let _ = cr_ppProcessTxQ(ac);
-            let plcp0_after = rd(super::mac_reg::plcp0_enable(ac as u32));
-            let blk_after = rd(super::mac_reg::PM_TXBLOCK_RETENTION);
+            let plcp0_after = rd(mac_reg::plcp0_enable(ac as u32));
+            let blk_after = rd(mac_reg::PM_TXBLOCK_RETENTION);
             (ac, ret, blk_before, blk_after, plcp0_before, plcp0_after)
         }
     }
 
     /// Allocate ONE eb from the live static-TX pool with our beacon payload copied in.
-    pub fn alloc_eb(payload: &[u8]) -> u32 {
-        unsafe { esf_buf_alloc(payload.as_ptr(), 1, payload.len() as u32) }
+    pub fn alloc_eb(payload: &[u8]) -> Eb {
+        Eb(unsafe { esf_buf_alloc(payload.as_ptr(), 1, payload.len() as u32) })
     }
 
     // ================= INDEPENDENT RUST eb POOL =================
@@ -1917,8 +2230,18 @@ mod cleanroom_tx {
     // is a separate Rust index stack (eb+0x30 is reserved for the blob pending list).
     pub const CR_POOL_ENABLED: bool = true;
     const POOL_N: usize = 12;
+    // Offsets of the sub-objects inside one of OUR eb blocks (the blob's are laid out the same).
+    const EB_ONE: u32 = 0x0c; // always 1 in a live eb
+    const EB_AUX_PTR: u32 = 0x10;
+    const EB_POOL_TYPE: u32 = 0x1a; // u8; 1 = static TX pool
+    const EB_OWN_DESC_OFF: u32 = 0x3c;
+    const EB_OWN_TXINFO_OFF: u32 = 0x48;
+    const EB_AUX_OFF: u32 = 0x90;
     const EB_FRAME_OFF: usize = 0xb8;
-    const EB_SIZE: usize = EB_FRAME_OFF + 0x200; // header/desc/txinfo/aux + 512B frame
+    const EB_FRAME_MAX: usize = 0x200;
+    const EB_DESC_SIZE_SEED: u32 = 0x68; // dma_desc[0] buffer-size seed, as esf_buf_alloc sets it
+    const TXINFO_FLAGS_SEED: u32 = 0x2000; // txinfo[0] as esf_buf_alloc hands it out
+    const EB_SIZE: usize = EB_FRAME_OFF + EB_FRAME_MAX; // header/desc/txinfo/aux + 512B frame
     #[repr(C, align(16))]
     struct EbBuf([u8; EB_SIZE]);
     static mut CR_POOL: [EbBuf; POOL_N] = [const { EbBuf([0u8; EB_SIZE]) }; POOL_N];
@@ -1930,6 +2253,20 @@ mod cleanroom_tx {
         unsafe { core::ptr::addr_of!(CR_POOL[i]) as u32 }
     }
 
+    /// Copy the beacon payload into an eb's frame region and set its payload length.
+    #[inline(always)]
+    unsafe fn eb_load_payload(b: u32, payload: &[u8]) {
+        unsafe {
+            let n = payload.len().min(EB_FRAME_MAX);
+            core::ptr::copy_nonoverlapping(
+                payload.as_ptr(),
+                (b + EB_FRAME_OFF as u32) as *mut u8,
+                n,
+            );
+            Eb(b).set_payload_len(n as u16);
+        }
+    }
+
     /// Build the pool: initialise every eb exactly as esf_buf_alloc hands it out (self-relative
     /// pointers, type, dma descriptor, txinfo seed, payload copied into the frame region), and fill
     /// the free-list. Called once at boot.
@@ -1939,65 +2276,60 @@ mod cleanroom_tx {
                 let b = eb_base(i);
                 // zero the whole block first
                 core::ptr::write_bytes(b as *mut u8, 0, EB_SIZE);
-                wr(b + 0x04, b + 0x3c); // dma_desc ptr
-                wr(b + 0x08, b + 0x3c); // dma_desc ptr (same desc)
-                wr(b + 0x0c, 1);
-                wr(b + 0x10, b + 0x90); // aux ptr
-                core::ptr::write_volatile((b + 0x1a) as *mut u8, 1); // pool type 1
-                wr(b + 0x34, b + 0x48); // txinfo ptr
+                wr(b + Eb::DMA_DESC, b + EB_OWN_DESC_OFF); // dma_desc ptr
+                wr(b + Eb::SEC_DESC, b + EB_OWN_DESC_OFF); // dma_desc ptr (same desc)
+                wr(b + EB_ONE, 1);
+                wr(b + EB_AUX_PTR, b + EB_AUX_OFF); // aux ptr
+                super::wr8(b + EB_POOL_TYPE, 1); // pool type 1
+                wr(b + Eb::TXINFO, b + EB_OWN_TXINFO_OFF); // txinfo ptr
                 // dma descriptor at +0x3c: [0]=size/ctrl (low 14b = buffer size), [1]=frame ptr,
                 // [2]=next. faithful_tx re-derives the owner/eof/length bits each frame.
-                wr(b + 0x3c, 0x68);
-                wr(b + 0x40, b + EB_FRAME_OFF as u32); // frame ptr
-                wr(b + 0x44, 0);
+                let desc = DmaDesc(b + EB_OWN_DESC_OFF);
+                desc.set_ctrl(EB_DESC_SIZE_SEED);
+                desc.set_frame_ptr(b + EB_FRAME_OFF as u32);
+                desc.set_next(0);
                 // txinfo seed (faithful_tx sets the rest per frame)
-                wr(b + 0x48, 0x2000);
+                TxInfo(b + EB_OWN_TXINFO_OFF).set_flags(TXINFO_FLAGS_SEED);
                 // payload -> frame, and the payload length at +0x16
-                let n = payload.len().min(0x200);
-                core::ptr::copy_nonoverlapping(
-                    payload.as_ptr(),
-                    (b + EB_FRAME_OFF as u32) as *mut u8,
-                    n,
-                );
-                core::ptr::write_volatile((b + 0x16) as *mut u16, n as u16);
+                eb_load_payload(b, payload);
                 CR_FREE[i] = i as u16;
             }
             CR_FREE_LEN = POOL_N;
         }
     }
 
-    /// Pop a free eb from our pool (0 if exhausted). Re-copies the payload + resets the length so a
-    /// re-used eb is handed out clean, matching esf_buf_alloc semantics.
-    pub fn cr_pool_alloc(payload: &[u8]) -> u32 {
+    /// Pop a free eb from our pool (Eb(0) if exhausted). Re-copies the payload + resets the length so
+    /// a re-used eb is handed out clean, matching esf_buf_alloc semantics.
+    pub fn cr_pool_alloc(payload: &[u8]) -> Eb {
         unsafe {
             if CR_FREE_LEN == 0 {
-                return 0;
+                return Eb(0);
             }
             CR_FREE_LEN -= 1;
             let i = CR_FREE[CR_FREE_LEN] as usize;
             let b = eb_base(i);
-            let n = payload.len().min(0x200);
-            core::ptr::copy_nonoverlapping(payload.as_ptr(), (b + EB_FRAME_OFF as u32) as *mut u8, n);
-            core::ptr::write_volatile((b + 0x16) as *mut u16, n as u16);
-            core::ptr::write_volatile((b + 0x14) as *mut u16, 0);
-            core::ptr::write_volatile((b + 0x24) as *mut u16, 0); // clear sec/FTM flag ppProcTxSecFrame sets
-            wr(b + 0x30, 0); // pending next-link
+            let eb = Eb(b);
+            eb_load_payload(b, payload);
+            eb.set_prefix_len(0);
+            eb.set_flags16(0); // clear the sec-hdr-shifted flag ppProcTxSecFrame sets
+            eb.set_pending_next(0);
             // restore dma descriptor (ppProcTxSecFrame shifted frame ptr / lengths last time)
-            wr(b + 0x3c, 0x68);
-            wr(b + 0x40, b + EB_FRAME_OFF as u32);
-            b
+            let desc = DmaDesc(b + EB_OWN_DESC_OFF);
+            desc.set_ctrl(EB_DESC_SIZE_SEED);
+            desc.set_frame_ptr(b + EB_FRAME_OFF as u32);
+            eb
         }
     }
 
     /// Return an eb to our pool. `eb` must be one of ours; maps back to its index.
-    pub fn cr_pool_recycle(eb: u32) {
+    pub fn cr_pool_recycle(eb: Eb) {
         unsafe {
             let base0 = eb_base(0);
-            if eb < base0 {
+            if eb.0 < base0 {
                 return;
             }
-            let idx = ((eb - base0) as usize) / EB_SIZE;
-            if idx >= POOL_N || eb_base(idx) != eb {
+            let idx = ((eb.0 - base0) as usize) / EB_SIZE;
+            if idx >= POOL_N || eb_base(idx) != eb.0 {
                 return; // not one of ours
             }
             if CR_FREE_LEN < POOL_N {
@@ -2017,8 +2349,8 @@ mod cleanroom_tx {
     pub fn probe() {
         unsafe {
             for s in 0..8u32 {
-                let a = super::mac_reg::plcp0_enable(s);
-                let e = super::mac_reg::conf1(s);
+                let a = mac_reg::plcp0_enable(s);
+                let e = mac_reg::conf1(s);
                 let p0 = rd(a);
                 let e0 = rd(e);
                 // write-test the EDCA-conf reg (non-arm, safe to restore) unless it's live
@@ -2135,7 +2467,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     // Sustained pure-Rust TX: each round allocates a fresh eb, runs the full Rust submit->schedule
     // ->arm on the REAL blob scheduler state (blob pp idle), then Rust completion+recycle. The
     // [CR.H] oracle (out-of-band) should read arms==latched==completed, allocfail==0, and
-    // last_plcp0==0xc067a6f0 (our frame armed on slot 0).
+    // last_plcp0==0xc0...... (our frame armed on slot 0).
     println!("[CR.F] pure-Rust TX pipeline on real scheduler state (submit/schedule/arm/complete)");
     let mut round: u32 = 0;
     let mut seq: u16 = 0;
@@ -2155,7 +2487,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
             } else {
                 cleanroom_tx::alloc_eb(&rust_buf[..rust_len])
             };
-            if feb == 0 {
+            if feb.0 == 0 {
                 n_allocfail += 1;
             } else {
                 let (ac, _ret, _bb, _ba, _pb, pa) = cleanroom_tx::faithful_tx(feb, seq);
