@@ -16,7 +16,8 @@ state; only then does the interlock clear and the launch bits latch. Our Rust re
 `ppTxPkt -> ppMapTxQueue -> ppGetTxframe -> ppProcessTxQ -> lmacTxFrame -> hal_mac_tx` sequence on the
 live scheduler structures — `our_instances` (per-AC lmac TX control, base `*(0x4004ffe0)`) and
 `TxRxCxt` (per-AC pending lists, base `*(0x4087ff80)`) — calling the blob only for a small,
-documented set of substrate leaves (chiefly `pm_on_data_tx` itself and the `esf_buf` packet pool).
+documented set of leaves (chiefly the `pm_on_data_tx` PM-wake FSM and `ppProcTxSecFrame`); the eb
+packet pool is now an independent Rust pool.
 
 ## WARNING — the fixed addresses are blob-version-specific
 
@@ -103,19 +104,49 @@ to slots in REVERSE (queue 0 = highest slot), so per-queue addr = base - q*strid
    made our real frame flow through and arm, and left `cr_complete` as the single recycle owner. This
    also un-blocked promoting `hal_he_set_tx_protection` to Rust.
 
+## The independent Rust eb pool
+
+`esf_buf` is de-blobbed: instead of the blob's callback-mediated two-list pool (which a bare Rust
+recycle cannot feed — it drained after ~31 buffers), our loop owns a fixed pool of eb structures
+end-to-end. `cr_pool_alloc` pops from our own free-list, `cr_pool_recycle` pushes back; the blob
+`esf_buf` lists are never touched on the hot path.
+
+The eb layout was reversed from a live blob type-1 eb (a single contiguous block, all internal
+pointers self-relative), verified against the 0.3.0 disasm and a runtime dump:
+- `+0x04` and `+0x08` both point to the same 3-word DMA descriptor at `+0x3c`
+  (`[size|ctrl, frame_ptr, next]`); `ppProcTxSecFrame` reads eb+8 and eb+4 as the "two" descriptors —
+  they are the same one.
+- `+0x0c` = 1, `+0x10` -> aux (`+0x90`), `+0x16` = u16 payload length, `+0x1a` = u8 pool type (1),
+  `+0x30` = pending next-link (the blob pending list uses this, so our free-list is a *separate* Rust
+  index stack), `+0x34` -> txinfo (`+0x48`, 0x48 bytes), frame bytes at `+0xb8`.
+
+`cr_pool_init` builds N=12 ebs in a `#[repr(C, align(16))]` static array in `.bss` (HP SRAM, DMA-
+reachable like the blob ebs at `0x4087xxxx`), initialising each exactly as `esf_buf_alloc` does
+(self-relative pointers, type, DMA descriptor, txinfo seed, payload copied into the frame region).
+`cr_pool_alloc` re-copies the payload and restores the descriptor/length fields (which
+`ppProcTxSecFrame` mutates in place) so a reused eb is handed out clean. Feasibility rested on one
+check: nothing outside our loop references our eb — `ppProcTxSecFrame` and the hal use only stored
+eb-field pointers (no `(eb - pool_base)/size` index arithmetic), and the blob MAC-complete ISR skips
+our AC (we never set `our_instances[ac].state=1`), confirmed by `dblfree==0`.
+
+Validated from a fresh flash: no drain over **1056 arms** (`arms==latched==completed==1056`,
+`allocfail=0`, `poolfree=12` constant at every health print — the previous blob-fed pool drained at
+31), `last_plcp0=0xc061d1fc` (our pool eb armed and radiating), no panic; OTA-confirmed on mon0 ch1
+(binned beacons: CR-RUST present alongside CR-CTRL).
+
 ## Minimal remaining blob surface
 
 The per-frame TX *logic* is entirely Rust. What remains blob, with reasons:
 
-Substrate leaves (the fully-blob-free frontier — characterized, kept blob):
-- `pm_on_data_tx` — the modem-PM wake FSM. `WDEV_PM_TXBLOCK_RETENTION` is only ever SET by the PM
-  code; no CPU store clears `0x00ff1000 -> 0`. The wake clear is a hardware consequence of
+Substrate leaves:
+- `pm_on_data_tx` — the modem-PM wake FSM, KEPT BLOB. `WDEV_PM_TXBLOCK_RETENTION` is only ever SET by
+  the PM code; no CPU store clears `0x00ff1000 -> 0`. The wake clear is a hardware consequence of
   `wifi_rf_phy_enable` + the `g_pm` FSM reaching the wake state, so it cannot be replayed as a
   register write — it needs the full g_pm state machine + PHY enable in order.
-- `esf_buf_alloc` / `esf_buf_recycle` — a callback-mediated two-list eb pool (alloc pops one per-type
-  head, recycle pushes a different one; the two are reconciled by OSI callbacks). A bare-freelist
-  Rust recycle radiates and latches fine but drains the pool after ~31 buffers, so the buffer return
-  depends on the callback machinery. Kept blob.
+- `esf_buf_alloc` / `esf_buf_recycle` — NOW RUST (see "The independent Rust eb pool" below). The blob
+  esf_buf is a callback-mediated two-list pool that a bare-freelist Rust recycle cannot feed (it
+  drained after ~31 buffers). Instead our loop uses its OWN fixed pool of correctly-laid-out eb
+  structures end-to-end; the blob esf_buf externs are kept only as a compile-time-disabled fallback.
 
 hal_mac_tx.o leaves:
 - `ppProcTxSecFrame` — the security-header dual-descriptor length adjustment; proven required for
@@ -144,5 +175,7 @@ Condensed timeline of the investigation (full blow-by-blow is in git history):
 - 9h: guard leaves in Rust; ppProcTxSecFrame confirmed required (must stay blob).
 - 9i: hal register helpers (rts_rate, set_len) in Rust; he_protection/pti deferred.
 - 9j: root-caused + fixed the layout-sensitive heap corruption (the ic_interface_enabled double-free).
+- 9l: esf_buf de-blobbed — an independent Rust eb pool (own free-list, blob esf_buf untouched on the
+  hot path); no drain over 1056 arms, OTA-confirmed.
 - 9k: ic_interface_enabled reimplemented in Rust with the correct 0.3.0 address; esf_buf pool and
   pm_on_data_tx characterized and kept blob; consolidation + refactor into this reference.

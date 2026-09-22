@@ -1179,7 +1179,14 @@ mod cleanroom_tx {
             // corrupted the LLA heap backing the esf_buf pool -> "hole list out of order".) Verified
             // over sustained runs: recycles==arms, dblfree==0, allocfail==0.
             let _txq = txq;
-            esf_buf_recycle(eb);
+            // Single recycle of the eb. With the independent Rust pool, return it there; otherwise
+            // to the blob pool. (No double-free: cr_ppTxPkt's drop-path is not taken, and the blob
+            // MAC-complete ISR skips our AC because we never set our_instances[ac].state=1.)
+            if CR_POOL_ENABLED {
+                cr_pool_recycle(eb);
+            } else {
+                esf_buf_recycle(eb);
+            }
             (done, status)
         }
     }
@@ -1337,6 +1344,115 @@ mod cleanroom_tx {
         unsafe { esf_buf_alloc(payload.as_ptr(), 1, payload.len() as u32) }
     }
 
+    // ================= INDEPENDENT RUST eb POOL =================
+    // A fixed pool of correctly-laid-out eb structures our loop owns end-to-end -- NO blob esf_buf
+    // in the hot path. Layout reversed from a live blob type-1 eb (esf_buf_alloc): a single
+    // contiguous block, all internal pointers self-relative.
+    //   +0x04, +0x08 -> dma_desc (both point to the same 3-word desc at +0x3c)
+    //   +0x0c = 1                 +0x10 -> aux (+0x90)
+    //   +0x16 = u16 payload len   +0x1a = u8 pool type (1)
+    //   +0x30 = pending next-link (used by cr_ppTxPkt/enqueue -- NOT our free-list)
+    //   +0x34 -> txinfo (+0x48, 0x48 bytes)     +0x3c dma_desc [size|ctrl, frame_ptr, next]
+    //   +0x48 txinfo (txinfo[0]=0x2000)         +0x90 aux (0x28 bytes)   +0xb8 frame bytes
+    // The pool lives in .bss (HP SRAM, DMA-reachable like the blob ebs at 0x4087xxxx). Our free-list
+    // is a separate Rust index stack (eb+0x30 is reserved for the blob pending list).
+    pub const CR_POOL_ENABLED: bool = true;
+    const POOL_N: usize = 12;
+    const EB_FRAME_OFF: usize = 0xb8;
+    const EB_SIZE: usize = EB_FRAME_OFF + 0x200; // header/desc/txinfo/aux + 512B frame
+    #[repr(C, align(16))]
+    struct EbBuf([u8; EB_SIZE]);
+    static mut CR_POOL: [EbBuf; POOL_N] = [const { EbBuf([0u8; EB_SIZE]) }; POOL_N];
+    static mut CR_FREE: [u16; POOL_N] = [0; POOL_N];
+    static mut CR_FREE_LEN: usize = 0;
+
+    #[inline(always)]
+    fn eb_base(i: usize) -> u32 {
+        unsafe { core::ptr::addr_of!(CR_POOL[i]) as u32 }
+    }
+
+    /// Build the pool: initialise every eb exactly as esf_buf_alloc hands it out (self-relative
+    /// pointers, type, dma descriptor, txinfo seed, payload copied into the frame region), and fill
+    /// the free-list. Called once at boot.
+    pub fn cr_pool_init(payload: &[u8]) {
+        unsafe {
+            for i in 0..POOL_N {
+                let b = eb_base(i);
+                // zero the whole block first
+                core::ptr::write_bytes(b as *mut u8, 0, EB_SIZE);
+                wr(b + 0x04, b + 0x3c); // dma_desc ptr
+                wr(b + 0x08, b + 0x3c); // dma_desc ptr (same desc)
+                wr(b + 0x0c, 1);
+                wr(b + 0x10, b + 0x90); // aux ptr
+                core::ptr::write_volatile((b + 0x1a) as *mut u8, 1); // pool type 1
+                wr(b + 0x34, b + 0x48); // txinfo ptr
+                // dma descriptor at +0x3c: [0]=size/ctrl (low 14b = buffer size), [1]=frame ptr,
+                // [2]=next. faithful_tx re-derives the owner/eof/length bits each frame.
+                wr(b + 0x3c, 0x68);
+                wr(b + 0x40, b + EB_FRAME_OFF as u32); // frame ptr
+                wr(b + 0x44, 0);
+                // txinfo seed (faithful_tx sets the rest per frame)
+                wr(b + 0x48, 0x2000);
+                // payload -> frame, and the payload length at +0x16
+                let n = payload.len().min(0x200);
+                core::ptr::copy_nonoverlapping(
+                    payload.as_ptr(),
+                    (b + EB_FRAME_OFF as u32) as *mut u8,
+                    n,
+                );
+                core::ptr::write_volatile((b + 0x16) as *mut u16, n as u16);
+                CR_FREE[i] = i as u16;
+            }
+            CR_FREE_LEN = POOL_N;
+        }
+    }
+
+    /// Pop a free eb from our pool (0 if exhausted). Re-copies the payload + resets the length so a
+    /// re-used eb is handed out clean, matching esf_buf_alloc semantics.
+    pub fn cr_pool_alloc(payload: &[u8]) -> u32 {
+        unsafe {
+            if CR_FREE_LEN == 0 {
+                return 0;
+            }
+            CR_FREE_LEN -= 1;
+            let i = CR_FREE[CR_FREE_LEN] as usize;
+            let b = eb_base(i);
+            let n = payload.len().min(0x200);
+            core::ptr::copy_nonoverlapping(payload.as_ptr(), (b + EB_FRAME_OFF as u32) as *mut u8, n);
+            core::ptr::write_volatile((b + 0x16) as *mut u16, n as u16);
+            core::ptr::write_volatile((b + 0x14) as *mut u16, 0);
+            core::ptr::write_volatile((b + 0x24) as *mut u16, 0); // clear sec/FTM flag ppProcTxSecFrame sets
+            wr(b + 0x30, 0); // pending next-link
+            // restore dma descriptor (ppProcTxSecFrame shifted frame ptr / lengths last time)
+            wr(b + 0x3c, 0x68);
+            wr(b + 0x40, b + EB_FRAME_OFF as u32);
+            b
+        }
+    }
+
+    /// Return an eb to our pool. `eb` must be one of ours; maps back to its index.
+    pub fn cr_pool_recycle(eb: u32) {
+        unsafe {
+            let base0 = eb_base(0);
+            if eb < base0 {
+                return;
+            }
+            let idx = ((eb - base0) as usize) / EB_SIZE;
+            if idx >= POOL_N || eb_base(idx) != eb {
+                return; // not one of ours
+            }
+            if CR_FREE_LEN < POOL_N {
+                CR_FREE[CR_FREE_LEN] = idx as u16;
+                CR_FREE_LEN += 1;
+            }
+        }
+    }
+
+    /// Free-list depth (diagnostic).
+    pub fn cr_pool_free_len() -> usize {
+        unsafe { CR_FREE_LEN }
+    }
+
     /// One-time write/read probe across all 8 slots: which slot config banks are writable?
     /// (Writes to slots whose bank the scheduler has not activated are dropped on the C6 MAC.)
     pub fn probe() {
@@ -1452,6 +1568,8 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     if cleanroom_tx::DIAG {
         cleanroom_tx::probe();
     }
+    // Initialise the independent Rust eb pool (no blob esf_buf in the hot path).
+    cleanroom_tx::cr_pool_init(&rust_buf[..rust_len]);
 
     // Sustained pure-Rust TX: each round allocates a fresh eb, runs the full Rust submit->schedule
     // ->arm on the REAL blob scheduler state (blob pp idle), then Rust completion+recycle. The
@@ -1465,7 +1583,11 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     loop {
         // ----- TX phase: one full submit+schedule+arm+complete per iteration (no send_raw_frame).
         for _ in 0..4u32 {
-            let feb = cleanroom_tx::alloc_eb(&rust_buf[..rust_len]);
+            let feb = if cleanroom_tx::CR_POOL_ENABLED {
+                cleanroom_tx::cr_pool_alloc(&rust_buf[..rust_len])
+            } else {
+                cleanroom_tx::alloc_eb(&rust_buf[..rust_len])
+            };
             if feb == 0 {
                 n_allocfail += 1;
             } else {
@@ -1498,8 +1620,8 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
         if cleanroom_tx::DIAG && round % 8 == 0 {
             let pmblk = cleanroom_tx::PM_BLK.load(core::sync::atomic::Ordering::Relaxed);
             println!(
-                "[CR.H] rounds={round} arms={n_arm} latched={n_latch} completed={n_done} allocfail={n_allocfail} last_plcp0={last_pa:#010x} pm_blk={:#06x}->{:#06x}",
-                pmblk >> 16, pmblk & 0xffff
+                "[CR.H] rounds={round} arms={n_arm} latched={n_latch} completed={n_done} allocfail={n_allocfail} last_plcp0={last_pa:#010x} pm_blk={:#06x}->{:#06x} poolfree={}",
+                pmblk >> 16, pmblk & 0xffff, cleanroom_tx::cr_pool_free_len()
             );
         }
         if cleanroom_tx::DIAG && round % 5 == 0 {
