@@ -270,6 +270,86 @@ mod mac_reg {
     /// PM_TXBLOCK_RETENTION: the per-queue TX-block byte (bits 16-23) + bit12, set by
     /// hal_mac_deinit when the modem sleeps and cleared by hal_mac_init on wake.
     pub const PM_TXBLOCK_BITS: u32 = 0x00ff_1000;
+    pub const PM_TXBLOCK_QUEUE_MASK: u32 = 0x00ff_0000; // per-queue block bits 16-23
+    pub const PM_TXBLOCK_BIT12: u32 = 0x1000;
+
+    // -- PLCP0_ENABLE fields (mac_tx_set_plcp0) --
+    pub const PLCP0_DMA_ADDR_MASK: u32 = 0x000f_ffff; // low 20 bits of the DMA descriptor address
+    pub const PLCP0_FORMAT_BASE: u32 = 0x0060_0000; // bits 21-22, set for every frame
+    pub const PLCP0_ACKTYPE_SHIFT: u32 = 24; // ack-type field bits 24-26
+
+    // -- PLCP1 fields (mac_tx_set_plcp1) --
+    pub const PLCP1_HE_MODE: u32 = 0x0400_0000; // bit26: HE PPDU
+    pub const PLCP1_HT_MODE: u32 = 0x0200_0000; // bit25: HT PPDU
+    pub const PLCP1_KEYSLOT_MASK: u32 = 0x01fe_0000; // bits 17-24
+    pub const PLCP1_KEYSLOT_SHIFT: u32 = 0x11;
+    pub const PLCP1_RATE_MASK: u32 = 0x0001_f000; // bits 12-16
+    pub const PLCP1_RATE_SHIFT: u32 = 0xc;
+    pub const PLCP1_LEGACY_LEN_MASK: u32 = 0x0000_0fff; // bits 0-11 (OFDM/HT: on-air length)
+    pub const PLCP1_LDPC: u32 = 0x2000_0000; // bit29
+
+    // -- RESP_DUR fields (mac_tx_set_txop_q / mac_tx_set_len) --
+    pub const RESP_DUR_TXOP_COUNT_MASK: u32 = 0x0f00_0000; // bits 24-27
+    pub const RESP_DUR_TXOP_COUNT_SHIFT: u32 = 0x18;
+    pub const RESP_DUR_TXOP_DEPTH_MASK: u32 = 0x3000_0000; // bits 28-29
+    pub const RESP_DUR_TXOP_DEPTH_SHIFT: u32 = 0x1c;
+    pub const RESP_DUR_CBW_SEL_SHIFT: u32 = 0x16; // bits 22-23 (OFDM channel-width select)
+    pub const RESP_DUR_RESP_RATE_SHIFT: u32 = 6; // bits 6-13: response (ACK/CTS) rate
+    pub const RESP_DUR_CBW40: u32 = 2; // bit1
+    pub const RESP_DUR_BIT2: u32 = 4; // always set by mac_tx_set_len
+    pub const RESP_DUR_ANT_MASK: u32 = 0x7; // bits 0-2: antenna select (hal_attenna_init)
+    pub const RESP_DUR_ANT_BIT3: u32 = 0x8;
+    pub const RESP_DUR_ANT_BIT4: u32 = 0x10;
+    pub const RESP_DUR_ANT_BIT5: u32 = 0x20;
+
+    // -- TXLEN fields (mac_tx_set_len, OFDM/HT only) --
+    pub const TXLEN_CBW_SHIFT: u32 = 0x16;
+    pub const TXLEN_RATE_SHIFT: u32 = 0x1c;
+    pub const TXLEN_LEN_MASK: u32 = 0x3fff;
+
+    // -- CONF1 (EDCA) fields --
+    pub const CONF1_TIMEOUT_MASK: u32 = 0x0000_0fff; // bits 0-11: lifetime / timeout
+    pub const CONF1_CW_MASK: u32 = 0x003f_f000; // bits 12-21: backoff window
+    pub const CONF1_CW_SHIFT: u32 = 12;
+    pub const CONF1_IFACE_MASK: u32 = 0x00c0_0000; // bits 22-23
+    pub const CONF1_IFACE_SHIFT: u32 = 0x16;
+    pub const CONF1_AIFSN_MASK: u32 = 0x0f00_0000; // bits 24-27
+    pub const CONF1_AIFSN_SHIFT: u32 = 24;
+    pub const CONF1_PTI_MASK: u32 = 0xf000_0000; // bits 28-31 (coex PTI)
+    pub const CONF1_PTI_SHIFT: u32 = 0x1c;
+    pub const CONF1_REAL_HETB_MPLEN_VALID: u32 = 1 << 3; // cleared by set_ppdu; HE-TB only
+
+    // -- PTI register fields (hal_set_tx_pti): pti nibble replicated into bits 4-19, hi in 20-31 --
+    pub const PTI_HI_SHIFT: u32 = 0x14;
+    pub const PTI_HI_CLEAR: u32 = 0x000f_ffff;
+
+    // -- PROT_THRESH / TX_MIN_PWR / PMD / state-machine fields --
+    pub const PROT_THRESH_VALID: u32 = 0x1_0000; // bit16 + the 16-bit threshold value
+    pub const TX_MIN_PWR_MASK: u32 = 0x3f0; // 6-bit field, bits 4-9
+    pub const TX_MIN_PWR_SHIFT: u32 = 4;
+    pub const PMD_CBW_SHIFT: u32 = 0x19; // bits 25-26: channel width
+    pub const PMD_BIT24: u32 = 1 << 24; // masked out by hal_mac_get_txq_pmd
+    pub const PMD_STATUS_SHIFT: u32 = 0xc; // bits 12-15: the completion state/match nibble
+    pub const PMD_ERROR_SHIFT: u32 = 8; // bits 8-11: error code
+    pub const AUX_LAST_TX_IS_TB: u32 = 0x10_0000; // AUX_54D0 bit20 -> HE-TB completion fill
+    pub const STATE_NIBBLE_MASK: u32 = 0xf;
+    pub const STATE_A_LO_MASK: u32 = 0x7ff; // queue 0 state in STATE_A bits 0-10
+    pub const STATE_A_HI_SHIFT: u32 = 0x10; // queue 1 state in STATE_A bits 16-23
+    pub const STATE_A_HI_MASK: u32 = 0xff;
+    pub const STATE_B_MASK: u32 = 0x7ff; // queue 2 state in STATE_B bits 0-10
+    pub const CLR_STATE_KIND1_BIT_BASE: u32 = 0x10; // kind 1 clears bit (q + 16)
+
+    // -- hal_attenna_init: the global antenna reg's select field --
+    pub const ATTENNA_SEL_MASK: u32 = 0x7;
+    pub const ATTENNA_BIT5: u32 = 0x20;
+
+    // -- rate-index windows shared by the PLCP/len/power lookups --
+    /// Rate indices 0..7 are DSSS/CCK; 0x10..0x24 (`RATE_NON_DSSS_FIRST + RATE_NON_DSSS_COUNT`)
+    /// are OFDM/HT/HE; indices > 0x19 fold down by `RATE_HT_FOLD` into the TX-power table.
+    pub const RATE_NON_DSSS_FIRST: u32 = 0x10;
+    pub const RATE_NON_DSSS_COUNT: u32 = 0x14;
+    pub const RATE_HT_FIRST: u32 = 0x1a;
+    pub const RATE_HT_FOLD: u32 = 0xa;
 
     #[inline(always)]
     const fn conf(base: u32, slot: u32) -> u32 {
@@ -433,8 +513,41 @@ mod blob_layout {
         pub const LIFETIME_HI: u32 = 0x44;
 
         pub const WORD10_IFACE_SHIFT: u32 = 0x13;
+        pub const WORD10_IFACE_CLEAR: u32 = 0xfff7_ffff;
         pub const WORD10_AC_SHIFT: u32 = 0x14;
         pub const WORD10_AC_CLEAR: u32 = 0xff0f_ffff;
+        pub const WORD10_KEYTYPE_SHIFT: u32 = 8; // bits 8-11
+        pub const WORD10_BIT18: u32 = 0x4_0000; // with FLAG_BIT14 -> PLCP1 LDPC
+
+        // -- FLAGS bits (the ones the legacy path reads or writes) --
+        pub const FLAG_NO_ACK: u32 = 0x2; // bit1: broadcast/multicast, no ACK expected
+        pub const FLAG_DATA: u32 = 0x8; // bit3: data frame
+        pub const FLAG_PROTECT: u32 = 0x100; // bit8: RTS / txop protection (CONF0 bit31)
+        /// what ieee80211_output_raw_process ORs in for a broadcast raw frame: FLAG_NO_ACK | bit10
+        /// (bit10 also keeps mac_tx_set_plcp0 on the ack-type-0 path).
+        pub const FLAG_RAW_BCAST: u32 = 0x402;
+        pub const FLAG_QOS_NULL_NOACK: u32 = 0x800; // bit11 (ppTxProtoProc, FC 0x40 null)
+        pub const FLAG_BIT12: u32 = 0x1000; // cleared when the long-frame RTS is requested
+        pub const FLAG_BIT13: u32 = 0x2000; // set in the esf_buf_alloc seed
+        pub const FLAG_BIT14: u32 = 0x4000; // with WORD10_BIT18 -> PLCP1 LDPC
+        pub const FLAG_ACKTYPE: u32 = 1 << 19; // -> PLCP0 ack-type field
+        pub const FLAG_BIT20: u32 = 1 << 20; // -> PLCP0 format 0x360_0000
+        pub const FLAG_AMPDU: u32 = 0x40_0000; // bit22
+        pub const FLAG_AMPDU_CCMP: u32 = 0x0104_0000; // ppProcTxSecFrame AMPDU-CCMP branch
+        pub const FLAG_BIT27: u32 = 0x800_0000; // ppTxProtoProc, FC 0x50 null/QoS
+        pub const FLAG_HE_EXT: u32 = 0x4000_0000; // bit30
+        pub const FLAG_HE: u32 = 0x8000_0000; // bit31: HE PPDU
+        /// ppTxProtoProc: `(flags & 0x2102) == 0x2000` selects the bit12 set in lmacTxFrame.
+        pub const FLAG_GROUP_2102: u32 = 0x2102;
+        pub const WORD30_BIT17: u32 = 0x2_0000; // ppTxProtoProc data-frame branch
+        pub const WORD30_PROT_THRESH_SHIFT: u32 = 3; // bits 3-12
+        pub const WORD30_PROT_THRESH_MASK: u32 = 0x3ff;
+
+        // -- CAT values --
+        pub const CAT_MGMT: u8 = 7;
+        pub const CAT_QOS_MASK: u32 = 0xf0;
+        pub const CAT_QOS_DATA: u32 = 0x40; // -> ppMapTxQueue's QoS branch (AC 2)
+        pub const WORD10_AC_QOS_DATA: u32 = 0x20_0000; // AC 2 in the AC field
 
         #[inline(always)]
         pub fn flags(self) -> u32 {
@@ -525,6 +638,7 @@ mod blob_layout {
         /// +0x24: u16 flags; bit13 = header already shifted (set by ppProcTxSecFrame).
         pub const FLAGS16: u32 = 0x24;
         pub const FLAG16_HDR_SHIFTED: u16 = 0x2000;
+        pub const FLAG16_BIT12: u16 = 0x1000; // mac_tx_set_plcp0 HE ack-type select
         /// +0x2c: rate-control context (trc); NULL for a raw frame.
         pub const TRC: u32 = 0x2c;
         /// +0x30: pending-list next link (also the aggregate MPDU chain).
@@ -532,10 +646,6 @@ mod blob_layout {
         /// +0x34: -> `TxInfo`.
         pub const TXINFO: u32 = 0x34;
 
-        #[inline(always)]
-        pub fn addr(self) -> u32 {
-            self.0
-        }
         #[inline(always)]
         pub fn is_null(self) -> bool {
             self.0 == 0
@@ -761,22 +871,28 @@ mod hal_mac_tx {
             let resp_dur = mac_reg::resp_dur(slot);
             let txinfo = eb.txinfo();
             if depth > 2 {
-                wr(resp_dur, rd(resp_dur) & 0xf0ff_ffff);
+                wr(resp_dur, rd(resp_dur) & !mac_reg::RESP_DUR_TXOP_COUNT_MASK);
                 return 0;
             }
             let count = txq.txop_count();
             wr(
                 resp_dur,
-                (rd(resp_dur) & 0xf0ff_ffff) | ((count << 0x18) & 0xf000_0000),
+                (rd(resp_dur) & !mac_reg::RESP_DUR_TXOP_COUNT_MASK)
+                    | ((count << mac_reg::RESP_DUR_TXOP_COUNT_SHIFT) & 0xf000_0000),
             );
-            wr(resp_dur, (rd(resp_dur) & 0xcfff_ffff) | (depth << 0x1c));
+            wr(
+                resp_dur,
+                (rd(resp_dur) & !mac_reg::RESP_DUR_TXOP_DEPTH_MASK)
+                    | (depth << mac_reg::RESP_DUR_TXOP_DEPTH_SHIFT),
+            );
             let conf0 = mac_reg::conf0(slot);
-            if (txinfo.flags() & 0x100) != 0 {
+            if (txinfo.flags() & TxInfo::FLAG_PROTECT) != 0 {
                 wr(conf0, rd(conf0) | mac_reg::CONF0_BIT31);
             } else {
                 wr(conf0, rd(conf0) & !mac_reg::CONF0_BIT31);
             }
             let plcp0 = mac_reg::plcp0_enable(slot);
+            // txinfo flags bits 6-7 == 0b10 -> hardware TXOP burst
             if (txinfo.flags() & 0xc0) == 0x80 {
                 wr(plcp0, rd(plcp0) | mac_reg::PLCP0_TXOP);
             } else {
@@ -857,7 +973,10 @@ mod hal_mac_tx {
             }
             wr(conf0, v);
             if threshold != 0 {
-                wr(mac_reg::prot_thresh(slot as u32), (val & 0xffff) | 0x1_0000);
+                wr(
+                    mac_reg::prot_thresh(slot as u32),
+                    (val & 0xffff) | mac_reg::PROT_THRESH_VALID,
+                );
             }
         }
     }
@@ -878,32 +997,44 @@ mod hal_mac_tx {
             let rts = cr_mac_tx_get_rts_rate(rate) as u32;
             let ac = (t10 >> TxInfo::WORD10_AC_SHIFT) & 0xf;
             let ac_txq = LmacTxq::in_array(param2 as u32, ac);
-            let mut uvar5 = 1u32;
-            if (rate.wrapping_sub(0x10) as u32 & 0xff) < 0x14 {
-                uvar5 = ac_txq.txlen_cbw_sel() & 3;
+            let mut cbw_sel = 1u32;
+            if (rate.wrapping_sub(mac_reg::RATE_NON_DSSS_FIRST as i32) as u32 & 0xff)
+                < mac_reg::RATE_NON_DSSS_COUNT
+            {
+                cbw_sel = ac_txq.txlen_cbw_sel() & 3;
             }
             let slot = txq.slot();
             let resp_dur = mac_reg::resp_dur(slot);
+            // key type (WORD10 bits 12-15) == 1 -> cbw40 bit
+            let cbw40 = ((t10 & 0xf000) == 0x1000) as u32 * mac_reg::RESP_DUR_CBW40;
             wr(
                 resp_dur,
-                uvar5 << 0x16 | ((t10 & 0xf000) == 0x1000) as u32 * 2 | (rts & 0xff) << 6 | 4,
+                cbw_sel << mac_reg::RESP_DUR_CBW_SEL_SHIFT
+                    | cbw40
+                    | (rts & 0xff) << mac_reg::RESP_DUR_RESP_RATE_SHIFT
+                    | mac_reg::RESP_DUR_BIT2,
             );
             let flags = txinfo.flags();
-            if (flags as i32) >= 0 {
+            if (flags & TxInfo::FLAG_HE) == 0 {
                 let r2 = txinfo.rate() as u32;
-                let mut uv3 = r2.wrapping_sub(0x10) & 0xff;
-                if uv3 < 0x14 {
-                    let len = if flags & 0x40_0000 == 0 {
-                        rd(frame) & 0x3fff
+                let mut rate_field = r2.wrapping_sub(mac_reg::RATE_NON_DSSS_FIRST) & 0xff;
+                if rate_field < mac_reg::RATE_NON_DSSS_COUNT {
+                    let len = if flags & TxInfo::FLAG_AMPDU == 0 {
+                        rd(frame) & mac_reg::TXLEN_LEN_MASK
                     } else {
                         eb.payload_len() as u32 + eb.prefix_len() as u32
                     };
-                    if r2 > 0x19 {
-                        uv3 = r2 - 0x1a;
+                    if r2 >= mac_reg::RATE_HT_FIRST {
+                        rate_field = r2 - mac_reg::RATE_HT_FIRST;
                     }
                     let txlen = mac_reg::txlen(slot);
                     let cbw = ac_txq.txlen_cbw() & 3;
-                    wr(txlen, cbw << 0x16 | len | uv3 << 0x1c);
+                    wr(
+                        txlen,
+                        cbw << mac_reg::TXLEN_CBW_SHIFT
+                            | len
+                            | rate_field << mac_reg::TXLEN_RATE_SHIFT,
+                    );
                 }
             }
         }
@@ -938,31 +1069,39 @@ mod hal_mac_tx {
         unsafe {
             let txq = LmacTxq::from_ctx(param_1);
             let eb = txq.cur_eb();
-            let u1 = eb.dma_desc().0;
+            let dma_addr = eb.dma_desc().0 & mac_reg::PLCP0_DMA_ADDR_MASK;
             let txinfo = eb.txinfo();
             let flags = txinfo.flags();
-            let base = (u1 & 0xfffff) | 0x60_0000;
+            let base = dma_addr | mac_reg::PLCP0_FORMAT_BASE;
             let mut v = base;
-            if (flags & 0x402) == 0 && (flags & 0x4048_0000) != 0x40_0000 {
-                if (flags & 0x10_0000) == 0 {
-                    v = base | ((((flags >> 0x13) & 1) + 1) << 0x18);
-                    if (flags as i32) < 0 {
-                        if (flags & 0x4000_0000) == 0 {
-                            v = (u1 & 0xfffff) | 0x260_0000;
+            // no-ack / raw broadcast frames keep ack-type 0; (flags & (HE_EXT|ACKTYPE|AMPDU)) ==
+            // AMPDU alone is the non-HE aggregate case, also ack-type 0.
+            if (flags & TxInfo::FLAG_RAW_BCAST) == 0
+                && (flags & (TxInfo::FLAG_HE_EXT | TxInfo::FLAG_ACKTYPE | TxInfo::FLAG_AMPDU))
+                    != TxInfo::FLAG_AMPDU
+            {
+                if (flags & TxInfo::FLAG_BIT20) == 0 {
+                    let ack_type = ((flags & TxInfo::FLAG_ACKTYPE) != 0) as u32 + 1;
+                    v = base | (ack_type << mac_reg::PLCP0_ACKTYPE_SHIFT);
+                    if (flags & TxInfo::FLAG_HE) != 0 {
+                        if (flags & TxInfo::FLAG_HE_EXT) == 0 {
+                            v = dma_addr | 0x260_0000; // HE, no ext: format 0x26
                         } else {
-                            let iv: u32 = if (eb.flags16() & 0x1000) == 0 { 1 } else { 5 };
-                            v = base | (iv << 0x18);
+                            let ack_type: u32 =
+                                if (eb.flags16() & Eb::FLAG16_BIT12) == 0 { 1 } else { 5 };
+                            v = base | (ack_type << mac_reg::PLCP0_ACKTYPE_SHIFT);
                         }
                     }
                 } else {
-                    v = (u1 & 0xfffff) | 0x360_0000;
+                    v = dma_addr | 0x360_0000; // FLAG_BIT20: format 0x36
                 }
             }
             let slot = txq.slot();
             wr(mac_reg::plcp0_enable(slot), v);
             // RTS/txop protection, exactly as the blob leaf is called.
-            let enable = ((flags >> 8) & 1) as i32;
-            let threshold = ((txinfo.word30() >> 3) & 0x3ff) as i32;
+            let enable = ((flags & TxInfo::FLAG_PROTECT) != 0) as i32;
+            let threshold = ((txinfo.word30() >> TxInfo::WORD30_PROT_THRESH_SHIFT)
+                & TxInfo::WORD30_PROT_THRESH_MASK) as i32;
             let tval = txinfo.word34();
             cr_hal_he_set_tx_protection(slot as i32, enable, 0, threshold, tval);
         }
@@ -1021,13 +1160,13 @@ mod hal_mac_tx {
             let pmd = rd(mac_reg::PMD.wrapping_sub(off));
             let aux = rd(mac_reg::AUX_54EC.wrapping_sub(off));
             *param_3.add(2) = (pmd >> 0x10) as u8;
-            *param_3.add(3) = ((pmd >> 0x19) & 3) as u8;
+            *param_3.add(3) = ((pmd >> mac_reg::PMD_CBW_SHIFT) & 3) as u8;
 
             let mut eb: i32 = 0;
             let mut he_tb = false;
             if !param_1.is_null() {
                 eb = *param_1;
-                if !param_4.is_null() && (*param_4 & 0x10_0000) != 0 {
+                if !param_4.is_null() && (*param_4 & mac_reg::AUX_LAST_TX_IS_TB) != 0 {
                     // HE-TB completion fill (never taken by the legacy beacon). Logging skipped.
                     he_tb = true;
                     *param_3.add(1) = (*param_3.add(1) & 0x0f) | (((aux >> 0xc) as u8) << 4);
@@ -1042,8 +1181,8 @@ mod hal_mac_tx {
                 }
             }
             if !he_tb {
-                let hi = ((pmd >> 0xc) as u8) << 4;
-                *param_3.add(1) = hi | ((pmd >> 8) as u8 & 0xf);
+                let hi = ((pmd >> mac_reg::PMD_STATUS_SHIFT) as u8) << 4;
+                *param_3.add(1) = hi | ((pmd >> mac_reg::PMD_ERROR_SHIFT) as u8 & 0xf);
                 *param_3 = pmd as u8;
             }
             *param_3.add(5) = (aux >> 0x10) as u8;
@@ -1072,24 +1211,28 @@ mod hal_mac_tx {
             let lensrc = eb.dma_desc().frame_ptr();
             let rate = txinfo.rate() as u32;
             let flags = txinfo.flags();
-            let uv3 = rate.wrapping_sub(0x10) & 0xff;
+            let non_dsss = rate.wrapping_sub(mac_reg::RATE_NON_DSSS_FIRST) & 0xff;
             let mut v: u32 = 0;
-            if uv3 <= 0x13 {
-                v = if (flags as i32) < 0 {
-                    0x400_0000
+            if non_dsss < mac_reg::RATE_NON_DSSS_COUNT {
+                v = if (flags & TxInfo::FLAG_HE) != 0 {
+                    mac_reg::PLCP1_HE_MODE
                 } else {
-                    0x200_0000
+                    mac_reg::PLCP1_HT_MODE
                 };
             }
             let keyslot = txinfo.keyslot() as u32;
-            v = (v & 0xfe01_ffff) | (keyslot << 0x11);
-            let ratefield = if rate > 0x28 { uv3 & 0x1f } else { rate & 0x1f };
-            v = (v & 0xfffe_0fff) | (ratefield << 0xc);
-            if uv3 > 0x13 {
-                v = (v & 0xffff_f000) | (rd(lensrc) & 0xfff);
+            v = (v & !mac_reg::PLCP1_KEYSLOT_MASK) | (keyslot << mac_reg::PLCP1_KEYSLOT_SHIFT);
+            let ratefield = if rate > 0x28 { non_dsss & 0x1f } else { rate & 0x1f };
+            v = (v & !mac_reg::PLCP1_RATE_MASK) | (ratefield << mac_reg::PLCP1_RATE_SHIFT);
+            if non_dsss >= mac_reg::RATE_NON_DSSS_COUNT {
+                // DSSS/CCK: the legacy length field comes from the frame's first word
+                v = (v & !mac_reg::PLCP1_LEGACY_LEN_MASK) | (rd(lensrc) & mac_reg::PLCP1_LEGACY_LEN_MASK);
             }
-            if (flags & 0x4000) != 0 && (txinfo.word10() & 0x40000) != 0 && (flags as i32) >= 0 {
-                v |= 0x2000_0000;
+            if (flags & TxInfo::FLAG_BIT14) != 0
+                && (txinfo.word10() & TxInfo::WORD10_BIT18) != 0
+                && (flags & TxInfo::FLAG_HE) == 0
+            {
+                v |= mac_reg::PLCP1_LDPC;
             }
             let slot = txq.slot();
             wr(mac_reg::plcp1(slot), v);
@@ -1128,13 +1271,13 @@ mod hal_mac_tx {
     pub extern "C" fn hal_mac_get_txq_state(ac: i32) -> u32 {
         let state = unsafe {
             match ac {
-                1 => (rd(mac_reg::STATE_A) >> 0x10) & 0xff,
-                2 => rd(mac_reg::STATE_B) & 0x7ff,
-                0 => rd(mac_reg::STATE_A) & 0x7ff,
+                1 => (rd(mac_reg::STATE_A) >> mac_reg::STATE_A_HI_SHIFT) & mac_reg::STATE_A_HI_MASK,
+                2 => rd(mac_reg::STATE_B) & mac_reg::STATE_B_MASK,
+                0 => rd(mac_reg::STATE_A) & mac_reg::STATE_A_LO_MASK,
                 _ => 0,
             }
         };
-        state & 0xf
+        state & mac_reg::STATE_NIBBLE_MASK
     }
 
     /// blob `hal_mac_clr_txq_state`: clear a queue's state bit in the SM clear registers.
@@ -1142,7 +1285,10 @@ mod hal_mac_tx {
     pub extern "C" fn hal_mac_clr_txq_state(kind: i32, bit: u32) -> u32 {
         unsafe {
             match kind {
-                1 => wr(mac_reg::CLR_STATE_A, 1u32 << ((bit.wrapping_add(0x10)) & 0x1f)),
+                1 => wr(
+                    mac_reg::CLR_STATE_A,
+                    1u32 << ((bit.wrapping_add(mac_reg::CLR_STATE_KIND1_BIT_BASE)) & 0x1f),
+                ),
                 2 => wr(
                     mac_reg::CLR_STATE_B,
                     rd(mac_reg::CLR_STATE_B) | (1u32 << (bit & 0x1f)),
@@ -1158,7 +1304,7 @@ mod hal_mac_tx {
     #[unsafe(no_mangle)]
     pub extern "C" fn hal_mac_tx_is_cbw40(q: i32) -> bool {
         let addr = mac_reg::pmd(q as u32);
-        unsafe { (rd(addr) >> 0x19) & 3 != 0 }
+        unsafe { (rd(addr) >> mac_reg::PMD_CBW_SHIFT) & 3 != 0 }
     }
 
     /// blob `hal_mac_tx_get_blockack`: copy the slot's block-ack bitmap registers into `out`.
@@ -1184,7 +1330,8 @@ mod hal_mac_tx {
         unsafe {
             wr(
                 mac_reg::TX_MIN_PWR,
-                ((pwr & 0x3f) << 4) | (rd(mac_reg::TX_MIN_PWR) & 0xffff_fc0f),
+                ((pwr << mac_reg::TX_MIN_PWR_SHIFT) & mac_reg::TX_MIN_PWR_MASK)
+                    | (rd(mac_reg::TX_MIN_PWR) & !mac_reg::TX_MIN_PWR_MASK),
             )
         }
     }
@@ -1197,8 +1344,17 @@ mod hal_mac_tx {
     /// baked flash table (indices > 0x19 are folded down by 0xa).
     #[unsafe(no_mangle)]
     pub extern "C" fn hal_get_tx_pwr(idx: u32) -> i32 {
-        let i = if idx > 0x19 { idx - 0xa } else { idx };
-        unsafe { *((TX_PWR_TABLE.wrapping_add(i.wrapping_mul(2))) as usize as *const i8) as i32 }
+        unsafe { pwr_byte(pwr_table_index(idx).wrapping_mul(2)) }
+    }
+
+    /// TX-power table row for a rate index: HT/HE rows (> 0x19) fold down by `RATE_HT_FOLD`.
+    #[inline(always)]
+    fn pwr_table_index(rate: u32) -> u32 {
+        if rate >= mac_reg::RATE_HT_FIRST {
+            rate - mac_reg::RATE_HT_FOLD
+        } else {
+            rate
+        }
     }
 
     #[inline(always)]
@@ -1221,33 +1377,33 @@ mod hal_mac_tx {
             mac_tx_set_plcp1(param_1);
             let slot = txq.slot();
             let conf1 = mac_reg::conf1_real(slot);
-            wr(conf1, rd(conf1) & 0xffff_fff7); // clear bit3
+            wr(conf1, rd(conf1) & !mac_reg::CONF1_REAL_HETB_MPLEN_VALID);
             let txinfo = eb.txinfo();
             let rate = txinfo.rate();
+            // PLCP_RATE_DUR bits 16-31: the RTS/response rate's TX-power pair from the table.
             let rtsidx = cr_mac_tx_get_rts_rate(rate as i32) as u32;
-            let s2 = (pwr_byte(rtsidx.wrapping_mul(2)) << 16)
+            let rts_pwr = (pwr_byte(rtsidx.wrapping_mul(2)) << 16)
                 | (pwr_byte(rtsidx.wrapping_mul(2).wrapping_add(1)) << 24);
-            let s3 = rate.wrapping_sub(0x10) as u32; // (rate-0x10)&0xff
+            let non_dsss = rate.wrapping_sub(mac_reg::RATE_NON_DSSS_FIRST as u8) as u32;
             let plcp_rate_dur = mac_reg::plcp_rate_dur(slot);
-            if s3 <= 0x13 {
+            if non_dsss < mac_reg::RATE_NON_DSSS_COUNT {
                 // OFDM/HT/HE rate. HT/HE SIG programming delegated to the blob leaves.
                 let flags0 = txinfo.flags();
-                if (flags0 as i32) < 0 {
+                if (flags0 & TxInfo::FLAG_HE) != 0 {
                     shims::mac_tx_set_hesig();
                 } else {
                     shims::mac_tx_set_htsig(param_1, param_2);
                 }
-                let r2 = eb.txinfo().rate() as u32;
-                let idx = if r2 > 0x19 { r2 - 0xa } else { r2 };
+                let idx = pwr_table_index(eb.txinfo().rate() as u32);
                 let c1 = pwr_byte(idx.wrapping_mul(2));
                 let c2 = pwr_byte(idx.wrapping_mul(2).wrapping_add(1));
-                wr(plcp_rate_dur, ((c2 << 8) | (c1 | s2)) as u32);
+                wr(plcp_rate_dur, ((c2 << 8) | (c1 | rts_pwr)) as u32);
             } else {
                 // DSSS / legacy path (our beacon).
                 cr_mac_tx_set_len(param_1, param_2);
                 mac_tx_set_txop_q(param_1);
                 let r = txinfo.rate() as u32;
-                wr(plcp_rate_dur, (pwr_byte(r.wrapping_mul(2)) | s2) as u32);
+                wr(plcp_rate_dur, (pwr_byte(r.wrapping_mul(2)) | rts_pwr) as u32);
             }
             cr_mac_tx_set_pti(param_1);
         }
@@ -1268,15 +1424,23 @@ mod hal_mac_tx {
             let pti = txinfo.pti() as u32;
             let hw22 = txinfo.pti_hi() as u32;
             let slot = txq.slot();
-            let a1 = pti; // coex clamp skipped (no BT); min(pti, coex_demand) == pti here
+            let pti_clamped = pti; // coex clamp skipped (no BT); min(pti, coex_demand) == pti here
             let conf1 = mac_reg::conf1(slot);
-            wr(conf1, (rd(conf1) & 0x0fff_ffff) | (a1 << 0x1c));
+            wr(
+                conf1,
+                (rd(conf1) & !mac_reg::CONF1_PTI_MASK) | (pti_clamped << mac_reg::CONF1_PTI_SHIFT),
+            );
+            // The frame pti nibble is replicated into the four PTI-register nibbles at bits
+            // 12/8/4/16 (one per traffic class), then the hi field goes into bits 20-31.
             let ptir = mac_reg::pti(slot);
             wr(ptir, (rd(ptir) & 0xffff_0fff) | ((pti << 0xc) & 0xf000));
             wr(ptir, (rd(ptir) & 0xffff_f0ff) | ((pti << 8) & 0xf00));
             wr(ptir, (rd(ptir) & 0xffff_ff0f) | ((pti << 4) & 0xf0));
             wr(ptir, (rd(ptir) & 0xfff0_ffff) | ((pti << 0x10) & 0xf_0000));
-            wr(ptir, (rd(ptir) & 0x000f_ffff) | (hw22 << 0x14));
+            wr(
+                ptir,
+                (rd(ptir) & mac_reg::PTI_HI_CLEAR) | (hw22 << mac_reg::PTI_HI_SHIFT),
+            );
         }
     }
 
@@ -1297,12 +1461,21 @@ mod hal_mac_tx {
             let ac = txq.slot();
             let conf1 = mac_reg::conf1(ac);
             let aifsn = (txq.aifsn() & 0xf) as u32;
-            wr(conf1, (rd(conf1) & 0xf0ff_ffff) | (aifsn << 24));
+            wr(
+                conf1,
+                (rd(conf1) & !mac_reg::CONF1_AIFSN_MASK) | (aifsn << mac_reg::CONF1_AIFSN_SHIFT),
+            );
             let cw = (txq.backoff() & 0x3ff) as u32;
-            wr(conf1, (rd(conf1) & 0xffc0_0fff) | (cw << 12));
+            wr(
+                conf1,
+                (rd(conf1) & !mac_reg::CONF1_CW_MASK) | (cw << mac_reg::CONF1_CW_SHIFT),
+            );
             // iface bit: txq[0]=eb ptr -> eb+0x34 = txinfo -> txinfo+0x10 word, bit 19.
             let ifb = txq.cur_eb().txinfo().iface();
-            wr(conf1, (rd(conf1) & 0xff3f_ffff) | (ifb << 0x16));
+            wr(
+                conf1,
+                (rd(conf1) & !mac_reg::CONF1_IFACE_MASK) | (ifb << mac_reg::CONF1_IFACE_SHIFT),
+            );
         }
         0
     }
@@ -1319,19 +1492,22 @@ mod hal_mac_tx {
             let ac = txq.slot();
             let conf1 = mac_reg::conf1(ac);
             let txinfo = txq.cur_eb().txinfo();
-            let u1 = txinfo.lifetime_hi();
-            let mut v3 = (txinfo.lifetime_lo() >> 10) | (u1 << 0x16);
-            if (u1 >> 10) != 0 || v3 > 0xfff {
-                v3 = 0xfff;
+            let hi = txinfo.lifetime_hi();
+            let mut timeout = (txinfo.lifetime_lo() >> 10) | (hi << 0x16);
+            if (hi >> 10) != 0 || timeout > mac_reg::CONF1_TIMEOUT_MASK {
+                timeout = mac_reg::CONF1_TIMEOUT_MASK;
             }
             let result: u32 = if param2 < 0 {
                 param2 as u32
-            } else if v3 >= param2 as u32 {
-                v3
+            } else if timeout >= param2 as u32 {
+                timeout
             } else {
                 param2 as u32
             };
-            wr(conf1, (rd(conf1) & 0xffff_f000) | (result & 0xfff));
+            wr(
+                conf1,
+                (rd(conf1) & !mac_reg::CONF1_TIMEOUT_MASK) | (result & mac_reg::CONF1_TIMEOUT_MASK),
+            );
         }
         0
     }
@@ -1341,7 +1517,7 @@ mod hal_mac_tx {
     #[unsafe(no_mangle)]
     pub extern "C" fn hal_mac_get_txq_pmd(q: i32, out: *mut u32) -> u32 {
         let addr = mac_reg::pmd(q as u32);
-        unsafe { *out = rd(addr) & 0xfeff_ffff }
+        unsafe { *out = rd(addr) & !mac_reg::PMD_BIT24 }
         0
     }
 
@@ -1350,10 +1526,10 @@ mod hal_mac_tx {
     #[unsafe(no_mangle)]
     pub extern "C" fn hal_attenna_init() {
         unsafe {
-            // Pass 1: clear low 3 bits of each slot's RESP_DUR reg.
+            // Pass 1: clear the antenna-select field of each slot's RESP_DUR reg.
             let mut a = mac_reg::RESP_DUR;
             loop {
-                wr(a, rd(a) & 0xffff_fff8);
+                wr(a, rd(a) & !mac_reg::RESP_DUR_ANT_MASK);
                 a = a.wrapping_sub(mac_reg::SLOT_STRIDE);
                 if a == mac_reg::RESP_DUR_BLOCK_END {
                     break;
@@ -1362,9 +1538,9 @@ mod hal_mac_tx {
             // Pass 2: clear bit3, set bit5, clear bit4 of each slot's RESP_DUR reg.
             let mut a = mac_reg::RESP_DUR;
             loop {
-                wr(a, rd(a) & 0xffff_fff7);
-                wr(a, rd(a) | 0x20);
-                wr(a, rd(a) & 0xffff_ffef);
+                wr(a, rd(a) & !mac_reg::RESP_DUR_ANT_BIT3);
+                wr(a, rd(a) | mac_reg::RESP_DUR_ANT_BIT5);
+                wr(a, rd(a) & !mac_reg::RESP_DUR_ANT_BIT4);
                 a = a.wrapping_sub(mac_reg::SLOT_STRIDE);
                 if a == mac_reg::RESP_DUR_BLOCK_END {
                     break;
@@ -1372,7 +1548,7 @@ mod hal_mac_tx {
             }
             wr(
                 mac_reg::ATTENNA_GLOBAL,
-                (rd(mac_reg::ATTENNA_GLOBAL) & 0xffff_fff8) | 0x20,
+                (rd(mac_reg::ATTENNA_GLOBAL) & !mac_reg::ATTENNA_SEL_MASK) | mac_reg::ATTENNA_BIT5,
             );
         }
     }
@@ -1673,6 +1849,27 @@ mod pm_wake {
     const OSI_WIFI_CLOCK_ENABLE: u32 = 0x0f8;
     const OSI_COEX_STATUS_GET: u32 = 0x190;
     const OSI_COEX_WIFI_REQUEST: u32 = 0x198;
+    /// g_ic: the rf_phy_enabled_mask byte the ROM wifi_rf_phy_enable/disable gate on.
+    const G_IC_RF_PHY_ENABLED_MASK: u32 = 0x24e;
+
+    // -- g_pm field offsets (0.3.0) --
+    const PM_PS_STATE: u32 = 0x1; // pm_set_state target: 0 active / 1 / 2 sleeping (pm_dream)
+    const PM_IFACE: u32 = 0x2; // the interface the PM FSM belongs to
+    const PM_CONNECTED: u32 = 0xe; // connected / PS-enabled: selects the associated-STA FSM
+    const PM_FIELD_0F: u32 = 0xf; // with PM_CONNECTED: pm_get_tx_blocks_retention_mask
+    const PM_SLICE_START_LO: u32 = 0x70; // u64 coex slice start (esp_timer time)
+    const PM_SLICE_START_HI: u32 = 0x74;
+    const PM_DISC_STATE: u32 = 0x121; // disconnected-modem state: 2 awake / 3 asleep
+    const PM_TWT_FLAG_A: u32 = 0x1c2; // pm_is_twt_start
+    const PM_TWT_FLAG_B: u32 = 0x2e4;
+    const PM_FIELD_46A: u32 = 0x46a; // pm_get_tx_blocks_retention_mask
+    const PM_DISC_AWAKE: u8 = 2;
+    const PM_DISC_ASLEEP: u8 = 3;
+    const PM_PS_ACTIVE: u8 = 0;
+    /// pm_get_tx_blocks_retention_mask result when connected without PM_FIELD_0F: keeps bits 17-19
+    /// (0xe0000, the coex-slice block) out of the hal_mac_init clear.
+    const RETENTION_MASK_CONNECTED: u32 = 0xfff1_ffff;
+    const RETENTION_MASK_ALL: u32 = 0xffff_ffff;
 
     /// Frames on which the Rust wake found the modem asleep (g_pm+0x121 == 3) and ran the full
     /// clock/PHY/MAC re-enable.
@@ -1717,16 +1914,16 @@ mod pm_wake {
     /// Rust pm_is_twt_start (0.3.0 @0x4080c2ba): g_pm+0x1c2 || g_pm+0x2e4.
     #[inline(always)]
     unsafe fn cr_pm_is_twt_start() -> bool {
-        unsafe { pm_u8(0x1c2) != 0 || pm_u8(0x2e4) != 0 }
+        unsafe { pm_u8(PM_TWT_FLAG_A) != 0 || pm_u8(PM_TWT_FLAG_B) != 0 }
     }
 
     /// Rust pm_get_tx_blocks_retention_mask (0.3.0 @0x42022cbe).
     unsafe fn cr_pm_get_tx_blocks_retention_mask() -> u32 {
         unsafe {
-            if pm_u8(0xe) != 0 && (pm_u8(0xf) == 0 || pm_u8(0x46a) != 0) {
-                0xfff1_ffff
+            if pm_u8(PM_CONNECTED) != 0 && (pm_u8(PM_FIELD_0F) == 0 || pm_u8(PM_FIELD_46A) != 0) {
+                RETENTION_MASK_CONNECTED
             } else {
-                0xffff_ffff
+                RETENTION_MASK_ALL
             }
         }
     }
@@ -1737,14 +1934,17 @@ mod pm_wake {
         unsafe {
             let m = cr_pm_get_tx_blocks_retention_mask();
             let v = rd(WDEV_PM_TXBLOCK_RETENTION);
-            wr(WDEV_PM_TXBLOCK_RETENTION, v & !((m & 0x00ff_0000) | 0x1000));
+            wr(
+                WDEV_PM_TXBLOCK_RETENTION,
+                v & !((m & mac_reg::PM_TXBLOCK_QUEUE_MASK) | mac_reg::PM_TXBLOCK_BIT12),
+            );
         }
     }
 
     /// Rust wifi_rf_phy_enable(mode) -- the ROM dispatcher @0x40016a68, 1:1.
     pub unsafe fn cr_wifi_rf_phy_enable(mode: u32) {
         unsafe {
-            let maskp = rd(G_IC_PTR) + 0x24e;
+            let maskp = rd(G_IC_PTR) + G_IC_RF_PHY_ENABLED_MASK;
             if rd8(maskp) == 0 {
                 let lock: extern "C" fn() =
                     core::mem::transmute(osi_slot(OSI_WIFI_PM_SLEEP_LOCK_ACQUIRE));
@@ -1779,13 +1979,13 @@ mod pm_wake {
     /// hook, *(0x40811e08) == 0 -> no-op.)
     #[inline(always)]
     unsafe fn cr_pm_set_state(s: u8) {
-        unsafe { pm_set_u8(1, s) }
+        unsafe { pm_set_u8(PM_PS_STATE, s) }
     }
 
     /// Rust pm_disconnected_wake (0.3.0 @0x42020838).
     pub unsafe fn cr_pm_disconnected_wake() {
         unsafe {
-            if pm_u8(0x121) == 3 && !mesh_started() {
+            if pm_u8(PM_DISC_STATE) == PM_DISC_ASLEEP && !mesh_started() {
                 PM_WAKES.fetch_add(1, Relaxed);
                 if config::PM_WAKE_EXPERIMENT & 8 != 0 {
                     // bisect: the real ROM wifi_rf_phy_enable instead of the Rust port
@@ -1796,8 +1996,8 @@ mod pm_wake {
                 } else {
                     cr_wifi_rf_phy_enable(0);
                 }
-                pm_set_u8(0x121, 2);
-                cr_pm_set_state(0);
+                pm_set_u8(PM_DISC_STATE, PM_DISC_AWAKE);
+                cr_pm_set_state(PM_PS_ACTIVE);
             }
         }
     }
@@ -1808,7 +2008,7 @@ mod pm_wake {
     #[inline(always)]
     unsafe fn cr_pm_check_state() {
         unsafe {
-            if pm_u8(1) != 0 {
+            if pm_u8(PM_PS_STATE) != PM_PS_ACTIVE {
                 odd();
             }
         }
@@ -1826,11 +2026,11 @@ mod pm_wake {
                 odd(); // mesh PS hook path not modelled
                 return;
             }
-            if pm_u8(2) as u32 != iface {
+            if pm_u8(PM_IFACE) as u32 != iface {
                 return; // not the PM's interface
             }
             cr_pm_check_state();
-            if pm_u8(0xe) != 0 {
+            if pm_u8(PM_CONNECTED) != 0 {
                 odd(); // connected / PS-enabled FSM (pm_go_to_wake, pm_dream, ...) not modelled
                 return;
             }
@@ -1839,7 +2039,7 @@ mod pm_wake {
                 unsafe extern "C" {
                     fn pm_disconnected_wake();
                 }
-                if pm_u8(0x121) == 3 {
+                if pm_u8(PM_DISC_STATE) == PM_DISC_ASLEEP {
                     PM_WAKES.fetch_add(1, Relaxed);
                 }
                 pm_disconnected_wake();
@@ -1852,11 +2052,12 @@ mod pm_wake {
                 odd(); // coex time-slicing not modelled (esp-radio without `coex` returns 0)
             }
             let now = __esp_radio_esp_timer_get_time() as u64;
-            let slice_start = ((pm_u32(0x74) as u64) << 32) | pm_u32(0x70) as u64;
+            let slice_start =
+                ((pm_u32(PM_SLICE_START_HI) as u64) << 32) | pm_u32(PM_SLICE_START_LO) as u64;
             if now < slice_start {
                 let req: extern "C" fn(u32, u32, u32) -> i32 =
                     core::mem::transmute(osi_slot(OSI_COEX_WIFI_REQUEST));
-                req(1, 0, pm_u32(0x70).wrapping_sub(now as u32));
+                req(1, 0, pm_u32(PM_SLICE_START_LO).wrapping_sub(now as u32));
             }
             cr_pm_disconnected_wake();
         }
@@ -1893,15 +2094,15 @@ mod pm_wake {
             esp_println::println!(
                 "[CR.PM] g_pm={:#x} st={} disc={} conn={} iface={} twt={}/{} mesh={} osi={:#x} ic={ic:#x} rfmask={} mac_sleep_en={} blk={:#010x}",
                 g_pm_base(),
-                pm_u8(1),
-                pm_u8(0x121),
-                pm_u8(0xe),
-                pm_u8(2),
-                pm_u8(0x1c2),
-                pm_u8(0x2e4),
+                pm_u8(PM_PS_STATE),
+                pm_u8(PM_DISC_STATE),
+                pm_u8(PM_CONNECTED),
+                pm_u8(PM_IFACE),
+                pm_u8(PM_TWT_FLAG_A),
+                pm_u8(PM_TWT_FLAG_B),
                 mesh_started() as u8,
                 rd(G_OSI_FUNCS_P),
-                rd8(ic + 0x24e),
+                rd8(ic + G_IC_RF_PHY_ENABLED_MASK),
                 rd8(rd(G_MAC_SLEEP_EN_PTR)),
                 rd(WDEV_PM_TXBLOCK_RETENTION)
             );
@@ -1937,6 +2138,31 @@ mod pipeline {
 
     /// CR_AB round parity: when set, this round's wake goes through the blob (see config::AB_WAKE).
     pub static AB_USE_BLOB: AtomicBool = AtomicBool::new(false);
+
+    // -- 802.11 frame-control / header offsets the pipeline reads on the on-air frame --
+    const FC_TYPE_MASK: u8 = 0xc;
+    const FC_TYPE_MGMT: u8 = 0x0;
+    const FC_TYPE_DATA: u8 = 0x8;
+    const FC_SUBTYPE_MASK: u8 = 0xf0;
+    const FC_SUBTYPE_QOS_NULL: u8 = 0x50; // mgmt-type check in ppTxProtoProc
+    const FC_SUBTYPE_NULL: u8 = 0x40;
+    const FC_DATA_QOS_MASK: u8 = 0x70; // data type: 0x40 = null / QoS class
+    const FRAME_ADDR1_OFF: u32 = 4; // addr1[0] bit0 = group address
+    const FRAME_SEQCTL_OFF: u32 = 0x16;
+    const SEQCTL_SEQ_SHIFT: u16 = 4;
+    const FTM_HDR_SHIFT: u32 = 8; // ppTxProtoProc: header offset when the sec-hdr is shifted
+    // -- ppProcTxSecFrame --
+    /// blob `_LANCHOR32` table: security-header length per key type (flash, 0.3.0).
+    const SEC_HDR_LEN_TABLE: u32 = 0x4200_b100;
+    const SEC_HDR_LEN_NOKEY: u32 = 4;
+    const SEC_HDR_RESERVE: u32 = 8; // bytes reserved in front of the frame
+    const SEC_HDR_LENWORD_MASK: u32 = 0x3fff; // the length the MAC reads from that first word
+    // -- trc (rate-control context) --
+    const TRC_FLAGS: u32 = 0xc; // u16
+    const TRC_FLAG_RAW: u16 = 0x80; // ppMapTxQueue: treat like trc == NULL
+    // -- cr_complete --
+    const COMPLETE_POLL_ITERS: u32 = 4000;
+    const CLR_STATE_KIND_COMPLETED: i32 = 2;
     /// Completion-status histogram (pmd>>12 nibble from hal_mac_get_txq_complete; 0 = success).
     pub static TX_STATUS: [AtomicU32; 16] = [const { AtomicU32::new(0) }; 16];
 
@@ -2012,26 +2238,30 @@ mod pipeline {
         unsafe {
             let mut frame = eb.dma_desc().frame_ptr();
             if (eb.flags16() & Eb::FLAG16_HDR_SHIFTED) != 0 {
-                frame += 8; // FTM offset (not our beacon)
+                frame += FTM_HDR_SHIFT; // FTM offset (not our beacon)
             }
             let txinfo = eb.txinfo();
-            if (rd8(frame + 4) & 1) != 0 {
-                txinfo.set_flags(txinfo.flags() | 2); // broadcast/multicast -> no-ack
+            if (rd8(frame + FRAME_ADDR1_OFF) & 1) != 0 {
+                txinfo.set_flags(txinfo.flags() | TxInfo::FLAG_NO_ACK); // broadcast/multicast
             }
             let fc = rd8(frame);
-            if (fc & 0xc) == 8 {
+            if (fc & FC_TYPE_MASK) == FC_TYPE_DATA {
                 let f = txinfo.flags();
-                txinfo.set_flags(f | 8);
-                if (txinfo.word30() & 0x2_0000) == 0 && (fc & 0x70) == 0x40 {
-                    txinfo.set_flags(txinfo.flags() & 0xffff_fff7);
+                txinfo.set_flags(f | TxInfo::FLAG_DATA);
+                if (txinfo.word30() & TxInfo::WORD30_BIT17) == 0
+                    && (fc & FC_DATA_QOS_MASK) == FC_SUBTYPE_NULL
+                {
+                    txinfo.set_flags(txinfo.flags() & !TxInfo::FLAG_DATA);
                 }
-            } else if (fc & 0xc) == 0 {
-                if (fc & 0xf0) == 0x50 {
-                    if (txinfo.flags() & 2) == 0 {
-                        txinfo.set_flags(txinfo.flags() | 0x800_0000);
+            } else if (fc & FC_TYPE_MASK) == FC_TYPE_MGMT {
+                if (fc & FC_SUBTYPE_MASK) == FC_SUBTYPE_QOS_NULL {
+                    if (txinfo.flags() & TxInfo::FLAG_NO_ACK) == 0 {
+                        txinfo.set_flags(txinfo.flags() | TxInfo::FLAG_BIT27);
                     }
-                } else if (fc & 0xf0) == 0x40 && (txinfo.flags() & 2) == 0 {
-                    txinfo.set_flags(txinfo.flags() | 0x800);
+                } else if (fc & FC_SUBTYPE_MASK) == FC_SUBTYPE_NULL
+                    && (txinfo.flags() & TxInfo::FLAG_NO_ACK) == 0
+                {
+                    txinfo.set_flags(txinfo.flags() | TxInfo::FLAG_QOS_NULL_NOACK);
                 }
             }
         }
@@ -2052,11 +2282,12 @@ mod pipeline {
         unsafe {
             let txinfo = eb.txinfo();
             // key-type -> sec-hdr length (open/no-key => 4; blob table _LANCHOR32 @ 0x4200b100).
-            let ktype = ((txinfo.word10() >> 8) & 0xf).wrapping_sub(1) & 0xff;
+            let ktype = ((txinfo.word10() >> TxInfo::WORD10_KEYTYPE_SHIFT) & 0xf).wrapping_sub(1)
+                & 0xff;
             let seclen: u32 = if ktype <= 8 {
-                rd8(0x4200_b100u32 + ktype) as u32
+                rd8(SEC_HDR_LEN_TABLE + ktype) as u32
             } else {
-                4
+                SEC_HDR_LEN_NOKEY
             };
             // eb+0x16 += seclen ; dma length += seclen
             let v16 = eb.payload_len() as u32 + seclen;
@@ -2065,25 +2296,25 @@ mod pipeline {
             dma.add_len(seclen);
             let flags = txinfo.flags();
             // HE / AMPDU-CCMP are separate blob branches; the open beacon has neither.
-            if (flags & 0x8000_0000) != 0 || (flags & 0x0104_0000) != 0 {
+            if (flags & TxInfo::FLAG_HE) != 0 || (flags & TxInfo::FLAG_AMPDU_CCMP) != 0 {
                 return 0;
             }
             dma.set_ctrl(dma.ctrl() | DmaDesc::CTRL_EOF); // eof
             let dma4 = eb.dma_desc(); // same descriptor as eb+8
             if (eb.flags16() & Eb::FLAG16_HDR_SHIFTED) == 0 {
-                dma4.set_frame_ptr(dma4.frame_ptr().wrapping_sub(8)); // frame ptr -= 8
-                let v14 = eb.prefix_len() as u32 + 8;
+                dma4.set_frame_ptr(dma4.frame_ptr().wrapping_sub(SEC_HDR_RESERVE)); // frame ptr -= 8
+                let v14 = eb.prefix_len() as u32 + SEC_HDR_RESERVE;
                 eb.set_prefix_len(v14 as u16);
                 eb.set_flags16(eb.flags16() | Eb::FLAG16_HDR_SHIFTED);
-                dma4.add_len(8);
+                dma4.add_len(SEC_HDR_RESERVE);
             }
             // zero the 8 reserved header bytes at the shifted frame ptr, then write the length word.
             let hdr = dma4.frame_ptr();
-            core::ptr::write_bytes(hdr as *mut u8, 0, 8);
+            core::ptr::write_bytes(hdr as *mut u8, 0, SEC_HDR_RESERVE as usize);
             let l14 = eb.prefix_len() as u32;
             let l16 = eb.payload_len() as u32;
-            let lenword = (l14 + l16 - 8) & 0x3fff;
-            wr(hdr, lenword | (rd(hdr) & 0xffff_c000));
+            let lenword = (l14 + l16 - SEC_HDR_RESERVE) & SEC_HDR_LENWORD_MASK;
+            wr(hdr, lenword | (rd(hdr) & !SEC_HDR_LENWORD_MASK));
             0
         }
     }
@@ -2128,14 +2359,16 @@ mod pipeline {
     pub fn cr_ppMapTxQueue(eb: Eb) -> i32 {
         unsafe {
             let txinfo = eb.txinfo();
-            let t4 = txinfo.cat_word();
-            if (t4 & 0xf0) == 0x40 {
-                txinfo.set_word10((txinfo.word10() & TxInfo::WORD10_AC_CLEAR) | 0x20_0000);
+            let cat = txinfo.cat_word();
+            if (cat & TxInfo::CAT_QOS_MASK) == TxInfo::CAT_QOS_DATA {
+                txinfo.set_word10(
+                    (txinfo.word10() & TxInfo::WORD10_AC_CLEAR) | TxInfo::WORD10_AC_QOS_DATA,
+                );
             } else {
                 let iface = txinfo.iface();
                 let trc = eb.trc();
-                if trc == 0 || (rd16(trc + 0xc) & 0x80) != 0 {
-                    txinfo.set_cat(7);
+                if trc == 0 || (rd16(trc + TRC_FLAGS) & TRC_FLAG_RAW) != 0 {
+                    txinfo.set_cat(TxInfo::CAT_MGMT);
                     txinfo.set_word10(
                         (txinfo.word10() & TxInfo::WORD10_AC_CLEAR)
                             | (iface << TxInfo::WORD10_AC_SHIFT),
@@ -2183,7 +2416,7 @@ mod pipeline {
         unsafe {
             let a = mac_reg::plcp0_enable(ac as u32);
             let mut done = false;
-            for _ in 0..4000 {
+            for _ in 0..COMPLETE_POLL_ITERS {
                 if (rd(a) & mac_reg::SLOT_ARM) == 0 {
                     done = true;
                     break;
@@ -2203,7 +2436,8 @@ mod pipeline {
             if config::DIAG {
                 TX_STATUS[(status & 0xf) as usize].fetch_add(1, Relaxed);
             }
-            hal_mac_tx::hal_mac_clr_txq_state(2, ac as u32); // clear completed-state bit (as the blob does)
+            // clear the completed-state bit, as the blob completion does
+            hal_mac_tx::hal_mac_clr_txq_state(CLR_STATE_KIND_COMPLETED, ac as u32);
             // NOTE: do NOT hal_mac_txq_disable here -- the MAC auto-clears the arm bits on
             // completion; forcing a disable leaves slot 0 in a state that breaks the shared control
             // beacon (AC 0). The blob completion never disables the slot.
@@ -2259,13 +2493,13 @@ mod pipeline {
         let state = txq.state();
         if state == LmacTxq::STATE_IDLE || state == LmacTxq::STATE_RELEASED {
             txq.set_cur_eb(eb);
-            if (flags & 0x2102) == 0x2000 {
-                txinfo.set_flags(flags | 0x1000);
+            if (flags & TxInfo::FLAG_GROUP_2102) == TxInfo::FLAG_BIT13 {
+                txinfo.set_flags(flags | TxInfo::FLAG_BIT12);
             }
             // long-frame -> RTS (beacon is short; lmacIsLongFrame returns 0 -> no-op, but
             // faithful)
-            if cr_lmacIsLongFrame(eb) != 0 && (txinfo.flags() & 2) == 0 {
-                txinfo.set_flags((txinfo.flags() & 0xffff_efff) | 0x100);
+            if cr_lmacIsLongFrame(eb) != 0 && (txinfo.flags() & TxInfo::FLAG_NO_ACK) == 0 {
+                txinfo.set_flags((txinfo.flags() & !TxInfo::FLAG_BIT12) | TxInfo::FLAG_PROTECT);
             }
             // state==3 retry-RTS and FTM (0x20000000) branches skipped (not taken by the
             // beacon).
@@ -2325,16 +2559,16 @@ mod pipeline {
                 | (w0 & DmaDesc::CTRL_KEEP_MASK);
             dma.set_ctrl(w0);
             let txinfo = eb.txinfo();
-            txinfo.set_cat(7); // cat = mgmt
+            txinfo.set_cat(TxInfo::CAT_MGMT);
             txinfo.set_timestamp(cr_hal_now());
             let mut w10 = txinfo.word10();
-            w10 &= 0xfff7_ffff; // iface 0
+            w10 &= TxInfo::WORD10_IFACE_CLEAR; // iface 0
             txinfo.set_word10(w10);
-            if (rd8(frame + 4) & 1) != 0 {
-                txinfo.set_flags(txinfo.flags() | 0x402);
+            if (rd8(frame + FRAME_ADDR1_OFF) & 1) != 0 {
+                txinfo.set_flags(txinfo.flags() | TxInfo::FLAG_RAW_BCAST);
             }
             txinfo.set_rate(0); // rate 1M DSSS
-            wr16(frame + 0x16, seq << 4); // seq ctrl
+            wr16(frame + FRAME_SEQCTL_OFF, seq << SEQCTL_SEQ_SHIFT); // seq ctrl
             eb.set_trc(0); // trc = NULL (raw frame -> rcGetSched no-op)
 
             // Faithful submit onto the REAL pending list (no kick).
