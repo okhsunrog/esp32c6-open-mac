@@ -92,16 +92,21 @@ leaves:
 | Schedule `cr_ppProcessTxQ` (idle guard, pop, coex, arm) | **Rust** |
 | Arm `cr_lmacTxFrame` (cur_eb, backoff, EDCA, state, txq_enable) | **Rust** |
 | Pending-list pop `cr_ppGetTxframe`, AC map `cr_ppMapTxQueue`, `cr_hal_random`, `cr_rcGetSched` | **Rust** |
+| Modem-PM wake `cr_pm_on_data_tx` (g_pm FSM → clocks/PHY via esp-radio OSI → `hal_mac_init` unblock store) | **Rust** |
 | Completion `cr_complete` (poll arm-clear → decode → clr state → recycle eb; our loop owns it, ISR skips our AC) | **Rust** |
 | PPDU-build seq `cr_lmacSetTxFrame`, coex `cr_pp_coex_tx_request`, guards `cr_ic_interface_enabled`/`cr_lmacIsLongFrame`, `ppProcessWaitingQueue` | **Rust** |
 
 **The entire per-frame TX logic path is now Rust.** The remaining blob is a small, well-characterised surface — substrate (things we lean on esp-radio for anyway) plus a couple of functions that do real, required work:
 
-- `pm_on_data_tx` — **substrate, required.** The per-frame PM-wake: a deep modem-PM FSM
-  (`pm_check_state` → `pm_disconnected_wake` → `wifi_rf_phy_enable` / `pm_set_state`) whose
-  clearing of the hardware PM-block interlock is a *consequence* of the modem waking, not a
-  reproducible register write. Removing it → the launch bits never latch, zero RF. On par
-  with PHY/clock init and the OS adapter we keep.
+- `pm_on_data_tx` — **now Rust** (`cr_pm_on_data_tx`). The per-frame PM-wake decompiles to
+  `pm_check_state` → `pm_disconnected_wake` → the ROM `wifi_rf_phy_enable` dispatcher, which
+  is: esp-radio's own OSI callbacks (`wifi_clock_enable`, `phy_enable`) followed by the
+  `hal_mac_init` store that clears the PM-block bits (`0x600a4ca8 &= ~0x00ff1000`). The
+  earlier "not a reproducible register write" reading was wrong: the store is dropped only
+  while the MAC clock is still gated, and the frame only completes once the PHY is up —
+  two gates, both now driven from Rust. The blob extern is kept as a compile-time-disabled
+  fallback; what remains non-Rust behind it is the libphy wake inside `esp_phy` and the
+  blob's background sleep timer. See `docs/cleanroom_tx.md`, "The Rust modem-PM wake".
 - `ppProcTxSecFrame` — **required.** Its security-header **length** adjustment (`+4` on
   `eb+0x16` and the DMA-descriptor length even for our no-key frame) is needed for reliable
   emission; without it frames latch but the BB keys up only marginally. Real work with a
@@ -131,11 +136,12 @@ This repo is the research vehicle. What it delivers back to the pure-Rust stack
 
 **The settled question.** C6 TX was an open question — `esp32-open-mac` had not done it, and
 the direct-register method that opens TX on the Wi-Fi-4 MACs (ESP32/S2/S3/C3) is
-*architecturally impossible* on the C6 Wi-Fi-6 MAC. This work settles why: the launch bits
-(`PLCP0_ENABLE[31:30]`) sit behind a hardware PM-block interlock (`0x600a4ca8`) that opens
-only while the MAC is in its active/txing state, and that state is reached only via the
-`pp/lmac` submit→schedule flow's **`pm_on_data_tx` PM-wake**. No idle-MAC register poke opens
-it.
+*architecturally impossible* on the C6 Wi-Fi-6 MAC. This work settles why: while the modem
+sleeps the MAC clock is gated (every register write, including the `PLCP0_ENABLE[31:30]`
+launch bits, is dropped) and the PM TX-block bits (`0x600a4ca8` = `0x00ff1000`) stop any armed
+frame from launching; both are undone only by the `pp/lmac` submit path's **`pm_on_data_tx`
+PM-wake** (clocks + PHY re-enable, then the `hal_mac_init` unblock store). No idle-MAC
+register poke opens it — but the wake itself is an ordinary, reproducible sequence, now Rust.
 
 **The reusable deliverables.** The full reversed TX state machine + register map
 (`docs/`), and pure-Rust reimplementations of the entire TX *logic* path (submit → AC map →

@@ -2,35 +2,55 @@
 
 A pure-Rust demonstrator of the ESP32-C6 Wi-Fi MAC transmit path, built on top of the working
 esp-radio blob substrate. Our Rust code drives the whole per-frame TX pipeline — submit, AC-map,
-pending enqueue/pop, schedule, arm, and completion — on the **real** blob scheduler state, and the
-frame radiates (SSID `CR-RUST`, captured on mon0 ch1 alongside the blob's own `CR-CTRL` control
-beacon). The reference implementation is `src/cleanroom.rs`.
+modem-PM wake, pending enqueue/pop, schedule, arm, and completion — on the **real** blob scheduler
+state, and the frame radiates (SSID `CR-RUST`, captured on mon0 ch1 alongside the blob's own
+`CR-CTRL` control beacon). The reference implementation is `src/cleanroom.rs`. **The exercised
+per-frame TX path no longer calls the blob at all** (see "The Rust modem-PM wake").
 
 ## Mechanism in one paragraph
 
-The C6 MAC gates TX launch behind a hardware interlock, `WDEV_PM_TXBLOCK_RETENTION` (0x600a4ca8):
-while the modem is in power-save it reads `0x00ff1000` and the `PLCP0_ENABLE` valid|enable launch
-bits (`0xc0000000`) will not latch, so a CPU-programmed slot never keys up the PHY. The blob
-`pm_on_data_tx` PM-wake FSM (invoked from the AC-mapping step) transitions the MAC to the active
-state; only then does the interlock clear and the launch bits latch. Our Rust reproduces the blob's
-`ppTxPkt -> ppMapTxQueue -> ppGetTxframe -> ppProcessTxQ -> lmacTxFrame -> hal_mac_tx` sequence on the
-live scheduler structures — `our_instances` (per-AC lmac TX control, base `*(0x4004ffe0)`) and
-`TxRxCxt` (per-AC pending lists, base `*(0x4087ff80)`) — calling the blob only for a small,
-documented set of leaves (chiefly the `pm_on_data_tx` PM-wake FSM); the eb packet pool and
-`ppProcTxSecFrame` are now Rust.
+The C6 MAC sits behind two gates that the modem power-management FSM operates. (1) While the modem
+is asleep the Wi-Fi MAC/BB clocks are gated (`MODEM_SYSCON`/`MODEM_LPCON`, esp-radio's
+`wifi_clock_enable(false)`): every MAC register write is silently dropped, so the `PLCP0_ENABLE`
+valid|enable launch bits (`0xc0000000`) never latch — this is what looked like a "hardware
+interlock". (2) `WDEV_PM_TXBLOCK_RETENTION` (0x600a4ca8) holds the PM TX-block bits: the blob's
+`hal_mac_deinit` sets `|= 0x00ff1000` when the modem goes to sleep, and while they are set an armed
+frame never launches (it latches but never completes). The 0x00ff1000 -> 0 transition is a plain
+CPU store (`hal_mac_init`: `reg &= ~((mask & 0xff0000) | 0x1000)`) that only sticks once the clocks
+are back, and the frame only completes/radiates once the PHY is re-enabled. The blob's
+`pm_on_data_tx` (invoked from the AC-mapping step) is the per-frame FSM that does all three — clocks,
+PHY, unblock store — and it is now Rust (`cr_pm_on_data_tx`). Our Rust reproduces the blob's
+`ppTxPkt -> ppMapTxQueue(+pm wake) -> ppGetTxframe -> ppProcessTxQ -> lmacTxFrame -> hal_mac_tx`
+sequence on the live scheduler structures — `our_instances` (per-AC lmac TX control, base
+`*(0x4004ffe0)`) and `TxRxCxt` (per-AC pending lists, base `*(0x4087ff80)`); the eb packet pool,
+`ppProcTxSecFrame` and the PM wake are Rust; the blob's own PM *sleep* side (a background timer)
+and the PHY/clock substrate behind esp-radio's OSI callbacks are the remaining non-Rust pieces.
 
-## WARNING — the fixed addresses are blob-version-specific
+## WARNING — the fixed addresses are blob-version-specific (and some are link-layout-specific)
 
 Every non-hardware address/offset in this file (the `our_instances` and `TxRxCxt` pointer slots,
-`wDevCtrl_ptr` @ `*(0x4087ff68)` + the `g_if_enabled_mask` byte at `+0x31`, `lmacConfMib`, the
-`esf_buf` pool list heads) is specific to the exact esp-wifi-sys blob build in use (currently
-**0.3.0**) and to the on-chip ROM. They were re-derived from the 0.3.0 linked-ELF and ROM
+`wDevCtrl_ptr` @ `*(0x4087ff68)` + the `g_if_enabled_mask` byte at `+0x31`, the `g_pm` field
+offsets, the `esf_buf` pool list heads) is specific to the exact esp-wifi-sys blob build in use
+(currently **0.3.0**) and to the on-chip ROM. They were re-derived from the 0.3.0 linked-ELF and ROM
 disassembly and **must be re-derived per blob version**. A wrong base or offset does not fail loudly
 — it silently reads/writes the wrong memory. This is exactly what bit us: `ic_interface_enabled` was
 reimplemented against a stale address (the static `wDevCtrl` 0x40812090 + offset 0x29 instead of the
 runtime pointer `*(0x4087ff68)` + 0x31), read 0, mis-classified every frame as "interface disabled",
 and drove a drop-path double-free of the eb that corrupted the allocator heap. Verify addresses
 against the disasm; do not port them blindly.
+
+There are three kinds of address, and only two of them may be hardcoded:
+- MMIO registers (`0x600aXXXX`): hardware, stable.
+- ROM interface cells (`0x4087ffXX`: `g_osi_funcs_p`, `pp_wdev_funcs`, `g_ic_ptr`,
+  `g_mac_sleep_en_ptr`, the `our_instances`/`TxRxCxt`/`wDevCtrl` pointer slots): fixed by the C6 ROM
+  (`esp32c6.rom.*.ld`), stable across blob versions and link layouts.
+- Blob globals that live in the linked `.data`/`.bss` (`g_pm`, `g_mesh_is_started`, `lmacConfMib`,
+  `wDevCtrl`, the esf_buf list heads): their addresses move whenever the link layout changes —
+  adding the Rust PM wake itself moved `g_pm` from 0x40820720 to 0x40820740 and then 0x40820730
+  between three builds of the same source, and an older layout had it at 0x4081ea98. Hardcoding
+  these is a silent-misread trap; they must be **linked** (`unsafe extern "C" { static mut g_pm: u8; }`
+  + `addr_of_mut!`), which is what `cr_pm_on_data_tx` and `cr_lmacIsLongFrame` now do. Only the
+  field *offsets* inside them are hardcoded (and those are blob-version-specific).
 
 ## The TX pipeline (Rust)
 
@@ -40,8 +60,9 @@ then runs the Rust pipeline on the real scheduler state:
 - `cr_ppTxPkt(eb)` — the submit. Guards with the Rust `cr_ic_interface_enabled` (per-VIF enable),
   runs `cr_ppTxProtoProc` (protocol flags), `cr_ppProcTxSecFrame` (Rust security-header reservation),
   `cr_rcGetSched` (no-op for a raw trc==0 beacon), then `cr_ppMapTxQueue`.
-- `cr_ppMapTxQueue(eb)` — assigns the EDCA AC into `txinfo+0x10`, and calls the blob `pm_on_data_tx`
-  (the PM-wake that makes the MAC active — the load-bearing ingredient). On success `cr_ppTxPkt`
+- `cr_ppMapTxQueue(eb)` — assigns the EDCA AC into `txinfo+0x10`, and runs the Rust
+  `cr_pm_on_data_tx` (the PM-wake that makes the MAC active — the load-bearing ingredient; the blob
+  `pm_on_data_tx` is kept only as a compile-time-disabled fallback). On success `cr_ppTxPkt`
   threads the eb onto the per-AC `TxRxCxt` pending list (`base + ac*0x34`, head `+0x20`, tail
   `+0x24`, linked via `eb+0x30`).
 - `cr_ppProcessTxQ(ac)` — the schedule. Pops the head eb from the pending list (`cr_ppGetTxframe`),
@@ -70,7 +91,17 @@ Scheduler state (re-derive per blob version):
   tail `+0x24`, threaded via `eb+0x30`.
 - `wDevCtrl`: base `*(u32*)0x4087ff68` (NOT the static link address); `g_if_enabled_mask` byte at
   `+0x31`, returns `(mask >> iface) & 1`.
-- `lmacConfMib` @ 0x40811ca8 (0.3.0): `+0x16` = RTS/long-frame threshold (u16).
+- `lmacConfMib` (linked symbol; layout-dependent address): `+0x16` = RTS/long-frame threshold (u16).
+- `g_pm` (linked symbol; layout-dependent address) field offsets on 0.3.0: `+1` PS state (0 active /
+  1 / 2 sleeping, `pm_set_state`), `+2` PM interface, `+0xe` connected/PS-enabled, `+0xf`, `+0x24`,
+  `+0x70/+0x74` coex slice start (u64), `+0x121` disconnected-modem state (2 awake / 3 asleep),
+  `+0x1c2`/`+0x2e4` TWT flags, `+0x46a` (in `pm_get_tx_blocks_retention_mask`).
+- ROM interface cells (fixed by the ROM): `g_osi_funcs_p` 0x4087ff6c (esp-radio's
+  `wifi_osi_funcs_t`: `+4 _env_is_chip`, `+0xc8 _wifi_pm_sleep_lock_acquire`, `+0xd4 _phy_enable`,
+  `+0xf8 _wifi_clock_enable`, `+0x108 _esp_timer_get_time`, `+0x190 _coex_status_get`,
+  `+0x198 _coex_wifi_request`), `pp_wdev_funcs` 0x4087ff70 (`[0x94] pm_mac_wakeup`,
+  `[0x95] ic_mac_init`), `g_ic_ptr` 0x4087ffa0 (`g_ic+0x24e` = rf_phy_enabled_mask byte),
+  `g_mac_sleep_en_ptr` 0x4087ff00.
 - `esf_buf` type-1 pool: alloc pops per-type head `0x40811b90 + type*0x14`; recycle pushes a
   different head (`g_eb_list_desc` 0x40811bc8 + type*0x14) reconciled by OSI callbacks.
 
@@ -160,17 +191,85 @@ mon0 capture shows CR-RUST radiating at a healthy steady rate — 26 CR-RUST vs 
 control under the same RF gave the same-order ratio (a short direct comparison read 1:3 for both
 builds), confirming the Rust version emits as reliably as the blob.
 
+## The Rust modem-PM wake (pm_on_data_tx)
+
+`pm_on_data_tx` was the last blob call on the exercised per-frame path. It is now Rust
+(`cr_pm_on_data_tx`), and the earlier characterization ("the block clears as a hardware consequence,
+no CPU store clears it") was wrong — the clear IS a CPU store, it is just the last step of a
+clock/PHY re-enable sequence, and a bare store fails for a different reason (clock gating).
+
+The decompiled chain (0.3.0 linked ELF; every offset verified in the disasm, Ghidra's program is a
+different build and its prologue differs slightly):
+
+- `pm_on_data_tx` @0x4080ef66 is `j pm_tx_data_process` @0x4080ece8. For our disconnected raw beacon
+  it takes: TWT guard (`pm_is_twt_start` @0x4080c2ba: `g_pm+0x1c2 || g_pm+0x2e4`), mesh guard
+  (`g_mesh_is_started`), `g_pm+2 == iface`, `pm_check_state` @0x4080971e (no-op while `g_pm+1 == 0`,
+  which the disconnected FSM keeps it at), `g_pm+0xe == 0` (not connected/PS) ->
+  `pm_is_in_wifi_slice_threshold(now, 5000)` (== 1 with no coex: `_coex_status_get` is 0) -> an
+  optional `_coex_wifi_request(1, 0, ...)` if `now < g_pm+0x70/0x74` (never armed without coex) ->
+  `pm_disconnected_wake`.
+- `pm_disconnected_wake` @0x42020838: `if g_pm+0x121 == 3 && !mesh { wifi_rf_phy_enable(0);
+  g_pm+0x121 = 2; pm_set_state(0) }`. `pm_set_state` @0x4202040a is `g_pm+1 = s` plus
+  `wifi_gpio_debug`, a null-checked debug hook (`*(0x40811e08) == 0` -> `ret`).
+- `wifi_rf_phy_enable` is the ROM routine @0x40016a68 (jump-table stub 0x40000ba8), a dispatcher:
+  `mask = *(g_ic + 0x24e)` (`g_ic = *g_ic_ptr(0x4087ffa0)`); if `mask == 0`:
+  `osi->_wifi_pm_sleep_lock_acquire` (+0xc8), `osi->_wifi_clock_enable` (+0xf8),
+  [`pp_wdev_funcs[0x94]` = `pm_mac_wakeup` if `*(*g_mac_sleep_en_ptr(0x4087ff00))`, never set here],
+  if `osi->_env_is_chip` (+4): `osi->_phy_enable` (+0xd4), then `pp_wdev_funcs[0x95]` = `ic_mac_init`
+  @0x4080a6c8 -> `hal_mac_init` @0x4080bc6a: `WDEV_PM_TXBLOCK_RETENTION &=
+  ~((pm_get_tx_blocks_retention_mask() & 0xff0000) | 0x1000)` (mask @0x42022cbe = 0xffffffff while
+  disconnected, so this clears exactly 0x00ff1000); finally `mask |= 1 << mode`.
+- Every OSI slot in that dispatcher is esp-radio **Rust**: `wifi_pm_sleep_lock_acquire` (no-op),
+  `wifi_clock_enable` (`radio_clocks::enable_wifi(true)`: the `MODEM_SYSCON.clk_conf1` /
+  `MODEM_LPCON.clk_conf` Wi-Fi clock gates), `env_is_chip` (true), `phy_enable`
+  (`esp_phy::enable_phy_with_wifi_rx`). `cr_wifi_rf_phy_enable` dispatches through the same
+  `g_osi_funcs_p` table (it is esp-radio's own static), which also keeps esp-radio's clock and PHY
+  refcounts balanced against the blob's later `wifi_rf_phy_disable`.
+
+The sleep side stays blob and is background PM, not per-frame: the blob's `pm_on_data_tx_done ->
+pm_tx_data_done_process -> pm_enable_disconnected_sleep_delay_timer` (1 ms) ->
+`pm_disconnected_sleep -> wifi_rf_phy_disable` (ROM) -> `ic_mac_deinit -> hal_mac_deinit`
+(`|= 0x00ff1000`), `_phy_disable`, `_wifi_clock_disable`; `g_pm+0x121 = 3`. It is armed by the blob's
+OWN tx-done (the CR-CTRL burst), never by our Rust completion, so in the reference build the modem is
+asleep at the start of every round and `cr_pm_on_data_tx` wakes it exactly once per round
+(`pm_wakes == rounds == pre_blk`, `post_blk == 0`), and with the burst disabled it wakes exactly once
+per boot and the block stays 0 for the rest of the run.
+
+What each gate does (fresh-flash experiments, on-device oracle, `CR_NO_BURST=1 CR_PM_EXP=<n>`):
+- full wake: block clears, `latched == completed == arms`, radiates.
+- no `hal_mac_init` store (`EXP=4`): block stays 0x00ff1000, the launch bits still LATCH
+  (`last_plcp0=0xc061cd5c`) but `completed == 0` and nothing radiates -> the block bits gate the
+  launch, not the register write.
+- store only, MAC clock still gated (`EXP=3`): the store reads back 0x00ff1000 and the slot's launch
+  bits do not latch either (`last_plcp0=0x0067a5f0`, `latched == 0`) -> every MAC write is dropped
+  while the clock is gated; this is the "interlock" the earlier sessions saw when strobing the
+  register.
+- clocks + store, no `_phy_enable` (`EXP=2`): block clears (0), launch latches, `completed == 0`, no
+  RF -> the PHY must be up for the MAC to finish a launch.
+
+Validation of the Rust wake (fresh flash, reference build): boot snapshot `disc=3 blk=0x00ff1000`
+(asleep); then `arms == latched == completed` (672+ arms), `allocfail=0`, `poolfree=12`,
+`pm_wakes == rounds == pre_blk`, `post_blk=0`, `pm_odd=0` (no unmodelled PM state ever seen), no
+panic; OTA on mon0 ch1 over 60 s: **90 CR-RUST vs 143 CR-CTRL** (0.63, against the 4:6 attempt
+share = 0.67), both at -58.5 dBm, present in every 10 s bin. Same-RF A/B (`CR_AB=1`, the wake
+alternating per round between Rust and blob inside one capture) shows the two indistinguishable in
+count and RSSI. NOTE on OTA methodology: the absolute C6->sniffer level swung by >15 dB between
+back-to-back fresh-flash runs in this session while the third-party AP reference stayed at
+-53..-56 dBm and the blob's CR-CTRL path was hit identically — treat absolute counts across runs as
+noise and compare only inside one capture (CR-CTRL reference or the per-round A/B).
+
 ## Minimal remaining blob surface
 
-The per-frame TX path is entirely Rust except a **single** exercised blob call: `pm_on_data_tx`, the
-modem-PM wake. Everything else below is either Rust now, kept blob only as a compile-time-disabled
-fallback, or in a branch the 1 Mbit DSSS beacon never reaches.
+The exercised per-frame TX path is entirely Rust. Everything below is either Rust now, kept blob
+only as a compile-time-disabled fallback, background (not per-frame) PM state, or in a branch the
+1 Mbit DSSS beacon never reaches.
 
 Substrate leaves:
-- `pm_on_data_tx` — the modem-PM wake FSM, KEPT BLOB. `WDEV_PM_TXBLOCK_RETENTION` is only ever SET by
-  the PM code; no CPU store clears `0x00ff1000 -> 0`. The wake clear is a hardware consequence of
-  `wifi_rf_phy_enable` + the `g_pm` FSM reaching the wake state, so it cannot be replayed as a
-  register write — it needs the full g_pm state machine + PHY enable in order.
+- `pm_on_data_tx` — NOW RUST (`cr_pm_on_data_tx`, see "The Rust modem-PM wake"). The blob extern is
+  kept only as the compile-time-disabled fallback (`PM_WAKE_RUST = false` / `CR_BLOB_WAKE=1`). What
+  remains non-Rust behind it is substrate reached through esp-radio's own OSI callbacks: the libphy
+  `phy_wakeup_init`/calibration inside `esp_phy::enable_phy`, and the blob's background PM sleep
+  timer (`pm_disconnected_sleep`) that re-blocks the MAC after the blob's own TX.
 - `esf_buf_alloc` / `esf_buf_recycle` — NOW RUST (see "The independent Rust eb pool" below). The blob
   esf_buf is a callback-mediated two-list pool that a bare-freelist Rust recycle cannot feed (it
   drained after ~31 buffers). Instead our loop uses its OWN fixed pool of correctly-laid-out eb
@@ -199,9 +298,9 @@ read used as the TX submit timestamp. The two former hal config delegations are 
 EDCA-disable bypass, never enabled — the blob itself takes the register-write path our Rust
 reproduces; the old code even read a wrong 0.3.0 address, 0x4208318c vs the blob's 0x408216c8, for
 that dead check), and `hal_mac_tx_clr_mplen` is a pure no-op for legacy frames (the blob only acts
-when CONF1 bit3 = HE-TB, which our DSSS beacon never sets). Everything else on the per-frame TX path —
-submit, AC-map, enqueue/pop, schedule, arm (plcp0/plcp1/txop_q/rts_rate/set_len/he_protection), and
-completion — is Rust.
+when CONF1 bit3 = HE-TB, which our DSSS beacon never sets). Everything on the per-frame TX path —
+submit, AC-map, PM wake, enqueue/pop, schedule, arm (plcp0/plcp1/txop_q/rts_rate/set_len/
+he_protection), and completion — is Rust.
 
 ## Appendix — session log
 
@@ -222,3 +321,8 @@ Condensed timeline of the investigation (full blow-by-blow is in git history):
   hot path); no drain over 1056 arms, OTA-confirmed.
 - 9k: ic_interface_enabled reimplemented in Rust with the correct 0.3.0 address; esf_buf pool and
   pm_on_data_tx characterized and kept blob; consolidation + refactor into this reference.
+- 9o: pm_on_data_tx reimplemented in Rust (cr_pm_on_data_tx): the wake chain decompiled to the ROM
+  wifi_rf_phy_enable dispatcher + hal_mac_init store; the two gates (clock gating drops MAC writes;
+  the PM block bits stop the launch) separated by experiment; g_pm/g_mesh_is_started/lmacConfMib
+  switched from hardcoded to linked symbols after the layout shift bit. OTA-confirmed. The exercised
+  per-frame TX path is now blob-call-free.

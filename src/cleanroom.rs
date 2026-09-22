@@ -3,27 +3,31 @@
 //! per-frame TX path is driven by Rust on the REAL blob scheduler state, with only a
 //! minimal, documented set of blob leaves left (see the `blob` extern blocks).
 //!
-//! Mechanism: the ESP32-C6 MAC holds an interlock, WDEV_PM_TXBLOCK_RETENTION @ 0x600a4ca8
-//! (0x00ff1000 = blocked, 0 = active); while blocked, the PLCP0_ENABLE launch bits
-//! (0xc0000000) never latch and nothing radiates. The blob `pm_on_data_tx` PM-wake FSM
-//! clears that interlock (a hardware consequence of the FSM reaching the wake state +
-//! wifi_rf_phy_enable, not a single register write). With the MAC active, our Rust drives
-//! the full pipeline on the blob's own scheduler state:
+//! Mechanism: while the modem sleeps, the Wi-Fi MAC clocks are gated (every MAC register
+//! write is dropped, so the PLCP0_ENABLE launch bits 0xc0000000 never latch) and the PM
+//! TX-block bits in WDEV_PM_TXBLOCK_RETENTION @ 0x600a4ca8 are set (0x00ff1000: an armed
+//! frame never launches). The per-frame modem-PM wake (`cr_pm_on_data_tx`, a Rust port of the
+//! blob's pm_on_data_tx -> pm_disconnected_wake -> ROM wifi_rf_phy_enable chain) re-enables
+//! the clocks and the PHY through esp-radio's own OSI callbacks and then performs the
+//! hal_mac_init store that clears the block bits. With the MAC active, our Rust drives the
+//! full pipeline on the blob's own scheduler state:
 //!   submit (cr_ppTxPkt) -> AC map + PM-wake (cr_ppMapTxQueue) -> enqueue onto the TxRxCxt
 //!   pending list -> pop (cr_ppGetTxframe) -> schedule (cr_ppProcessTxQ) -> arm
 //!   (cr_lmacTxFrame -> cr_lmacSetTxFrame -> Rust hal_mac_tx register ops) -> completion +
 //!   recycle (cr_complete). State lives in the blob globals: our_instances @ *0x4004ffe0
-//!   (per-AC lmac txq blocks, stride 0x34) and TxRxCxt pending @ *0x4087ff80.
+//!   (per-AC lmac txq blocks, stride 0x34), TxRxCxt pending @ *0x4087ff80, and g_pm.
 //!
 //! WARNING — blob-version-specific addresses. Every fixed address/offset that is NOT a
 //! hardware MMIO register is specific to the esp-wifi-sys 0.3.0 blob and MUST be re-derived
 //! per blob version from the linked-ELF / ROM disassembly: our_instances (*0x4004ffe0),
 //! TxRxCxt pending (*0x4087ff80), wDevCtrl_ptr (*0x4087ff68) + g_if_enabled_mask (+0x31),
-//! lmacConfMib, and the esf_buf pool list heads. A wrong base or offset does not fault
-//! loudly — it silently reads/writes the wrong memory. That is exactly the bug that bit us:
-//! a stale ic_interface_enabled mask address read 0, sent every frame down the drop path,
-//! and the resulting double-free of the eb corrupted the heap. Re-verify all of these
-//! against the disasm when bumping the blob.
+//! the g_pm field offsets, and the esf_buf pool list heads. A wrong base or offset does not
+//! fault loudly — it silently reads/writes the wrong memory. That is exactly the bug that
+//! bit us: a stale ic_interface_enabled mask address read 0, sent every frame down the drop
+//! path, and the resulting double-free of the eb corrupted the heap. Re-verify all of these
+//! against the disasm when bumping the blob. Blob globals that live in the linked .data/.bss
+//! (g_pm, g_mesh_is_started, lmacConfMib) additionally MOVE with the link layout, so they
+//! are linked as extern statics, never hardcoded.
 //!
 //! Full write-up (investigation, register/struct model, remaining blob surface):
 //! docs/cleanroom_tx.md in the esp32c6-open-mac repo.
@@ -957,6 +961,43 @@ mod cleanroom_tx {
     pub const DIAG: bool = true;
     pub const CONTROL_BEACON: bool = true;
 
+    // Compile-time experiment selectors (env at build time; unset == the production reference
+    // build). They exist so the PM-wake characterization runs below are reproducible from source.
+    //   CR_NO_BURST=1   : skip the per-round CR-CTRL burst (keep only the 10 boot beacons). The blob
+    //                     then never re-sleeps the modem (its sleep timer is armed from ITS tx-done),
+    //                     so the Rust wake runs exactly once per boot -- which makes omitting a wake
+    //                     step safe against esp-radio's clock/PHY refcounts (no later blob disable).
+    //   CR_PM_EXP=<n>   : bitmask applied inside cr_wifi_rf_phy_enable:
+    //                     1 = skip _wifi_clock_enable, 2 = skip _phy_enable,
+    //                     4 = skip the hal_mac_init store (the WDEV_PM_TXBLOCK_RETENTION clear).
+    const fn env_digit(v: Option<&'static str>) -> u8 {
+        match v {
+            Some(s) => {
+                let b = s.as_bytes();
+                let mut i = 0;
+                let mut n: u8 = 0;
+                while i < b.len() {
+                    n = n.wrapping_mul(10).wrapping_add(b[i].wrapping_sub(b'0'));
+                    i += 1;
+                }
+                n
+            }
+            None => 0,
+        }
+    }
+    pub const CONTROL_BURST: bool = env_digit(option_env!("CR_NO_BURST")) == 0;
+    pub const PM_WAKE_EXPERIMENT: u8 = env_digit(option_env!("CR_PM_EXP"));
+    //   CR_AB=1         : same-RF A/B -- alternate the wake per round (even rounds Rust, odd rounds
+    //                     blob), so the two variants can be compared by round parity (seq/4) inside
+    //                     ONE capture instead of across runs (RF drift between runs is large).
+    pub const AB_WAKE: bool = env_digit(option_env!("CR_AB")) != 0;
+    pub static AB_USE_BLOB: core::sync::atomic::AtomicBool =
+        core::sync::atomic::AtomicBool::new(false);
+    /// Experiment-only readback of the block register right after the hal_mac_init store (and, for
+    /// the clock-gated variant, whether that store stuck). Not read on the production build.
+    pub static PM_BLK_AFTER_STORE: core::sync::atomic::AtomicU32 =
+        core::sync::atomic::AtomicU32::new(0xffff_ffff);
+
     // The minimal blob surface the live TX path still calls. Everything else on the per-frame path
     // (submit/map/pop/enqueue/schedule/arm/complete + the hal register ops) is Rust below.
     unsafe extern "C" {
@@ -964,9 +1005,12 @@ mod cleanroom_tx {
         // another; the OSI callbacks reconcile them). type 1 = static TX. See docs for why it stays.
         fn esf_buf_alloc(payload: *const u8, pool_type: i32, len: u32) -> u32;
         fn esf_buf_recycle(eb: u32);
-        // modem-PM wake FSM: clears the WDEV_PM_TXBLOCK_RETENTION interlock so the MAC goes active
-        // (a hardware consequence of the g_pm FSM + wifi_rf_phy_enable, not a single register write).
+        // modem-PM wake FSM (pm_tx_data_process): NOW RUST (`cr_pm_on_data_tx`, see below). Kept
+        // only as the compile-time-disabled fallback selected by `PM_WAKE_RUST = false`.
         fn pm_on_data_tx(iface: u32, p2: i32) -> i32;
+        // esp-radio's own (Rust) esp_timer_get_time, the target of the OSI `_esp_timer_get_time`
+        // slot the blob PM code reads through g_osi_funcs_p+0x108.
+        fn __esp_radio_esp_timer_get_time() -> i64;
         // security-header handling: dual-descriptor (eb+8 vs eb+4) length adjustment, required for
         // reliable emit (a no-op regresses the on-air frame).
         fn ppProcTxSecFrame(eb: u32) -> i32;
@@ -1150,12 +1194,18 @@ mod cleanroom_tx {
     }
 
     /// Rust lmacIsLongFrame: MPDU length vs the RTS/long-frame threshold (lmacConfMib+0x16 on the
-    /// 0.3.0 blob, lmacConfMib=0x40811ca8). For our short broadcast beacon this is false; and in
-    /// cr_lmacTxFrame the RTS it would gate is additionally suppressed by txinfo bit1 (broadcast),
-    /// so the result is not on the beacon's critical path.
+    /// 0.3.0 blob). `lmacConfMib` is an exported .data object whose address moves with the link
+    /// layout (0x40811ca8 in one build, 0x408117d8 in another), so it is linked, not hardcoded. For
+    /// our short broadcast beacon this is false; and in cr_lmacTxFrame the RTS it would gate is
+    /// additionally suppressed by txinfo bit1 (broadcast), so the result is not on the beacon's
+    /// critical path.
     pub fn cr_lmacIsLongFrame(eb: u32) -> i32 {
+        unsafe extern "C" {
+            static mut lmacConfMib: u8;
+        }
         unsafe {
-            let threshold = core::ptr::read_volatile((0x4081_1ca8u32 + 0x16) as *const u16) as i32;
+            let mib = core::ptr::addr_of_mut!(lmacConfMib) as u32;
+            let threshold = core::ptr::read_volatile((mib + 0x16) as *const u16) as i32;
             let len = core::ptr::read_volatile((eb + 0x14) as *const u16) as i32
                 + core::ptr::read_volatile((eb + 0x16) as *const u16) as i32;
             (threshold < len) as i32
@@ -1163,9 +1213,287 @@ mod cleanroom_tx {
     }
 
     pub static PM_BLK: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    /// Crown-jewel test: when false, skip the blob pm_on_data_tx entirely (Rust no-op) to see if the
-    /// MAC stays active without it in our sustained-TX steady state.
+    /// Crown-jewel test: when false, skip the PM-wake entirely (no-op) to see if the MAC stays
+    /// active without it in our sustained-TX steady state (proven: it does not -- the block sticks).
     pub const PM_ON_DATA_TX: bool = true;
+    /// When true (default), the modem-PM wake is the Rust `cr_pm_on_data_tx`; when false, the blob
+    /// `pm_on_data_tx` (kept only as the compile-time-disabled fallback; `CR_BLOB_WAKE=1` at build
+    /// time selects it for A/B runs).
+    pub const PM_WAKE_RUST: bool = env_digit(option_env!("CR_BLOB_WAKE")) == 0;
+    /// Completion-status histogram (pmd>>12 nibble from hal_mac_get_txq_complete; 0 = success).
+    pub static TX_STATUS: [core::sync::atomic::AtomicU32; 16] =
+        [const { core::sync::atomic::AtomicU32::new(0) }; 16];
+
+    // ================= THE RUST MODEM-PM WAKE (pm_on_data_tx) =================
+    // What the blob does per frame (0.3.0 disasm, pm_on_data_tx @0x4080ef66 -> pm_tx_data_process
+    // @0x4080ece8), reduced to the disconnected-STA path our raw beacon always takes:
+    //   - TWT / mesh guards (never active here), `g_pm+2 == iface` (the PM's own interface),
+    //   - pm_check_state (no-op while g_pm+1 == 0, which the disconnected FSM keeps it at),
+    //   - g_pm+0xe == 0 (not connected/PS-enabled)  =>  pm_is_in_wifi_slice_threshold(now, 5000)
+    //     (== 1 with no coex, since _coex_status_get() == 0), an optional _coex_wifi_request if `now`
+    //     is before the coex slice start (g_pm+0x70/0x74, never armed without coex),
+    //   - pm_disconnected_wake @0x42020838:  if g_pm+0x121 == 3 (modem asleep) && !mesh:
+    //         wifi_rf_phy_enable(0); g_pm+0x121 = 2; pm_set_state(0) (g_pm+1 = 0).
+    // wifi_rf_phy_enable is the ROM function @0x40016a68 (a jump-table stub at 0x40000ba8), and it is
+    // just a dispatcher:  mask = g_ic->rf_phy_enabled_mask (byte @ *(g_ic_ptr 0x4087ffa0) + 0x24e);
+    //   if mask == 0: osi->_wifi_pm_sleep_lock_acquire (+0xc8), osi->_wifi_clock_enable (+0xf8),
+    //                 [if *(*g_mac_sleep_en_ptr 0x4087ff00): pp_wdev_funcs[0x94] = pm_mac_wakeup],
+    //                 if osi->_env_is_chip (+4): osi->_phy_enable (+0xd4),
+    //                 pp_wdev_funcs[0x95] = ic_mac_init -> hal_mac_init @0x4080bc6a:
+    //                     WDEV_PM_TXBLOCK_RETENTION &= ~((pm_get_tx_blocks_retention_mask() &
+    //                     0xff0000) | 0x1000)     <-- THE CPU STORE THAT CLEARS THE INTERLOCK
+    //   mask |= 1 << mode.
+    // So the "hardware consequence" model was wrong: the 0x00ff1000 -> 0 transition IS a plain
+    // register write (hal_mac_init), it just has to come AFTER the Wi-Fi MAC clocks are re-enabled
+    // (_wifi_clock_enable: MODEM_SYSCON/MODEM_LPCON) -- a write to the clock-gated MAC is dropped,
+    // which is what made a bare strobe of the register look like a hardware interlock -- and the
+    // PHY must be back up (_phy_enable) for the launched frame to actually radiate. Every OSI slot
+    // the wake dispatches through is esp-radio Rust (`wifi_pm_sleep_lock_acquire` no-op,
+    // `wifi_clock_enable` -> radio_clocks::enable_wifi, `env_is_chip` -> true, `phy_enable` ->
+    // esp_phy::enable_phy_with_wifi_rx), reached exactly as the ROM reaches them (through the
+    // g_osi_funcs_p table, which keeps esp-radio's clock/PHY refcounts balanced against the blob's
+    // later wifi_rf_phy_disable from the disconnected-sleep timer). The sleep side (the blob's
+    // pm_on_data_tx_done -> 1 ms disconnected-sleep-delay timer -> pm_disconnected_sleep ->
+    // wifi_rf_phy_disable -> hal_mac_deinit |= 0xff1000, g_pm+0x121 = 3) is background PM state and
+    // stays blob; it is what re-arms the block after every CR-CTRL burst.
+    //
+    // The PM globals are linked, NOT hardcoded: `g_pm` (.bss) and `g_mesh_is_started` (.data) are
+    // exported blob symbols and their addresses move with the link layout -- adding this very code
+    // shifted g_pm from 0x40820720 to 0x40820740 (and an earlier layout had it at 0x4081ea98), which
+    // a hardcoded address would have silently mis-read. The FIELD OFFSETS below are 0.3.0-specific
+    // (re-derive per blob version; see the WARNING at the top). The 0x4087ffxx cells are ROM
+    // interface cells (fixed by the C6 ROM).
+    unsafe extern "C" {
+        static mut g_pm: u8;
+        static mut g_mesh_is_started: u8;
+    }
+    #[inline(always)]
+    fn g_pm_base() -> u32 {
+        core::ptr::addr_of_mut!(g_pm) as u32
+    }
+    #[inline(always)]
+    fn g_mesh_is_started_addr() -> u32 {
+        core::ptr::addr_of_mut!(g_mesh_is_started) as u32
+    }
+    const G_OSI_FUNCS_P: u32 = 0x4087_ff6c; // ROM cell -> esp-radio's wifi_osi_funcs_t
+    const G_IC_PTR: u32 = 0x4087_ffa0; // ROM cell -> g_ic; rf_phy_enabled_mask byte @ +0x24e
+    const G_MAC_SLEEP_EN_PTR: u32 = 0x4087_ff00; // ROM cell -> &g_mac_sleep_en (0x4081f0dc)
+    const WDEV_PM_TXBLOCK_RETENTION: u32 = 0x600a_4ca8;
+    const OSI_ENV_IS_CHIP: u32 = 0x004;
+    const OSI_WIFI_PM_SLEEP_LOCK_ACQUIRE: u32 = 0x0c8;
+    const OSI_PHY_ENABLE: u32 = 0x0d4;
+    const OSI_WIFI_CLOCK_ENABLE: u32 = 0x0f8;
+    const OSI_COEX_STATUS_GET: u32 = 0x190;
+    const OSI_COEX_WIFI_REQUEST: u32 = 0x198;
+
+    /// Frames on which the Rust wake found the modem asleep (g_pm+0x121 == 3) and ran the full
+    /// clock/PHY/MAC re-enable.
+    pub static PM_WAKES: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    /// Frames on which the block bits (0x00ff1000) were set before / after the wake.
+    pub static PM_PRE_BLOCKED: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+    pub static PM_POST_BLOCKED: core::sync::atomic::AtomicU32 =
+        core::sync::atomic::AtomicU32::new(0);
+    /// PM states the reduced Rust FSM does not model (connected-PS states, TWT, mesh, coex active,
+    /// g_mac_sleep_en). Must stay 0; if it ever ticks the reduction is not valid for that run.
+    pub static PM_ODD: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
+
+    #[inline(always)]
+    unsafe fn pm_u8(off: u32) -> u8 {
+        unsafe { core::ptr::read_volatile((g_pm_base() + off) as *const u8) }
+    }
+    #[inline(always)]
+    unsafe fn pm_set_u8(off: u32, v: u8) {
+        unsafe { core::ptr::write_volatile((g_pm_base() + off) as *mut u8, v) }
+    }
+    #[inline(always)]
+    unsafe fn pm_u32(off: u32) -> u32 {
+        unsafe { rd(g_pm_base() + off) }
+    }
+    #[inline(always)]
+    unsafe fn mesh_started() -> bool {
+        unsafe { core::ptr::read_volatile(g_mesh_is_started_addr() as *const u8) != 0 }
+    }
+    #[inline(always)]
+    unsafe fn osi_slot(off: u32) -> u32 {
+        unsafe { rd(rd(G_OSI_FUNCS_P) + off) }
+    }
+    #[inline(always)]
+    fn odd() {
+        PM_ODD.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Rust pm_is_twt_start (0.3.0 @0x4080c2ba): g_pm+0x1c2 || g_pm+0x2e4.
+    #[inline(always)]
+    unsafe fn cr_pm_is_twt_start() -> bool {
+        unsafe { pm_u8(0x1c2) != 0 || pm_u8(0x2e4) != 0 }
+    }
+
+    /// Rust pm_get_tx_blocks_retention_mask (0.3.0 @0x42022cbe).
+    unsafe fn cr_pm_get_tx_blocks_retention_mask() -> u32 {
+        unsafe {
+            if pm_u8(0xe) != 0 && (pm_u8(0xf) == 0 || pm_u8(0x46a) != 0) {
+                0xfff1_ffff
+            } else {
+                0xffff_ffff
+            }
+        }
+    }
+
+    /// Rust hal_mac_init (0.3.0 @0x4080bc6a, via ic_mac_init @0x4080a6c8): the store that clears
+    /// the WDEV_PM_TXBLOCK_RETENTION block bits. Disconnected: mask == 0xffffffff -> clears 0xff1000.
+    pub unsafe fn cr_hal_mac_init() {
+        unsafe {
+            let m = cr_pm_get_tx_blocks_retention_mask();
+            let v = rd(WDEV_PM_TXBLOCK_RETENTION);
+            wr(WDEV_PM_TXBLOCK_RETENTION, v & !((m & 0x00ff_0000) | 0x1000));
+        }
+    }
+
+    /// Rust wifi_rf_phy_enable(mode) -- the ROM dispatcher @0x40016a68, 1:1.
+    pub unsafe fn cr_wifi_rf_phy_enable(mode: u32) {
+        unsafe {
+            let maskp = (rd(G_IC_PTR) + 0x24e) as *mut u8;
+            if core::ptr::read_volatile(maskp) == 0 {
+                let lock: extern "C" fn() =
+                    core::mem::transmute(osi_slot(OSI_WIFI_PM_SLEEP_LOCK_ACQUIRE));
+                lock(); // esp-radio: no-op
+                if PM_WAKE_EXPERIMENT & 1 == 0 {
+                    let clk_en: extern "C" fn() =
+                        core::mem::transmute(osi_slot(OSI_WIFI_CLOCK_ENABLE));
+                    clk_en(); // esp-radio radio_clocks::enable_wifi(true): MODEM_SYSCON/LPCON gates
+                }
+                if core::ptr::read_volatile(rd(G_MAC_SLEEP_EN_PTR) as *const u8) != 0 {
+                    // g_mac_sleep_en (modem-sleep MAC retention) is never set in this build
+                    // (set_power_saving(None)); pm_mac_wakeup is not modelled.
+                    odd();
+                }
+                let is_chip: extern "C" fn() -> u32 = core::mem::transmute(osi_slot(OSI_ENV_IS_CHIP));
+                if is_chip() != 0 && PM_WAKE_EXPERIMENT & 2 == 0 {
+                    let phy_en: extern "C" fn() = core::mem::transmute(osi_slot(OSI_PHY_ENABLE));
+                    phy_en(); // esp-radio: esp_phy::enable_phy_with_wifi_rx()
+                }
+                if PM_WAKE_EXPERIMENT & 4 == 0 {
+                    cr_hal_mac_init(); // ic_mac_init -> hal_mac_init: unblock the MAC
+                }
+                if PM_WAKE_EXPERIMENT != 0 {
+                    PM_BLK_AFTER_STORE.store(
+                        rd(WDEV_PM_TXBLOCK_RETENTION),
+                        core::sync::atomic::Ordering::Relaxed,
+                    );
+                }
+            }
+            core::ptr::write_volatile(maskp, core::ptr::read_volatile(maskp) | (1u8 << mode));
+        }
+    }
+
+    /// Rust pm_set_state (0.3.0 @0x4202040a): g_pm+1 = s. (wifi_gpio_debug is a null-checked debug
+    /// hook, *(0x40811e08) == 0 -> no-op.)
+    #[inline(always)]
+    unsafe fn cr_pm_set_state(s: u8) {
+        unsafe { pm_set_u8(1, s) }
+    }
+
+    /// Rust pm_disconnected_wake (0.3.0 @0x42020838).
+    pub unsafe fn cr_pm_disconnected_wake() {
+        unsafe {
+            if pm_u8(0x121) == 3 && !mesh_started() {
+                PM_WAKES.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                if PM_WAKE_EXPERIMENT & 8 != 0 {
+                    // bisect: the real ROM wifi_rf_phy_enable instead of the Rust port
+                    unsafe extern "C" {
+                        fn wifi_rf_phy_enable(mode: u32);
+                    }
+                    wifi_rf_phy_enable(0);
+                } else {
+                    cr_wifi_rf_phy_enable(0);
+                }
+                pm_set_u8(0x121, 2);
+                cr_pm_set_state(0);
+            }
+        }
+    }
+
+    /// Rust pm_check_state (0.3.0 @0x4080971e), disconnected reduction. The blob calls pm_dream +
+    /// pm_set_state(0) if the PS state (g_pm+1) is non-zero; the disconnected FSM never leaves 0
+    /// (only pm_sleep/pm_dream move it, and they need g_pm+0xe), so that is an invariant we count.
+    #[inline(always)]
+    unsafe fn cr_pm_check_state() {
+        unsafe {
+            if pm_u8(1) != 0 {
+                odd();
+            }
+        }
+    }
+
+    /// Rust pm_on_data_tx(iface, 0) == pm_tx_data_process(iface, 0), disconnected-STA reduction.
+    /// The per-frame cost when the modem is already awake is a handful of byte reads.
+    pub fn cr_pm_on_data_tx(iface: u32) {
+        unsafe {
+            if iface == 0 && cr_pm_is_twt_start() {
+                odd(); // TWT session: the blob returns a status without waking
+                return;
+            }
+            if mesh_started() {
+                odd(); // mesh PS hook path not modelled
+                return;
+            }
+            if pm_u8(2) as u32 != iface {
+                return; // not the PM's interface
+            }
+            cr_pm_check_state();
+            if pm_u8(0xe) != 0 {
+                odd(); // connected / PS-enabled FSM (pm_go_to_wake, pm_dream, ...) not modelled
+                return;
+            }
+            if PM_WAKE_EXPERIMENT & 16 != 0 {
+                // bisect: the blob pm_disconnected_wake instead of the Rust one
+                unsafe extern "C" {
+                    fn pm_disconnected_wake();
+                }
+                if pm_u8(0x121) == 3 {
+                    PM_WAKES.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                }
+                pm_disconnected_wake();
+                return;
+            }
+            // pm_is_in_wifi_slice_threshold(now, 5000): 1 unless coex is active.
+            let coex_status: extern "C" fn() -> u32 =
+                core::mem::transmute(osi_slot(OSI_COEX_STATUS_GET));
+            if coex_status() != 0 {
+                odd(); // coex time-slicing not modelled (esp-radio without `coex` returns 0)
+            }
+            let now = __esp_radio_esp_timer_get_time() as u64;
+            let slice_start = ((pm_u32(0x74) as u64) << 32) | pm_u32(0x70) as u64;
+            if now < slice_start {
+                let req: extern "C" fn(u32, u32, u32) -> i32 =
+                    core::mem::transmute(osi_slot(OSI_COEX_WIFI_REQUEST));
+                req(1, 0, pm_u32(0x70).wrapping_sub(now as u32));
+            }
+            cr_pm_disconnected_wake();
+        }
+    }
+
+    /// Boot-time snapshot of the PM state the Rust wake relies on (diagnostic).
+    pub fn pm_snapshot() {
+        unsafe {
+            let ic = rd(G_IC_PTR);
+            super::println!(
+                "[CR.PM] g_pm={:#x} st={} disc={} conn={} iface={} twt={}/{} mesh={} osi={:#x} ic={ic:#x} rfmask={} mac_sleep_en={} blk={:#010x}",
+                g_pm_base(),
+                pm_u8(1),
+                pm_u8(0x121),
+                pm_u8(0xe),
+                pm_u8(2),
+                pm_u8(0x1c2),
+                pm_u8(0x2e4),
+                mesh_started() as u8,
+                rd(G_OSI_FUNCS_P),
+                core::ptr::read_volatile((ic + 0x24e) as *const u8),
+                core::ptr::read_volatile(rd(G_MAC_SLEEP_EN_PTR) as *const u8),
+                rd(WDEV_PM_TXBLOCK_RETENTION)
+            );
+        }
+    }
     pub fn cr_ppMapTxQueue(eb: u32) -> i32 {
         unsafe {
             // ppProcessWaitingQueue drains the per-iface hmac WAITING queue (frames deferred to the
@@ -1184,11 +1512,23 @@ mod cleanroom_tx {
                         txinfo + 0x10,
                         (rd(txinfo + 0x10) & 0xff0f_ffff) | (iface << 0x14),
                     );
-                    let blk_pre = rd(0x600a_4ca8);
+                    let blk_pre = rd(WDEV_PM_TXBLOCK_RETENTION);
                     if PM_ON_DATA_TX {
-                        pm_on_data_tx(iface, 0); // PM-wake (blob)
+                        let use_blob = !PM_WAKE_RUST
+                            || (AB_WAKE && AB_USE_BLOB.load(core::sync::atomic::Ordering::Relaxed));
+                        if !use_blob {
+                            cr_pm_on_data_tx(iface); // PM-wake (Rust)
+                        } else {
+                            pm_on_data_tx(iface, 0); // PM-wake (blob fallback / A-B control)
+                        }
                     }
-                    let blk_post = rd(0x600a_4ca8);
+                    let blk_post = rd(WDEV_PM_TXBLOCK_RETENTION);
+                    if (blk_pre & 0x00ff_1000) != 0 {
+                        PM_PRE_BLOCKED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                    }
+                    if (blk_post & 0x00ff_1000) != 0 {
+                        PM_POST_BLOCKED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                    }
                     // pack: high byte-ish of pre and post so we see the 0xff1000/0x2000 region
                     PM_BLK.store(((blk_pre >> 8) << 16) | ((blk_post >> 8) & 0xffff), core::sync::atomic::Ordering::Relaxed);
                 }
@@ -1254,6 +1594,10 @@ mod cleanroom_tx {
                 aux8.as_mut_ptr(),
             );
             let status = (res6[1] >> 4) & 0xf; // (pmd>>12)&0xf : 0=success
+            if DIAG {
+                TX_STATUS[(status & 0xf) as usize]
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            }
             super::hal_mac_clr_txq_state(2, ac as u32); // clear completed-state bit (as the blob does)
             // NOTE: do NOT hal_mac_txq_disable here -- the MAC auto-clears the arm bits on
             // completion; forcing a disable leaves slot 0 in a state that breaks the shared control
@@ -1653,6 +1997,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     // Which TX slot config banks the scheduler has activated (diagnostic).
     if cleanroom_tx::DIAG {
         cleanroom_tx::probe();
+        cleanroom_tx::pm_snapshot();
     }
     // Initialise the independent Rust eb pool (no blob esf_buf in the hot path).
     cleanroom_tx::cr_pool_init(&rust_buf[..rust_len]);
@@ -1667,6 +2012,9 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
     let (mut n_arm, mut n_latch, mut n_done, mut n_allocfail) = (0u32, 0u32, 0u32, 0u32);
     let mut last_pa: u32 = 0;
     loop {
+        if cleanroom_tx::AB_WAKE {
+            cleanroom_tx::AB_USE_BLOB.store(round % 2 == 1, core::sync::atomic::Ordering::Relaxed);
+        }
         // ----- TX phase: one full submit+schedule+arm+complete per iteration (no send_raw_frame).
         for _ in 0..4u32 {
             let feb = if cleanroom_tx::CR_POOL_ENABLED {
@@ -1695,7 +2043,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
         }
 
         // ----- Control phase: a few blob-scheduled CR-CTRL beacons as a same-RF reference.
-        if cleanroom_tx::CONTROL_BEACON {
+        if cleanroom_tx::CONTROL_BEACON && cleanroom_tx::CONTROL_BURST {
             for _ in 0..6 {
                 let _ = sniffer.send_raw_frame(true, ctrl, false);
                 delay.delay(Duration::from_millis(100));
@@ -1704,11 +2052,44 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
         round += 1;
         // Periodic health + oracle summary (out-of-band; catchable in any monitor window).
         if cleanroom_tx::DIAG && round % 8 == 0 {
-            let pmblk = cleanroom_tx::PM_BLK.load(core::sync::atomic::Ordering::Relaxed);
+            use core::sync::atomic::Ordering::Relaxed;
+            let pmblk = cleanroom_tx::PM_BLK.load(Relaxed);
             println!(
-                "[CR.H] rounds={round} arms={n_arm} latched={n_latch} completed={n_done} allocfail={n_allocfail} last_plcp0={last_pa:#010x} pm_blk={:#06x}->{:#06x} poolfree={}",
-                pmblk >> 16, pmblk & 0xffff, cleanroom_tx::cr_pool_free_len()
+                "[CR.H] rounds={round} arms={n_arm} latched={n_latch} completed={n_done} allocfail={n_allocfail} last_plcp0={last_pa:#010x} pm_blk={:#06x}->{:#06x} poolfree={} pm_wakes={} pre_blk={} post_blk={} pm_odd={} blk_now={:#010x}",
+                pmblk >> 16,
+                pmblk & 0xffff,
+                cleanroom_tx::cr_pool_free_len(),
+                cleanroom_tx::PM_WAKES.load(Relaxed),
+                cleanroom_tx::PM_PRE_BLOCKED.load(Relaxed),
+                cleanroom_tx::PM_POST_BLOCKED.load(Relaxed),
+                cleanroom_tx::PM_ODD.load(Relaxed),
+                unsafe { rd(0x600a_4ca8) }
             );
+            let st = &cleanroom_tx::TX_STATUS;
+            println!(
+                "[CR.S] status ok={} s1={} s2={} s3={} s4={} s5={} s6={} s7={} s8+={}",
+                st[0].load(Relaxed),
+                st[1].load(Relaxed),
+                st[2].load(Relaxed),
+                st[3].load(Relaxed),
+                st[4].load(Relaxed),
+                st[5].load(Relaxed),
+                st[6].load(Relaxed),
+                st[7].load(Relaxed),
+                st[8..].iter().map(|a| a.load(Relaxed)).sum::<u32>()
+            );
+            if cleanroom_tx::PM_WAKE_EXPERIMENT != 0
+                || !cleanroom_tx::CONTROL_BURST
+                || !cleanroom_tx::PM_WAKE_RUST
+            {
+                println!(
+                    "[CR.X] exp={} burst={} rust_wake={} blk_after_store={:#010x}",
+                    cleanroom_tx::PM_WAKE_EXPERIMENT,
+                    cleanroom_tx::CONTROL_BURST,
+                    cleanroom_tx::PM_WAKE_RUST,
+                    cleanroom_tx::PM_BLK_AFTER_STORE.load(Relaxed)
+                );
+            }
         }
         if cleanroom_tx::DIAG && round % 5 == 0 {
             println!("[CR.F] completed {round} rounds");
