@@ -134,7 +134,7 @@ EFFECTS of a real transmit, not a settable arm). This session adds:
   0xc0000000. open-mac never touches it (inherits libphy state).
 - EXPERIMENT: added ll.force_disable_cca() (0x600a4c5c|=0xa0000000) before start_tx_queue, built
   beacon CHANNEL=11, flashed C6 (58:e6:c5:17:35:7c), captured AX210 mon0 ch11. Result: 767 frames,
-  strong positive control (349 JustANet + others) but ZERO from our SSID "The cake is a lie." /
+  strong positive control (349 ambient beacons + others) but ZERO from our SSID "The cake is a lie." /
   our MAC. => forcing CCA off does NOT make the C6 radiate. EDCA/CCA/medium-sensing RULED OUT.
   Experiment reverted (working tree clean); knowledge kept here + memory + Ghidra comments.
 
@@ -169,7 +169,7 @@ refined with the retry-count/CW-index/muedca fields discovered this pass.
 Hypothesis: the C6 MAC EDCA/slot sequencer needs a running TSF timebase to advance backoff and fire
 the PHY (blob always runs the MAC timer; the open beacon example never enables TSF). Test: added
 wifi.set_tsf_time(0,..) + wifi.set_tsf_enabled(0,true) before the beacon loop, rebuilt, flashed,
-captured AX210 mon0 ch11 -> 532 frames, strong positive control (272 JustANet), ZERO of ours.
+captured AX210 mon0 ch11 -> 532 frames, strong positive control (272 ambient beacons), ZERO of ours.
 Firmware verified healthy (no panic on serial). => TSF timebase is NOT the blocker either. Reverted.
 
 NET RESULT of session 7 hardware work: three independent writable-state levers tested and falsified
