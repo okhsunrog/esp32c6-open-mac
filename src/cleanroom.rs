@@ -194,7 +194,6 @@ mod lmac_deblob {
 // rts_rate are Rust now; these four are HT/HE-SIG, coex-PTI and aggregate-TXOP leaves that the
 // legacy 1 Mbit DSSS beacon path calls but does not exercise (HE/AMPDU branches are not taken).
 unsafe extern "C" {
-    fn mac_tx_set_pti(p: *mut u8); // coex packet-traffic-indication (CONF-region writes)
     fn mac_tx_set_hesig(); // HE-SIG field (not taken by a legacy beacon)
     fn mac_tx_set_htsig(p: *mut u8, param2: i32); // HT-SIG field (not taken by a legacy beacon)
     fn hal_mac_fill_hwtxop(eb: u32, depth: u32, idx: u32); // per-MPDU TXOP fill (dead for single frames)
@@ -780,9 +779,36 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
             let r = *((txinfo.wrapping_add(0xc)) as usize as *const u8) as u32;
             wr(plcp_rate_dur, (pwr_byte(r.wrapping_mul(2)) | s2) as u32);
         }
-        mac_tx_set_pti(param_1);
+        cr_mac_tx_set_pti(param_1);
     }
     0
+}
+
+/// Rust `mac_tx_set_pti` -> `hal_set_tx_pti` (0x4080ff56 / 0x4080febe). Programs the BT-coex packet-
+/// traffic-indication fields from the frame's pti (txinfo+0x20) and txinfo+0x22. Faithful to the
+/// 0.3.0 disasm: clears the CONF1 top nibble (0x600a4d68 - slot*0x10) and packs pti into the PTI
+/// register (0x600a5490 - slot*0x74) bits 4-19 with txinfo+0x22 in bits 20-31. The blob additionally
+/// runs a coex callback that clamps pti = min(pti, coex_demand); with no BT coex active the frame's
+/// own pti governs (and our disconnected beacon has pti=txinfo+0x22=0, so this reduces to clearing
+/// those fields -- proven irrelevant to emission: skipping it radiates identically). Verified against
+/// the 0.3.0 disasm.
+unsafe fn cr_mac_tx_set_pti(ctx: *mut u8) {
+    unsafe {
+        let eb = core::ptr::read_unaligned(ctx as *const u32);
+        let txinfo = rd_at(eb.wrapping_add(0x34));
+        let pti = *((txinfo.wrapping_add(0x20)) as *const u8) as u32;
+        let hw22 = core::ptr::read_unaligned((txinfo.wrapping_add(0x22)) as *const u16) as u32;
+        let slot = *ctx.add(4) as u32;
+        let a1 = pti; // coex clamp skipped (no BT); min(pti, coex_demand) == pti here
+        let conf1 = 0x600a_4d68u32.wrapping_sub(slot.wrapping_mul(0x10));
+        wr(conf1, (rd(conf1) & 0x0fff_ffff) | (a1 << 0x1c));
+        let ptir = 0x600a_5490u32.wrapping_sub(slot.wrapping_mul(0x74));
+        wr(ptir, (rd(ptir) & 0xffff_0fff) | ((pti << 0xc) & 0xf000));
+        wr(ptir, (rd(ptir) & 0xffff_f0ff) | ((pti << 8) & 0xf00));
+        wr(ptir, (rd(ptir) & 0xffff_ff0f) | ((pti << 4) & 0xf0));
+        wr(ptir, (rd(ptir) & 0xfff0_ffff) | ((pti << 0x10) & 0xf_0000));
+        wr(ptir, (rd(ptir) & 0x000f_ffff) | (hw22 << 0x14));
+    }
 }
 
 /// blob `hal_mac_tx_clr_mplen`: the blob reads CONF1 (0x600a4d64 - q*0x10) and, only if bit3 is set

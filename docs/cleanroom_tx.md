@@ -162,7 +162,9 @@ builds), confirming the Rust version emits as reliably as the blob.
 
 ## Minimal remaining blob surface
 
-The per-frame TX *logic* is entirely Rust. What remains blob, with reasons:
+The per-frame TX path is entirely Rust except a **single** exercised blob call: `pm_on_data_tx`, the
+modem-PM wake. Everything else below is either Rust now, kept blob only as a compile-time-disabled
+fallback, or in a branch the 1 Mbit DSSS beacon never reaches.
 
 Substrate leaves:
 - `pm_on_data_tx` — the modem-PM wake FSM, KEPT BLOB. `WDEV_PM_TXBLOCK_RETENTION` is only ever SET by
@@ -178,8 +180,13 @@ hal_mac_tx.o leaves:
 - `ppProcTxSecFrame` — NOW RUST (`cr_ppProcTxSecFrame`, open/no-key beacon path; see "The Rust
   ppProcTxSecFrame" below). Proven required for reliable emit, and OTA-confirmed to emit as reliably
   as the blob. The blob extern is kept only as a compile-time-disabled fallback.
-- `mac_tx_set_pti`, `mac_tx_set_hesig`, `mac_tx_set_htsig`, `hal_mac_fill_hwtxop` — PTI/HE/aggregate
-  helpers on the PPDU-build path that the legacy 1 Mbit DSSS beacon does not exercise.
+- `mac_tx_set_pti` — NOW RUST (`cr_mac_tx_set_pti`). It is called unconditionally by
+  `hal_mac_tx_set_ppdu` (so it IS on the exercised path), and reduces to `hal_set_tx_pti` clearing the
+  CONF1 top nibble (0x600a4d68 - slot*0x10) and packing pti (txinfo+0x20) / txinfo+0x22 into the PTI
+  register (0x600a5490 - slot*0x74); the blob's coex callback only clamps pti downward and is inert
+  with no BT active. OTA-confirmed unchanged. HE-only leaves `mac_tx_set_hesig`, `mac_tx_set_htsig`,
+  `hal_mac_fill_hwtxop` stay blob but are genuinely never reached by the 1 Mbit DSSS beacon (they sit
+  in the OFDM/HT/HE and aggregate branches).
 
 lmac.o: the ~15 ROM *ABS* lmac symbols are not interposable, and the libpp lmac copies are
 placement-locked (a byte-identical copy at a different address stalls TX); only the empty
@@ -207,9 +214,8 @@ Condensed timeline of the investigation (full blow-by-blow is in git history):
 - 9h: guard leaves in Rust; ppProcTxSecFrame confirmed required (must stay blob).
 - 9i: hal register helpers (rts_rate, set_len) in Rust; he_protection/pti deferred.
 - 9j: root-caused + fixed the layout-sensitive heap corruption (the ic_interface_enabled double-free).
-- 9n: hal_now + the two hal config delegations (config_timeout esp_test branch, clr_mplen HE-TB
-  branch) reimplemented/removed in Rust; OTA-confirmed. Exercised-path blob now pm_on_data_tx (+ the
-  still-blob mac_tx_set_pti coex leaf).
+- 9n: hal_now, the two hal config delegations, and mac_tx_set_pti reimplemented/removed in Rust;
+  OTA-confirmed. The only exercised-path blob call left is pm_on_data_tx (the modem-PM wake).
 - 9m: ppProcTxSecFrame reimplemented in Rust (open/no-key beacon path, memset resolved); OTA-confirmed
   to emit as reliably as the blob.
 - 9l: esf_buf de-blobbed — an independent Rust eb pool (own free-list, blob esf_buf untouched on the
