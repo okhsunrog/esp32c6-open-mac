@@ -16,8 +16,8 @@ state; only then does the interlock clear and the launch bits latch. Our Rust re
 `ppTxPkt -> ppMapTxQueue -> ppGetTxframe -> ppProcessTxQ -> lmacTxFrame -> hal_mac_tx` sequence on the
 live scheduler structures — `our_instances` (per-AC lmac TX control, base `*(0x4004ffe0)`) and
 `TxRxCxt` (per-AC pending lists, base `*(0x4087ff80)`) — calling the blob only for a small,
-documented set of leaves (chiefly the `pm_on_data_tx` PM-wake FSM and `ppProcTxSecFrame`); the eb
-packet pool is now an independent Rust pool.
+documented set of leaves (chiefly the `pm_on_data_tx` PM-wake FSM); the eb packet pool and
+`ppProcTxSecFrame` are now Rust.
 
 ## WARNING — the fixed addresses are blob-version-specific
 
@@ -38,8 +38,8 @@ Per frame, `faithful_tx` mirrors the blob's raw-submit field setup on a freshly 
 then runs the Rust pipeline on the real scheduler state:
 
 - `cr_ppTxPkt(eb)` — the submit. Guards with the Rust `cr_ic_interface_enabled` (per-VIF enable),
-  runs `cr_ppTxProtoProc` (protocol flags), calls the blob `ppProcTxSecFrame` (security-header
-  length work — kept blob), `cr_rcGetSched` (no-op for a raw trc==0 beacon), then `cr_ppMapTxQueue`.
+  runs `cr_ppTxProtoProc` (protocol flags), `cr_ppProcTxSecFrame` (Rust security-header reservation),
+  `cr_rcGetSched` (no-op for a raw trc==0 beacon), then `cr_ppMapTxQueue`.
 - `cr_ppMapTxQueue(eb)` — assigns the EDCA AC into `txinfo+0x10`, and calls the blob `pm_on_data_tx`
   (the PM-wake that makes the MAC active — the load-bearing ingredient). On success `cr_ppTxPkt`
   threads the eb onto the per-AC `TxRxCxt` pending list (`base + ac*0x34`, head `+0x20`, tail
@@ -134,6 +134,32 @@ Validated from a fresh flash: no drain over **1056 arms** (`arms==latched==compl
 31), `last_plcp0=0xc061d1fc` (our pool eb armed and radiating), no panic; OTA-confirmed on mon0 ch1
 (binned beacons: CR-RUST present alongside CR-CTRL).
 
+## The Rust ppProcTxSecFrame
+
+`ppProcTxSecFrame` reserves a security header on the frame; it is REQUIRED for reliable emit (a
+short/underlength frame latches but the baseband keys up only marginally, so the latch oracle alone is
+not sufficient to validate it). `cr_ppProcTxSecFrame` is a faithful port of the 0.3.0 blob open/no-key
+broadcast-beacon path (0x40804cd0), verified byte-for-byte against the disasm, feasible now that we
+own the eb layout and know eb+4 and eb+8 are the same single descriptor:
+- key type = `((*(txinfo+0x10) >> 8) & 0xf) - 1`; for the open no-key frame this is > 8, so the
+  security-header length is 4 (the blob's `_LANCHOR32` table at 0x4200b100 is only read for keyed
+  types).
+- `eb+0x16 += 4`; the DMA descriptor length field (bits 14-27 of `dma[0]`) `+= 4`; `dma[0] |=
+  0x40000000` (eof).
+- guarded by `eb+0x24` bit13 (cleared on each `cr_pool_alloc`): frame pointer (`dma[1]`) `-= 8`;
+  `eb+0x14 += 8`; `eb+0x24 |= 0x2000`; `dma[0]` length `+= 8`.
+- the memset (args were unresolved before, resolved here): `memset(dma[1], 0, 8)` — zero the 8
+  reserved header bytes at the shifted frame pointer; then write `(eb+0x14 + eb+0x16 - 8) & 0x3fff`
+  into that first word (a length field the MAC reads). HE (flags bit31) and AMPDU-CCMP (flags &
+  0x1040000) are separate blob branches the open beacon never takes and are skipped.
+
+Validation (the critical OTA check, not just the latch oracle): from a fresh flash the on-device
+oracle is perfect (`arms==latched==completed`, `allocfail=0`, `poolfree=12`, no panic), and a binned
+mon0 capture shows CR-RUST radiating at a healthy steady rate — 26 CR-RUST vs 35 CR-CTRL over 72 s
+(ratio ~0.74, matching the 4:6 attempt share), not a degraded trickle. The blob-`ppProcTxSecFrame`
+control under the same RF gave the same-order ratio (a short direct comparison read 1:3 for both
+builds), confirming the Rust version emits as reliably as the blob.
+
 ## Minimal remaining blob surface
 
 The per-frame TX *logic* is entirely Rust. What remains blob, with reasons:
@@ -149,8 +175,9 @@ Substrate leaves:
   structures end-to-end; the blob esf_buf externs are kept only as a compile-time-disabled fallback.
 
 hal_mac_tx.o leaves:
-- `ppProcTxSecFrame` — the security-header dual-descriptor length adjustment; proven required for
-  reliable emit.
+- `ppProcTxSecFrame` — NOW RUST (`cr_ppProcTxSecFrame`, open/no-key beacon path; see "The Rust
+  ppProcTxSecFrame" below). Proven required for reliable emit, and OTA-confirmed to emit as reliably
+  as the blob. The blob extern is kept only as a compile-time-disabled fallback.
 - `mac_tx_set_pti`, `mac_tx_set_hesig`, `mac_tx_set_htsig`, `hal_mac_fill_hwtxop` — PTI/HE/aggregate
   helpers on the PPDU-build path that the legacy 1 Mbit DSSS beacon does not exercise.
 
@@ -175,6 +202,8 @@ Condensed timeline of the investigation (full blow-by-blow is in git history):
 - 9h: guard leaves in Rust; ppProcTxSecFrame confirmed required (must stay blob).
 - 9i: hal register helpers (rts_rate, set_len) in Rust; he_protection/pti deferred.
 - 9j: root-caused + fixed the layout-sensitive heap corruption (the ic_interface_enabled double-free).
+- 9m: ppProcTxSecFrame reimplemented in Rust (open/no-key beacon path, memset resolved); OTA-confirmed
+  to emit as reliably as the blob.
 - 9l: esf_buf de-blobbed — an independent Rust eb pool (own free-list, blob esf_buf untouched on the
   hot path); no drain over 1056 arms, OTA-confirmed.
 - 9k: ic_interface_enabled reimplemented in Rust with the correct 0.3.0 address; esf_buf pool and

@@ -977,7 +977,12 @@ mod cleanroom_tx {
                 return 1;
             }
             cr_ppTxProtoProc(eb);
-            if ppProcTxSecFrame(eb) == 1 {
+            let sec = if CR_SECFRAME {
+                cr_ppProcTxSecFrame(eb)
+            } else {
+                ppProcTxSecFrame(eb)
+            };
+            if sec == 1 {
                 esf_buf_recycle(eb);
                 return 1;
             }
@@ -1036,6 +1041,70 @@ mod cleanroom_tx {
                     wr(txinfo, rd(txinfo) | 0x800);
                 }
             }
+        }
+    }
+
+    /// When true, use the Rust ppProcTxSecFrame (open/no-key beacon path); else the blob.
+    pub const CR_SECFRAME: bool = true;
+    /// dma_desc[0] length field (bits 14-27) += delta, keeping bits 0-13 and 28-31 (owner/eof/size).
+    #[inline(always)]
+    unsafe fn dma_len_add(dma: u32, delta: u32) {
+        unsafe {
+            let w = rd(dma);
+            let len = ((w >> 0xe) & 0x3fff).wrapping_add(delta) & 0x3fff;
+            wr(dma, (len << 0xe) | (w & 0xf000_3fff));
+        }
+    }
+
+    /// Rust ppProcTxSecFrame, OPEN (no-key) broadcast-beacon path only -- a faithful port of the
+    /// 0.3.0 blob ppProcTxSecFrame (0x40804cd0), verified byte-for-byte against the disasm. It
+    /// reserves the security header:
+    ///   key type = ((*(txinfo+0x10)>>8)&0xf)-1; for no-key (>8) the sec-hdr len is 4.
+    ///   eb+0x16 += 4; dma_desc[0] length (bits14-27) += 4; dma_desc[0] |= 0x40000000 (eof).
+    ///   Then (guarded by eb+0x24 bit13, cleared each alloc): frame ptr (dma_desc[1]) -= 8;
+    ///   eb+0x14 += 8; eb+0x24 |= 0x2000; dma_desc[0] length += 8.
+    ///   memset the 8 reserved header bytes at the shifted frame ptr to 0, then write
+    ///   (eb+0x14 + eb+0x16 - 8) & 0x3fff into that first word (a length the MAC reads).
+    /// eb+4 and eb+8 are the SAME descriptor. HE (flags bit31) / AMPDU-CCMP (flags & 0x1040000)
+    /// branches are not our path and are skipped. Returns 0 (proceed; the blob returns non-1 here).
+    pub fn cr_ppProcTxSecFrame(eb: u32) -> i32 {
+        unsafe {
+            let txinfo = rd(eb + 0x34);
+            // key-type -> sec-hdr length (open/no-key => 4; blob table _LANCHOR32 @ 0x4200b100).
+            let ktype = ((rd(txinfo + 0x10) >> 8) & 0xf).wrapping_sub(1) & 0xff;
+            let seclen: u32 = if ktype <= 8 {
+                core::ptr::read_volatile((0x4200_b100u32 + ktype) as *const u8) as u32
+            } else {
+                4
+            };
+            // eb+0x16 += seclen ; dma length += seclen
+            let v16 = core::ptr::read_volatile((eb + 0x16) as *const u16) as u32 + seclen;
+            core::ptr::write_volatile((eb + 0x16) as *mut u16, v16 as u16);
+            let dma = rd(eb + 8);
+            dma_len_add(dma, seclen);
+            let flags = rd(txinfo);
+            // HE / AMPDU-CCMP are separate blob branches; the open beacon has neither.
+            if (flags & 0x8000_0000) != 0 || (flags & 0x0104_0000) != 0 {
+                return 0;
+            }
+            wr(dma, rd(dma) | 0x4000_0000); // eof
+            let dma4 = rd(eb + 4); // same descriptor as eb+8
+            if (core::ptr::read_volatile((eb + 0x24) as *const u16) & 0x2000) == 0 {
+                wr(dma4 + 4, rd(dma4 + 4).wrapping_sub(8)); // frame ptr -= 8
+                let v14 = core::ptr::read_volatile((eb + 0x14) as *const u16) as u32 + 8;
+                core::ptr::write_volatile((eb + 0x14) as *mut u16, v14 as u16);
+                let v24 = core::ptr::read_volatile((eb + 0x24) as *const u16) | 0x2000;
+                core::ptr::write_volatile((eb + 0x24) as *mut u16, v24);
+                dma_len_add(dma4, 8);
+            }
+            // zero the 8 reserved header bytes at the shifted frame ptr, then write the length word.
+            let hdr = rd(dma4 + 4);
+            core::ptr::write_bytes(hdr as *mut u8, 0, 8);
+            let l14 = core::ptr::read_volatile((eb + 0x14) as *const u16) as u32;
+            let l16 = core::ptr::read_volatile((eb + 0x16) as *const u16) as u32;
+            let lenword = (l14 + l16 - 8) & 0x3fff;
+            wr(hdr, lenword | (rd(hdr) & 0xffff_c000));
+            0
         }
     }
 
