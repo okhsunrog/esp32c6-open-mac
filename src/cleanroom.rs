@@ -212,11 +212,120 @@ unsafe extern "C" {
 // Rust PPDU path (cr_lmacSetTxFrame -> hal_mac_tx_set_ppdu -> set_plcp0/plcp1/txop_q/len)
 // calls them too. All addresses here are hardware registers (stable across blob versions).
 //
-// TXOP slot registers: RESP_DUR @0x600a54bc-slot*0x74, CONF0 @0x600a4d60-slot*0x10.
-const WDEV_TXQ0_RESP_DUR: u32 = 0x600a_54bc;
-const WDEV_TXQ0_CONF0: u32 = 0x600a_4d60;
-// PLCP0_ENABLE base reused from txq_plcp0_enable_addr (0x600a_4d6c).
-const WDEV_TXQ0_PLCP0: u32 = 0x600a_4d6c;
+// Typed MMIO register layer. Per-slot registers live in two blocks and the queue index maps to
+// slots in REVERSE (queue 0 = highest slot), so the address for slot `s` is `base - s*stride`:
+// `CONF_STRIDE` (0x10) is the per-slot config block at 0x600a4d6x, `SLOT_STRIDE` (0x74) the
+// completion/TXOP block at 0x600a54xx. The `*(slot)` fns compute those addresses; `rd`/`wr` below
+// do the actual MMIO. All addresses are real hardware registers (stable across blob versions).
+mod mac_reg {
+    /// stride between adjacent slots in the 0x600a4d6x config block.
+    pub const CONF_STRIDE: u32 = 0x10;
+    /// stride between adjacent slots in the 0x600a54xx completion/TXOP block.
+    pub const SLOT_STRIDE: u32 = 0x74;
+
+    // -- config block (CONF_STRIDE) --
+    pub const PLCP0_ENABLE: u32 = 0x600a_4d6c; // dma/len/format word + arm bits (SLOT_VALID|SLOT_ENABLED)
+    pub const CONF0: u32 = 0x600a_4d60; // RTS/txop protect-enable + txop-valid (bit31)
+    pub const CONF1: u32 = 0x600a_4d68; // EDCA aifsn/cw/timeout + PTI top nibble
+    pub const CONF1_REAL: u32 = 0x600a_4d64; // slot conf1+4; clr_mplen HE-TB mplen-valid = bit3
+
+    // -- completion/TXOP block (SLOT_STRIDE) --
+    pub const RESP_DUR: u32 = 0x600a_54bc; // response-rate/duration + TXOP depth/count
+    pub const TXLEN: u32 = 0x600a_54b8; // OFDM/HT TX length
+    pub const PLCP1: u32 = 0x600a_5488; // rate/keyslot/HT-HE-mode/legacy-length/LDPC
+    pub const PLCP_RATE_DUR: u32 = 0x600a_54ac; // PLCP rate/duration word
+    pub const PROT_THRESH: u32 = 0x600a_548c; // RTS/txop-duration threshold (he_set_tx_protection)
+    pub const PTI: u32 = 0x600a_5490; // BT-coex packet-traffic-indication
+    pub const PMD: u32 = 0x600a_54e8; // PMD / completion result
+    pub const BA_BITMAP: u32 = 0x600a_54d4; // block-ack bitmap word0 (+4 = word1, +8 = header)
+    pub const AUX_54E0: u32 = 0x600a_54e0; // completion aux (HE-TB / BA info)
+    pub const AUX_54D0: u32 = 0x600a_54d0; // completion aux (last-tx-is-tb flag, ...)
+    pub const AUX_54EC: u32 = 0x600a_54ec; // completion aux (sub-status / tb_sent)
+    pub const AUX_54F4: u32 = 0x600a_54f4; // completion aux
+
+    // -- global TX state-machine registers (not per-slot) --
+    pub const STATE_A: u32 = 0x600a_4cb0;
+    pub const STATE_B: u32 = 0x600a_4cb8;
+    pub const CLR_STATE_A: u32 = 0x600a_4cac;
+    pub const CLR_STATE_B: u32 = 0x600a_4cb4;
+    pub const TX_MIN_PWR: u32 = 0x600a_4400;
+    pub const PM_TXBLOCK_RETENTION: u32 = 0x600a_4ca8; // the TX interlock (0x00ff1000 = blocked, 0 = active)
+    pub const SYS_TIMER: u32 = 0x600a_d000; // free-running WDEV system timer (hal_now)
+
+    // -- hal_attenna_init: RESP_DUR block loop bound + global antenna reg --
+    pub const RESP_DUR_BLOCK_END: u32 = 0x600a_511c; // attenna_init RESP_DUR loop lower bound
+    pub const ATTENNA_GLOBAL: u32 = 0x600a_42cc; // global antenna/PHY-select reg
+
+    // -- diagnostic-only TX power / gain-mem / FE / BB registers (pwr_dump) --
+    pub const GAIN_MEM_C8: u32 = 0x600a_08c8;
+    pub const GAIN_MEM_CC: u32 = 0x600a_08cc;
+    pub const GAIN_MEM_D0: u32 = 0x600a_08d0;
+    pub const GAIN_MEM_D4: u32 = 0x600a_08d4;
+    pub const FE_0910: u32 = 0x600a_0910;
+    pub const FE_00C0: u32 = 0x600a_00c0;
+    pub const BB_7030: u32 = 0x600a_7030;
+
+    // -- PLCP0_ENABLE arm bits + CONF0/PLCP0 field bits --
+    pub const SLOT_VALID: u32 = 0x8000_0000; // PLCP0_ENABLE bit31
+    pub const SLOT_ENABLED: u32 = 0x4000_0000; // PLCP0_ENABLE bit30
+    pub const SLOT_ARM: u32 = SLOT_VALID | SLOT_ENABLED; // 0xc0000000 (hal_mac_txq_enable)
+    pub const SLOT_ARM_CLEAR: u32 = !SLOT_ARM; // 0x3fffffff (hal_mac_txq_disable)
+    pub const CONF0_BIT31: u32 = 0x8000_0000; // CONF0 protect-enable / txop-valid
+    pub const PLCP0_TXOP: u32 = 0x0040_0000; // PLCP0_ENABLE txop bit22 (set_txop_q)
+
+    #[inline(always)]
+    const fn conf(base: u32, slot: u32) -> u32 {
+        base.wrapping_sub(slot.wrapping_mul(CONF_STRIDE))
+    }
+    #[inline(always)]
+    const fn perslot(base: u32, slot: u32) -> u32 {
+        base.wrapping_sub(slot.wrapping_mul(SLOT_STRIDE))
+    }
+    #[inline(always)]
+    pub fn plcp0_enable(slot: u32) -> u32 {
+        conf(PLCP0_ENABLE, slot)
+    }
+    #[inline(always)]
+    pub fn conf0(slot: u32) -> u32 {
+        conf(CONF0, slot)
+    }
+    #[inline(always)]
+    pub fn conf1(slot: u32) -> u32 {
+        conf(CONF1, slot)
+    }
+    #[inline(always)]
+    pub fn conf1_real(slot: u32) -> u32 {
+        conf(CONF1_REAL, slot)
+    }
+    #[inline(always)]
+    pub fn resp_dur(slot: u32) -> u32 {
+        perslot(RESP_DUR, slot)
+    }
+    #[inline(always)]
+    pub fn txlen(slot: u32) -> u32 {
+        perslot(TXLEN, slot)
+    }
+    #[inline(always)]
+    pub fn plcp1(slot: u32) -> u32 {
+        perslot(PLCP1, slot)
+    }
+    #[inline(always)]
+    pub fn plcp_rate_dur(slot: u32) -> u32 {
+        perslot(PLCP_RATE_DUR, slot)
+    }
+    #[inline(always)]
+    pub fn prot_thresh(slot: u32) -> u32 {
+        perslot(PROT_THRESH, slot)
+    }
+    #[inline(always)]
+    pub fn pti(slot: u32) -> u32 {
+        perslot(PTI, slot)
+    }
+    #[inline(always)]
+    pub fn pmd(slot: u32) -> u32 {
+        perslot(PMD, slot)
+    }
+}
 
 /// blob `mac_tx_set_txop_q`: program the slot's TXOP burst fields. For depth>2 it just clears
 /// the RESP_DUR txop nibble; otherwise it sets RESP_DUR depth/count, CONF0 txop-valid bit
@@ -228,7 +337,7 @@ pub extern "C" fn mac_tx_set_txop_q(param_1: *mut u8) -> u32 {
         let slot = *param_1.add(4) as u32;
         let eb = core::ptr::read_unaligned(param_1 as *const u32);
         let depth = *param_1.add(0x1d) as u32;
-        let resp_dur = WDEV_TXQ0_RESP_DUR.wrapping_sub(slot.wrapping_mul(0x74));
+        let resp_dur = mac_reg::resp_dur(slot);
         let txinfo = rd_at(eb.wrapping_add(0x34));
         if depth > 2 {
             wr(resp_dur, rd(resp_dur) & 0xf0ff_ffff);
@@ -240,17 +349,17 @@ pub extern "C" fn mac_tx_set_txop_q(param_1: *mut u8) -> u32 {
             (rd(resp_dur) & 0xf0ff_ffff) | ((s3 << 0x18) & 0xf000_0000),
         );
         wr(resp_dur, (rd(resp_dur) & 0xcfff_ffff) | (depth << 0x1c));
-        let conf0 = WDEV_TXQ0_CONF0.wrapping_sub(slot.wrapping_mul(0x10));
+        let conf0 = mac_reg::conf0(slot);
         if (rd_at(txinfo) & 0x100) != 0 {
-            wr(conf0, rd(conf0) | 0x8000_0000);
+            wr(conf0, rd(conf0) | mac_reg::CONF0_BIT31);
         } else {
-            wr(conf0, rd(conf0) & 0x7fff_ffff);
+            wr(conf0, rd(conf0) & !mac_reg::CONF0_BIT31);
         }
-        let plcp0 = WDEV_TXQ0_PLCP0.wrapping_sub(slot.wrapping_mul(0x10));
+        let plcp0 = mac_reg::plcp0_enable(slot);
         if (rd_at(txinfo) & 0xc0) == 0x80 {
-            wr(plcp0, rd(plcp0) | 0x40_0000);
+            wr(plcp0, rd(plcp0) | mac_reg::PLCP0_TXOP);
         } else {
-            wr(plcp0, rd(plcp0) & 0xffbf_ffff);
+            wr(plcp0, rd(plcp0) & !mac_reg::PLCP0_TXOP);
         }
         // Aggregate chain: fill each MPDU's HW TXOP. Empty for single frames.
         let mut s2 = rd_at(eb.wrapping_add(0x30));
@@ -352,19 +461,16 @@ fn cr_mac_tx_get_rts_rate(rate: i32) -> i32 {
 #[allow(dead_code)]
 unsafe fn cr_hal_he_set_tx_protection(slot: i32, enable: i32, _p3: u32, threshold: i32, val: u32) {
     unsafe {
-        let conf0 = 0x600a_4d60u32.wrapping_sub((slot as u32).wrapping_mul(0x10));
+        let conf0 = mac_reg::conf0(slot as u32);
         let mut v = rd(conf0);
         if enable == 0 {
-            v &= 0x7fff_ffff;
+            v &= !mac_reg::CONF0_BIT31;
         } else {
-            v |= 0x8000_0000;
+            v |= mac_reg::CONF0_BIT31;
         }
         wr(conf0, v);
         if threshold != 0 {
-            wr(
-                0x600a_548cu32.wrapping_sub((slot as u32).wrapping_mul(0x74)),
-                (val & 0xffff) | 0x1_0000,
-            );
+            wr(mac_reg::prot_thresh(slot as u32), (val & 0xffff) | 0x1_0000);
         }
     }
 }
@@ -390,7 +496,7 @@ unsafe fn cr_mac_tx_set_len(ctx: *mut u8, param2: i32) {
                 & 3;
         }
         let slot = *ctx.add(4) as u32;
-        let resp_dur = 0x600a_54bcu32.wrapping_sub(slot.wrapping_mul(0x74));
+        let resp_dur = mac_reg::resp_dur(slot);
         wr(
             resp_dur,
             uvar5 << 0x16 | ((t10 & 0xf000) == 0x1000) as u32 * 2 | (rts & 0xff) << 6 | 4,
@@ -408,7 +514,7 @@ unsafe fn cr_mac_tx_set_len(ctx: *mut u8, param2: i32) {
                 if r2 > 0x19 {
                     uv3 = r2 - 0x1a;
                 }
-                let txlen = 0x600a_54b8u32.wrapping_sub(slot.wrapping_mul(0x74));
+                let txlen = mac_reg::txlen(slot);
                 let cbw = core::ptr::read_volatile(
                     (param2 as u32).wrapping_add(ac.wrapping_mul(0x34)).wrapping_add(0x41)
                         as *const u8,
@@ -449,7 +555,7 @@ pub extern "C" fn mac_tx_set_plcp0(param_1: *mut u8) -> u32 {
             }
         }
         let slot = *param_1.add(4) as u32;
-        wr(0x600a_4d6c_u32.wrapping_sub(slot.wrapping_mul(0x10)), v);
+        wr(mac_reg::plcp0_enable(slot), v);
         // RTS/txop protection, exactly as the blob leaf is called.
         let enable = ((flags >> 8) & 1) as i32;
         let threshold = ((rd_at(txinfo.wrapping_add(0x30)) >> 3) & 0x3ff) as i32;
@@ -503,9 +609,9 @@ pub extern "C" fn hal_mac_get_txq_complete(
         if !param_4.is_null() {
             // memset(param_4, 0, 8)
             core::ptr::write_bytes(param_4 as *mut u8, 0, 8);
-            let r54e0 = rd(0x600a_54e0_u32.wrapping_sub(off));
-            let r54d0 = rd(0x600a_54d0_u32.wrapping_sub(off));
-            let r54f4 = rd(0x600a_54f4_u32.wrapping_sub(off));
+            let r54e0 = rd(mac_reg::AUX_54E0.wrapping_sub(off));
+            let r54d0 = rd(mac_reg::AUX_54D0.wrapping_sub(off));
+            let r54f4 = rd(mac_reg::AUX_54F4.wrapping_sub(off));
             let w0 = ((r54e0 >> 0x10) << 0x1c)
                 | (r54d0 & 0xfe000)
                 | (r54d0 & 0x10_0000)
@@ -514,8 +620,8 @@ pub extern "C" fn hal_mac_get_txq_complete(
             *param_4 = w0;
             *param_4.add(1) = w1;
         }
-        let pmd = rd(0x600a_54e8_u32.wrapping_sub(off));
-        let aux = rd(0x600a_54ec_u32.wrapping_sub(off));
+        let pmd = rd(mac_reg::PMD.wrapping_sub(off));
+        let aux = rd(mac_reg::AUX_54EC.wrapping_sub(off));
         *param_3.add(2) = (pmd >> 0x10) as u8;
         *param_3.add(3) = ((pmd >> 0x19) & 3) as u8;
 
@@ -557,9 +663,6 @@ pub extern "C" fn hal_mac_get_txq_complete(
     0
 }
 
-// PLCP1 word: queue0 @ 0x600a5488, stride -0x74.
-const WDEV_TXQ0_PLCP1: u32 = 0x600a_5488;
-
 /// blob `mac_tx_set_plcp1`: program the PLCP1 word (rate/keyslot/HT-HE-mode/legacy-length/LDPC)
 /// for the slot from the txinfo. Self-contained register I/O (no blob callees).
 #[unsafe(no_mangle)]
@@ -593,14 +696,14 @@ pub extern "C" fn mac_tx_set_plcp1(param_1: *mut u8) -> u32 {
             v |= 0x2000_0000;
         }
         let slot = *param_1.add(4) as u32;
-        wr(WDEV_TXQ0_PLCP1.wrapping_sub(slot.wrapping_mul(0x74)), v);
+        wr(mac_reg::plcp1(slot), v);
     }
     0
 }
 
 #[inline(always)]
 fn txq_plcp0_enable_addr(ac: i32) -> *mut u32 {
-    (0x600a_4d6c_i32.wrapping_sub(ac.wrapping_mul(0x10))) as usize as *mut u32
+    mac_reg::plcp0_enable(ac as u32) as usize as *mut u32
 }
 
 /// blob `hal_mac_txq_enable`: arm the slot (slot_valid|slot_enabled = 0xc000_0000).
@@ -611,7 +714,7 @@ fn txq_plcp0_enable_addr(ac: i32) -> *mut u32 {
 pub extern "C" fn hal_mac_txq_enable(ac: i32) {
     unsafe {
         let addr = txq_plcp0_enable_addr(ac);
-        core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) | 0xc000_0000);
+        core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) | mac_reg::SLOT_ARM);
     }
 }
 
@@ -620,7 +723,7 @@ pub extern "C" fn hal_mac_txq_enable(ac: i32) {
 pub extern "C" fn hal_mac_txq_disable(ac: i32) {
     unsafe {
         let addr = txq_plcp0_enable_addr(ac);
-        core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) & 0x3fff_ffff);
+        core::ptr::write_volatile(addr, core::ptr::read_volatile(addr) & mac_reg::SLOT_ARM_CLEAR);
     }
 }
 
@@ -634,19 +737,6 @@ unsafe fn wr(addr: u32, val: u32) {
     unsafe { core::ptr::write_volatile(addr as usize as *mut u32, val) }
 }
 
-// The WIFI MAC TX register file. Queue index maps to slots in REVERSE (queue0 = highest
-// slot); per-queue address = base - q * stride. Verified against the blob disassembly.
-// 0x74-stride block (completion/PMD/BA/txop): base 0x600a54xx, stride 0x74.
-// 0x10-stride block (per-slot config): base 0x600a4d6x, stride 0x10.
-const TXQ_PMD_Q0: u32 = 0x600a_54e8; // PMD/completion result
-const TXQ_BA_BITMAP_Q0: u32 = 0x600a_54d4; // block-ack bitmap word0 (d8=word1, dc=header)
-const TXQ_CONF1_Q0: u32 = 0x600a_4d68; // EDCA/AIFSN/CW/timeout
-// Global TX state-machine registers (not per-queue).
-const TXQ_STATE_A: u32 = 0x600a_4cb0;
-const TXQ_STATE_B: u32 = 0x600a_4cb8;
-const TXQ_CLR_STATE_A: u32 = 0x600a_4cac;
-const TXQ_CLR_STATE_B: u32 = 0x600a_4cb4;
-const TX_MIN_PWR: u32 = 0x600a_4400;
 
 /// blob `hal_mac_rate_autoack_init`: empty in the blob (no-op).
 #[unsafe(no_mangle)]
@@ -658,9 +748,9 @@ pub extern "C" fn hal_mac_rate_autoack_init() {}
 pub extern "C" fn hal_mac_get_txq_state(ac: i32) -> u32 {
     let state = unsafe {
         match ac {
-            1 => (rd(TXQ_STATE_A) >> 0x10) & 0xff,
-            2 => rd(TXQ_STATE_B) & 0x7ff,
-            0 => rd(TXQ_STATE_A) & 0x7ff,
+            1 => (rd(mac_reg::STATE_A) >> 0x10) & 0xff,
+            2 => rd(mac_reg::STATE_B) & 0x7ff,
+            0 => rd(mac_reg::STATE_A) & 0x7ff,
             _ => 0,
         }
     };
@@ -672,12 +762,12 @@ pub extern "C" fn hal_mac_get_txq_state(ac: i32) -> u32 {
 pub extern "C" fn hal_mac_clr_txq_state(kind: i32, bit: u32) -> u32 {
     unsafe {
         match kind {
-            1 => wr(TXQ_CLR_STATE_A, 1u32 << ((bit.wrapping_add(0x10)) & 0x1f)),
+            1 => wr(mac_reg::CLR_STATE_A, 1u32 << ((bit.wrapping_add(0x10)) & 0x1f)),
             2 => wr(
-                TXQ_CLR_STATE_B,
-                rd(TXQ_CLR_STATE_B) | (1u32 << (bit & 0x1f)),
+                mac_reg::CLR_STATE_B,
+                rd(mac_reg::CLR_STATE_B) | (1u32 << (bit & 0x1f)),
             ),
-            0 => wr(TXQ_CLR_STATE_A, 1u32 << (bit & 0x1f)),
+            0 => wr(mac_reg::CLR_STATE_A, 1u32 << (bit & 0x1f)),
             _ => {}
         }
     }
@@ -687,7 +777,7 @@ pub extern "C" fn hal_mac_clr_txq_state(kind: i32, bit: u32) -> u32 {
 /// blob `hal_mac_tx_is_cbw40`: true if the slot is configured for 40 MHz (PMD bits 25-26).
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_tx_is_cbw40(q: i32) -> bool {
-    let addr = TXQ_PMD_Q0.wrapping_sub((q as u32).wrapping_mul(0x74));
+    let addr = mac_reg::pmd(q as u32);
     unsafe { (rd(addr) >> 0x19) & 3 != 0 }
 }
 
@@ -697,12 +787,12 @@ pub extern "C" fn hal_mac_tx_is_cbw40(q: i32) -> bool {
 pub extern "C" fn hal_mac_tx_get_blockack(q: i32, out: *mut u8) -> u32 {
     let off = (q as u32).wrapping_mul(0x74);
     unsafe {
-        let hdr = rd(TXQ_BA_BITMAP_Q0.wrapping_add(8).wrapping_sub(off)); // 0x600a54dc - off
+        let hdr = rd(mac_reg::BA_BITMAP.wrapping_add(8).wrapping_sub(off)); // 0x600a54dc - off
         core::ptr::write_unaligned(out.add(2) as *mut u16, (hdr as u16) >> 4);
         *out = ((hdr >> 0x10) & 0xf) as u8;
-        let w1 = rd(TXQ_BA_BITMAP_Q0.wrapping_add(4).wrapping_sub(off)); // 0x600a54d8 - off
+        let w1 = rd(mac_reg::BA_BITMAP.wrapping_add(4).wrapping_sub(off)); // 0x600a54d8 - off
         core::ptr::write_unaligned(out.add(4) as *mut u32, w1);
-        let w0 = rd(TXQ_BA_BITMAP_Q0.wrapping_sub(off)); // 0x600a54d4 - off
+        let w0 = rd(mac_reg::BA_BITMAP.wrapping_sub(off)); // 0x600a54d4 - off
         core::ptr::write_unaligned(out.add(8) as *mut u32, w0);
     }
     0
@@ -713,16 +803,14 @@ pub extern "C" fn hal_mac_tx_get_blockack(q: i32, out: *mut u8) -> u32 {
 pub extern "C" fn hal_set_tx_min_pwr(pwr: u32) {
     unsafe {
         wr(
-            TX_MIN_PWR,
-            ((pwr & 0x3f) << 4) | (rd(TX_MIN_PWR) & 0xffff_fc0f),
+            mac_reg::TX_MIN_PWR,
+            ((pwr & 0x3f) << 4) | (rd(mac_reg::TX_MIN_PWR) & 0xffff_fc0f),
         )
     }
 }
 
 // _LANCHOR0: baked TX-power table in blob flash (signed bytes, stride 2), read by hal_get_tx_pwr.
 const TX_PWR_TABLE: u32 = 0x4208_3134;
-// Real conf1 register (slot base + 4); clr_mplen's HE-TB mplen-valid bit is bit 3.
-const TXQ_CONF1_REAL_Q0: u32 = 0x600a_4d64;
 
 /// blob `hal_get_tx_pwr`: look up the signed max-TX-power byte for a rate index from the
 /// baked flash table (indices > 0x19 are folded down by 0xa).
@@ -731,9 +819,6 @@ pub extern "C" fn hal_get_tx_pwr(idx: u32) -> i32 {
     let i = if idx > 0x19 { idx - 0xa } else { idx };
     unsafe { *((TX_PWR_TABLE.wrapping_add(i.wrapping_mul(2))) as usize as *const i8) as i32 }
 }
-
-// PLCP rate/duration word: queue0 @ 0x600a54ac, stride -0x74.
-const TXQ_PLCP_RATE_DUR_Q0: u32 = 0x600a_54ac;
 
 #[inline(always)]
 unsafe fn pwr_byte(off: u32) -> i32 {
@@ -753,7 +838,7 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
         mac_tx_set_plcp0(param_1);
         mac_tx_set_plcp1(param_1);
         let slot = *param_1.add(4) as u32;
-        let conf1 = TXQ_CONF1_REAL_Q0.wrapping_sub(slot.wrapping_mul(0x10));
+        let conf1 = mac_reg::conf1_real(slot);
         wr(conf1, rd(conf1) & 0xffff_fff7); // clear bit3
         let txinfo = rd_at(eb.wrapping_add(0x34));
         let rate = *((txinfo.wrapping_add(0xc)) as usize as *const u8);
@@ -761,7 +846,7 @@ pub extern "C" fn hal_mac_tx_set_ppdu(param_1: *mut u8, param_2: i32) -> u32 {
         let s2 = (pwr_byte(rtsidx.wrapping_mul(2)) << 16)
             | (pwr_byte(rtsidx.wrapping_mul(2).wrapping_add(1)) << 24);
         let s3 = rate.wrapping_sub(0x10) as u32; // (rate-0x10)&0xff
-        let plcp_rate_dur = TXQ_PLCP_RATE_DUR_Q0.wrapping_sub(slot.wrapping_mul(0x74));
+        let plcp_rate_dur = mac_reg::plcp_rate_dur(slot);
         if s3 <= 0x13 {
             // OFDM/HT/HE rate. HT/HE SIG programming delegated to the blob leaves.
             let flags0 = rd_at(txinfo);
@@ -804,9 +889,9 @@ unsafe fn cr_mac_tx_set_pti(ctx: *mut u8) {
         let hw22 = core::ptr::read_unaligned((txinfo.wrapping_add(0x22)) as *const u16) as u32;
         let slot = *ctx.add(4) as u32;
         let a1 = pti; // coex clamp skipped (no BT); min(pti, coex_demand) == pti here
-        let conf1 = 0x600a_4d68u32.wrapping_sub(slot.wrapping_mul(0x10));
+        let conf1 = mac_reg::conf1(slot);
         wr(conf1, (rd(conf1) & 0x0fff_ffff) | (a1 << 0x1c));
-        let ptir = 0x600a_5490u32.wrapping_sub(slot.wrapping_mul(0x74));
+        let ptir = mac_reg::pti(slot);
         wr(ptir, (rd(ptir) & 0xffff_0fff) | ((pti << 0xc) & 0xf000));
         wr(ptir, (rd(ptir) & 0xffff_f0ff) | ((pti << 8) & 0xf00));
         wr(ptir, (rd(ptir) & 0xffff_ff0f) | ((pti << 4) & 0xf0));
@@ -834,7 +919,7 @@ unsafe fn rd_at(addr: u32) -> u32 {
 pub extern "C" fn hal_mac_tx_config_edca(txq: *mut u8) -> u32 {
     unsafe {
         let ac = *txq.add(4) as u32;
-        let conf1 = TXQ_CONF1_Q0.wrapping_sub(ac.wrapping_mul(0x10));
+        let conf1 = mac_reg::conf1(ac);
         let aifsn = (*txq.add(5) & 0xf) as u32;
         wr(conf1, (rd(conf1) & 0xf0ff_ffff) | (aifsn << 24));
         let cw = (core::ptr::read_unaligned(txq.add(6) as *const u16) & 0x3ff) as u32;
@@ -857,7 +942,7 @@ pub extern "C" fn hal_mac_tx_config_edca(txq: *mut u8) -> u32 {
 pub extern "C" fn hal_mac_tx_config_timeout(txq: *mut u8, param2: i32) -> u32 {
     unsafe {
         let ac = *txq.add(4) as u32;
-        let conf1 = TXQ_CONF1_Q0.wrapping_sub(ac.wrapping_mul(0x10));
+        let conf1 = mac_reg::conf1(ac);
         let eb = core::ptr::read_unaligned(txq as *const u32);
         let txinfo = rd_at(eb.wrapping_add(0x34));
         let u1 = rd_at(txinfo.wrapping_add(0x44));
@@ -881,7 +966,7 @@ pub extern "C" fn hal_mac_tx_config_timeout(txq: *mut u8, param2: i32) -> u32 {
 /// Caller uses `*out >> 28` as the TXOP subframe-complete count.
 #[unsafe(no_mangle)]
 pub extern "C" fn hal_mac_get_txq_pmd(q: i32, out: *mut u32) -> u32 {
-    let addr = TXQ_PMD_Q0.wrapping_sub((q as u32).wrapping_mul(0x74));
+    let addr = mac_reg::pmd(q as u32);
     unsafe { *out = rd(addr) & 0xfeff_ffff }
     0
 }
@@ -892,26 +977,29 @@ pub extern "C" fn hal_mac_get_txq_pmd(q: i32, out: *mut u32) -> u32 {
 pub extern "C" fn hal_attenna_init() {
     unsafe {
         // Pass 1: clear low 3 bits of each slot's RESP_DUR reg.
-        let mut a = 0x600a_54bc_u32;
+        let mut a = mac_reg::RESP_DUR;
         loop {
             wr(a, rd(a) & 0xffff_fff8);
-            a = a.wrapping_sub(0x74);
-            if a == 0x600a_511c {
+            a = a.wrapping_sub(mac_reg::SLOT_STRIDE);
+            if a == mac_reg::RESP_DUR_BLOCK_END {
                 break;
             }
         }
         // Pass 2: clear bit3, set bit5, clear bit4 of each slot's RESP_DUR reg.
-        let mut a = 0x600a_54bc_u32;
+        let mut a = mac_reg::RESP_DUR;
         loop {
             wr(a, rd(a) & 0xffff_fff7);
             wr(a, rd(a) | 0x20);
             wr(a, rd(a) & 0xffff_ffef);
-            a = a.wrapping_sub(0x74);
-            if a == 0x600a_511c {
+            a = a.wrapping_sub(mac_reg::SLOT_STRIDE);
+            if a == mac_reg::RESP_DUR_BLOCK_END {
                 break;
             }
         }
-        wr(0x600a_42cc, (rd(0x600a_42cc) & 0xffff_fff8) | 0x20);
+        wr(
+            mac_reg::ATTENNA_GLOBAL,
+            (rd(mac_reg::ATTENNA_GLOBAL) & 0xffff_fff8) | 0x20,
+        );
     }
 }
 
@@ -1023,14 +1111,14 @@ mod cleanroom_tx {
         unsafe {
             super::println!(
                 "[CR.PWR] {tag} minpwr={:#010x} gain[c8/cc/d0/d4]={:#010x} {:#010x} {:#010x} {:#010x} fe0910={:#010x} fe00c0={:#010x} bb7030={:#010x}",
-                rd(0x600a_4400),
-                rd(0x600a_08c8),
-                rd(0x600a_08cc),
-                rd(0x600a_08d0),
-                rd(0x600a_08d4),
-                rd(0x600a_0910),
-                rd(0x600a_00c0),
-                rd(0x600a_7030),
+                rd(super::mac_reg::TX_MIN_PWR),
+                rd(super::mac_reg::GAIN_MEM_C8),
+                rd(super::mac_reg::GAIN_MEM_CC),
+                rd(super::mac_reg::GAIN_MEM_D0),
+                rd(super::mac_reg::GAIN_MEM_D4),
+                rd(super::mac_reg::FE_0910),
+                rd(super::mac_reg::FE_00C0),
+                rd(super::mac_reg::BB_7030),
             );
         }
     }
@@ -1062,7 +1150,7 @@ mod cleanroom_tx {
     /// submit timestamp (txinfo+0x18); a direct volatile read reproduces it exactly.
     #[inline(always)]
     pub fn cr_hal_now() -> u32 {
-        unsafe { rd(0x600a_d000) }
+        unsafe { rd(super::mac_reg::SYS_TIMER) }
     }
 
     /// Rust ppTxPkt (submit), kick=0. Gate on the per-VIF enable, run the blob security-header leaf,
@@ -1616,10 +1704,10 @@ mod cleanroom_tx {
     /// (completed, status_nibble).
     pub fn cr_complete(ac: i32, eb: u32) -> (bool, u8) {
         unsafe {
-            let a = 0x600a_4d6c - (ac as u32) * 0x10;
+            let a = super::mac_reg::plcp0_enable(ac as u32);
             let mut done = false;
             for _ in 0..4000 {
-                if (rd(a) & 0xc000_0000) == 0 {
+                if (rd(a) & super::mac_reg::SLOT_ARM) == 0 {
                     done = true;
                     break;
                 }
@@ -1800,12 +1888,12 @@ mod cleanroom_tx {
             let ret = cr_ppTxPkt(eb, 0);
             // AC that ppMapTxQueue assigned into txinfo+0x10 bits 20-23.
             let ac = ((rd(txinfo + 0x10) >> 0x14) & 0xf) as i32;
-            let blk_before = rd(0x600a_4ca8);
-            let plcp0_before = rd(0x600a_4d6c - (ac as u32) * 0x10);
+            let blk_before = rd(super::mac_reg::PM_TXBLOCK_RETENTION);
+            let plcp0_before = rd(super::mac_reg::plcp0_enable(ac as u32));
             // Faithful schedule + arm on real state (pop + coex + lmacTxFrame -> our Rust hal).
             let _ = cr_ppProcessTxQ(ac);
-            let plcp0_after = rd(0x600a_4d6c - (ac as u32) * 0x10);
-            let blk_after = rd(0x600a_4ca8);
+            let plcp0_after = rd(super::mac_reg::plcp0_enable(ac as u32));
+            let blk_after = rd(super::mac_reg::PM_TXBLOCK_RETENTION);
             (ac, ret, blk_before, blk_after, plcp0_before, plcp0_after)
         }
     }
@@ -1929,8 +2017,8 @@ mod cleanroom_tx {
     pub fn probe() {
         unsafe {
             for s in 0..8u32 {
-                let a = 0x600a_4d6c - s * 0x10;
-                let e = 0x600a_4d68 - s * 0x10;
+                let a = super::mac_reg::plcp0_enable(s);
+                let e = super::mac_reg::conf1(s);
                 let p0 = rd(a);
                 let e0 = rd(e);
                 // write-test the EDCA-conf reg (non-arm, safe to restore) unless it's live
@@ -2073,7 +2161,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
                 let (ac, _ret, _bb, _ba, _pb, pa) = cleanroom_tx::faithful_tx(feb, seq);
                 seq = seq.wrapping_add(1);
                 n_arm += 1;
-                if pa & 0xc000_0000 != 0 {
+                if pa & mac_reg::SLOT_ARM != 0 {
                     n_latch += 1;
                 }
                 last_pa = pa;
@@ -2111,7 +2199,7 @@ async fn main(_spawner: embassy_executor::Spawner) -> ! {
                 cleanroom_tx::PM_PRE_BLOCKED.load(Relaxed),
                 cleanroom_tx::PM_POST_BLOCKED.load(Relaxed),
                 cleanroom_tx::PM_ODD.load(Relaxed),
-                unsafe { rd(0x600a_4ca8) }
+                unsafe { rd(mac_reg::PM_TXBLOCK_RETENTION) }
             );
             let st = &cleanroom_tx::TX_STATUS;
             println!(
